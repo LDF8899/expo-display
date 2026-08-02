@@ -1,0 +1,772 @@
+{
+ "id": "smart-energy",
+ "type": "topic",
+ "name": "智慧能源",
+ "summary": "绿色能源、智能开采与化工安全",
+ "cover": "/uploads/blueprint/topics/smart-energy/images/img01.webp",
+ "stats": [
+  {"label": "高职专业", "value": "8 个"},
+  {"label": "教职工", "value": "82 人"},
+  {"label": "实训室", "value": "30 余间"},
+  {"label": "实训投入", "value": "1.4 亿元"},
+  {"label": "培养人才", "value": "2 万余名"}
+ ],
+ "sections": [
+  {
+   "id": "overview",
+   "title": "基本情况",
+   "blocks": [
+    {
+     "type": "text",
+     "content": "系部简介：工矿建筑系"
+    },
+    {
+     "type": "text",
+     "content": "工矿建筑系2008年成立，下设矿业、机电、建筑三个教研室，设建筑工程技术、煤矿智能开采技术、智能机电技术、安全技术与管理、测绘工程技术、应用化工技术、新能源汽车检测与维修技术、资源综合利用技术等8个高职专业和煤矿开采中技专业，与贵州工程应用技术学院开展联合培养土木工程、工程管理、采矿工程3个本科专业。建筑工程技术、煤矿智能开采技术获批两个省级高水平专业群。"
+    },
+    {
+     "type": "text",
+     "content": "办学基础好。系部现有教职工82人，博士、教授、副教授等高层次人才齐备，双师型教师49人。先后获批国家高技能人才培训基地、毕节市智能矿山产教融合实训基地、贵州省开放性实训基地等多个项目支持，建成模拟矿井、智能综采实训中心、智能综掘进实训中心、建筑等比例模型、智能机电实训中心、应用化工专业实训室等30余个实训室，总投入资金近1.4亿元。"
+    },
+    {
+     "type": "text",
+     "content": "产教融合实。依托统一战线帮扶，与东部广州港集团、广汽集团、奇瑞控股集团等龙头企业开展深度合作，年均提供实习就业岗位2000余个。牵头成立西南地区新型综合能源行业产教融合共同体、毕节市智能矿山市域产教联合体，加入全国城市更新、全国核能建设等10余个共同体和联合体。"
+    },
+    {
+     "type": "text",
+     "content": "办学质量高。累计培养学生2万余名。获国家教学成果二等奖1项、省级教学成果一等奖2项。近三年学生在各类大赛中获奖120余项。系部获“贵州省脱贫攻坚先进集体”等优秀称号。"
+    },
+    {
+     "type": "text",
+     "content": "科研能力强。教师主持省市级科研项目 50 余项，一年来开展横向课题经费到账80余万元。"
+    }
+   ]
+  },
+  {
+   "id": "majors",
+   "title": "专业设置",
+   "blocks": [
+    {
+     "type": "text",
+     "content": "绿色智慧能源专业群（省级高水平专业群）"
+    },
+    {
+     "type": "text",
+     "content": "绿色智慧能源专业群立足省级高水平建设定位，以煤矿智能开采技术为核心，整合安全技术与管理、应用化工技术、资源综合利用技术、测绘工程技术五大专业，聚焦煤炭绿色开发、磷煤化工、资源循环利用、智慧测绘等领域，服务贵州省基础能源、毕节市精细磷煤化工及资源综合利用产业集群。"
+    },
+    {
+     "type": "text",
+     "content": "专业群对接智能矿山建设、煤炭安全高效生产、化工工艺管控、固废资源化利用、矿山测绘与地理信息等关键环节，面向智能采掘工程师、安全监测监控师、化工工艺技术员、资源综合利用工程师、测绘与地理信息技术员等岗位，培养懂技术、会操作、能运维的高技能人才。"
+    },
+    {
+     "type": "text",
+     "content": "深度联动区域煤炭、化工、资源利用龙头企业，围绕智能开采、安全管控、化工生产、资源循环、精准测绘核心技能，构建 “岗课赛证” 融合育人体系，助力煤炭产业低碳转型、资源高效利用与智慧矿山建设，为区域绿色智慧能源产业高质量发展提供人才支撑。"
+    },
+    {
+     "type": "text",
+     "content": "综掘实训室掘进机 / 综采实训中心"
+    },
+    {
+     "type": "text",
+     "content": "煤矿智能开采技术专业"
+    },
+    {
+     "type": "text",
+     "content": "培养目标：本专业坚持立德树人，面向煤炭开采和洗选行业的发展需求。培养理想信念坚定与德智体美劳全面发展，具备良好职业道德、人文素养、科学素养和数字素养，掌握煤矿智能开采相关理论知识与技术技能，能够适应智能化矿山建设和生产一线岗位要求的高技能人才。毕业生应具有较强的岗位实践能力、技术应用能力、就业创业能力和持续发展能力，能够胜任智能化工作面采掘施工、采掘生产组织、通风技术管理及智能开采安全管理等工作。"
+    },
+    {
+     "type": "text",
+     "content": "核心课程:《智能化采煤方法》、《采掘机械使用与维护》、《巷道智能掘进技术》、《矿井智能通风技术》、《智能采掘电气》、《煤矿安全技术》、《矿山压力观测与控制》、《智能监测监控技术》等。"
+    },
+    {
+     "type": "text",
+     "content": "专业特色：煤矿智能开采技术专业是贵州省第二批高水平专业群核心专业，办学历史悠久，深度融合贵州省区域经济发展。先后获得国家、省、市多个项目支持，建成了目前省内职业院校规模最大、设备最为齐全的模拟矿井和综采实训中心。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img01.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img02.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "综采工作面“三机”配套设备 液压支架操作实训"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img03.webp",
+     "caption": "综采工作面“三机”配套设备 液压支架操作实训"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img04.webp",
+     "caption": "综采工作面“三机”配套设备 液压支架操作实训"
+    },
+    {
+     "type": "text",
+     "content": "模拟矿井主平硐地面瓦斯抽放泵房"
+    },
+    {
+     "type": "text",
+     "content": "就业去向：毕业生主要面向煤矿企业智能化综采、智能化掘进、矿井通风、安全技术管理、机电运输和生产调度等岗位就业和自主创业，从事采掘生产组织、设备运行维护、通风安全管理、现场技术管理及智能化系统应用等业务工作。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img05.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img06.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img07.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img08.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "应用化工技术专业"
+    },
+    {
+     "type": "text",
+     "content": "培养目标：本专业旨在培养自觉践行社会主义核心价值观，具备扎实科学文化基础、良好人文科学素养、职业道德、创新意识、爱岗敬业职业精神和精益求精工匠精神，拥有较强的创新创业能力和可持续发展素养的高素质技术技能人才。学生将掌握基础化学、化学反应器、典型产品生产工艺、化工过程模拟、个人防护、HSE与清洁生产等专业理论知识；熟练掌握化工单元现场操作、中控操作技能等专业技能，具备化工装置高效运维、生产工艺流程优化、工艺方案评估的能力，可处理一般生产性突发事故，能够胜任班组生产管理工作。同时具有适应化工行业数字化和智能化发展需求，能综合运用专业知识解决生产实际问题，毕业后可从事化工生产操作与控制、生产管理和工艺技术优化等岗位工作。"
+    },
+    {
+     "type": "text",
+     "content": "核心课程：化工传热与控制技术、化工分离与控制技术、化学反应过程及设备、化工生产技术、化工生产DCS操作、化工安全技术、磷系新型储能材。"
+    },
+    {
+     "type": "text",
+     "content": "就业方向：主要面向化学原料和化学制品制造业，针对以基础化学原料、精细化工、新材料产业、医药化工、化工产品质量检测等为主营业务的国有或民营化工企业、专用化学品企业、技术服务机构等类型单位的就业和自主创业。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img09.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img10.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img11.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img12.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "安全技术与管理专业"
+    },
+    {
+     "type": "text",
+     "content": "培养目标：本专业培养理想信念坚定，德智体美劳全面发展，具有一定的科学文化水平，良好的人文素养、职业道德和创新意识，德技并修、精益求精的工匠精神，较强的就业创新创业能力和可持续发展能力，掌握安全技术与管理的专业知识和技术技能，面向相关行业领域企事业单位、专业技术服务行业以及应急管理部门的技术人员、管理人员、行政执法人员等职业群，能够从事安全检查与管理、安全评价、安全技术咨询等工作的高素质技术技能人才。"
+    },
+    {
+     "type": "text",
+     "content": "主要课程：《安全管理》、《安全评价技术》、《防火与防爆技术》、《电气安全技术》、《智能安全监测与监控技术》、《安全生产事故调查与案例分析》、《工业通风与除尘》、《安全系统工程》、《安全人机工程》、《电工技术》、《安全法律法规》。"
+    },
+    {
+     "type": "text",
+     "content": "实训条件：安全技术与管理专业校内实践教学基地设备总价值1800余万元，每个实训基地（实训室）均能同时满足30～40人开展实习实训，优越的实习实训基地为学生的生产实习实训奠定了坚实基础。"
+    },
+    {
+     "type": "text",
+     "content": "就业去向：职业服务领域面向安全生产领域相关企事业单位，可在煤矿安全监察部门、矿山设计研究院、矿产企业等从事安全生产项目设计、施工、生产、组织、管理及检测等技术技能工作。"
+    }
+   ]
+  },
+  {
+   "id": "training",
+   "title": "实训基地",
+   "blocks": [
+    {
+     "type": "text",
+     "content": "煤矿智能开采技术专业群群内专业协同互补，聚焦智能开采、化工生产、安全保障三大领域，建有总投资1.2亿元的智能矿山产教融合实训基地、省级安全培训基地，实训条件省内一流。"
+    },
+    {
+     "type": "text",
+     "content": "综掘实训室掘进机 / 综采实训中心"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img13.webp",
+     "caption": "综掘实训室掘进机 / 综采实训中心"
+    },
+    {
+     "type": "text",
+     "content": "煤矿智能开采技术专业学生在综采工作面操作液压支架"
+    },
+    {
+     "type": "text",
+     "content": "智能矿山产教融合实训基地 ？"
+    },
+    {
+     "type": "text",
+     "content": "智能综采实训中心"
+    },
+    {
+     "type": "text",
+     "content": "主要功能：一是开展采煤机结构认识、液压支架结构认识，综采工作面“三机”配套设备组成认识实训；二是开展液压支架、刮板输送机、胶带输送机操作实训。"
+    },
+    {
+     "type": "text",
+     "content": "承担的教学任务：可开展《智能开采机械使用与维护》课程中液压支架操作、刮板输送机操作、胶带输送机操作等实训。"
+    },
+    {
+     "type": "text",
+     "content": "模拟矿井实训基地"
+    },
+    {
+     "type": "text",
+     "content": "主要功能：一是开展矿井生产系统认识实训；二是开展局部通风机操作实训（含反风）；三是开展掘进工作面风筒安装实训；四是开展矿井巷道布置实训；五是开展采掘工作面传感器布置实训；六是开展机电设备结构认识实训。"
+    },
+    {
+     "type": "text",
+     "content": "承担的教学任务：可开展《采掘电气》《巷道施工与智能掘进技术》等课程实训。"
+    },
+    {
+     "type": "text",
+     "content": "1楼 智能综采实训中心：布置煤矿采煤工作面三机配套技术，能满足采煤机司机、液压支架工、皮带机司机等工种技能培训。智能综掘实训中心：布置煤矿掘进工作面及配套技术，满足掘进机司机、瓦斯抽放工、瓦斯检查工等工种技能培训。AR-VR实训中心：布置井下模拟生产场景和各主要核心技能体验，实现井下多个工种模拟考核及培训。综合管控平台（地面调度中心）：布置综合管控平台和煤矿井下调度中心，引入煤矿实际生产场景数据，并实现与智能综采实训中心和智能综掘实训中心设备远程控制。"
+    },
+    {
+     "type": "text",
+     "content": "2楼 技能大赛训练中心：布置无人机救援系统、事故坍塌救援系统、电力恢复系统和防灭火装置系统等，能完成安全生产事故应急救援方面的技能训练。瓦斯治理实训室：布置瓦斯抽采、瓦斯突出等实训设备，能完成瓦斯抽采钻孔布置、瓦斯抽采和瓦斯突出等实训。机电实训室：布置煤矿井下各种馈电开关和机电监测控制系统，可满足学生从模拟训练、安全电压下操作到井下一致设备操作的培训。矿井通风实训室：布置井下矿井通风系统，能实现井下风流控制、反风等功能。"
+    },
+    {
+     "type": "text",
+     "content": "3楼 安全巡检实训室：布置巡检机器人及煤矿相关检测设备，能实现煤矿安全巡检、机器设备探伤及井下相关设备维护保养的日常训练。矿山压力观测实训室：布置了矿山压力控制装置及测量设备，能开展煤矿井下测量、矿山压力显现及控制等实训。PLC控制实训室：能开展煤矿井下智能化控制技术训练和智能化技术培训。"
+    },
+    {
+     "type": "text",
+     "content": "4楼 无人机应用技术实训室：能开展无人机操作培训和实训。"
+    },
+    {
+     "type": "text",
+     "content": "5楼 应用化工技术单元操作实训室：能开展应用化工技术液体传热、蒸馏、萃取等实训和培训。应用化工技术基础实训室：能开展化学基础实验实训和培训。矿山生态修复实训室：能开展矿山环境治理研究、生态修复研究等实训以及社会培训。"
+    },
+    {
+     "type": "text",
+     "content": "安全技术与管理校内实践教学基地"
+    },
+    {
+     "type": "text",
+     "content": "安全技术与管理专业校内实践教学基地设备总价值1800余万元，每个实训基地（实训室）均能同时满足30～40人开展实习实训，优越的实习实训基地为学生的生产实习实训奠定了坚实基础。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img14.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img15.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "煤与瓦斯突出防治操作演示 生产事故应急救援实训"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img16.webp",
+     "caption": "煤与瓦斯突出防治操作演示 生产事故应急救援实训"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img17.webp",
+     "caption": "煤与瓦斯突出防治操作演示 生产事故应急救援实训"
+    },
+    {
+     "type": "text",
+     "content": "采煤工作面 采煤工作面回风巷"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img18.webp",
+     "caption": "采煤工作面 采煤工作面回风巷"
+    },
+    {
+     "type": "text",
+     "content": "煤矿安全培训基地"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img19.webp",
+     "caption": "煤矿安全培训基地"
+    },
+    {
+     "type": "text",
+     "content": "矿山机器人巡检"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img20.webp",
+     "caption": "矿山机器人巡检"
+    },
+    {
+     "type": "text",
+     "content": "突发事故应急救援（cpr）"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img21.webp",
+     "caption": "突发事故应急救援（cpr）"
+    },
+    {
+     "type": "text",
+     "content": "智能监测监控实训室"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img22.webp",
+     "caption": "智能监测监控实训室"
+    },
+    {
+     "type": "text",
+     "content": "综采工作面安全操作实训"
+    }
+   ]
+  },
+  {
+   "id": "cooperation",
+   "title": "产教融合",
+   "blocks": [
+    {
+     "type": "text",
+     "content": "对接产业"
+    },
+    {
+     "type": "text",
+     "content": "产教融合成果"
+    },
+    {
+     "type": "text",
+     "content": "产教融合实。依托统一战线帮扶，与东部广州港集团、广汽集团、奇瑞控股集团等龙头企业开展深度合作，年均提供实习就业岗位2000余个。牵头成立西南地区新型综合能源行业产教融合共同体、毕节市智能矿山市域产教联合体，加入全国城市更新、全国核能建设等10余个共同体和联合体。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img23.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "牵头成立西南地区新型综合能源行业产教融合共同体 毕节市智能矿山市域产教联合体"
+    },
+    {
+     "type": "text",
+     "content": "校企合作订单班/产业学院"
+    }
+   ]
+  },
+  {
+   "id": "masters",
+   "title": "名师名匠",
+   "blocks": [
+    {
+     "type": "text",
+     "content": "高振勇 研究员、咨询（投资）工程师 工矿建筑系安全技术与管理专业带头人"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img24.webp",
+     "caption": "高振勇 研究员、咨询（投资）工程师 工矿建筑系安全技术与管理专业带头人"
+    },
+    {
+     "type": "text",
+     "content": "2006年毕业于辽宁工程技术大学采矿工程专业，获工学硕士学位，2006年4月参加工作，从事煤矿瓦斯灾害防治研究与教学工作19年。"
+    },
+    {
+     "type": "text",
+     "content": "主要研究方向为煤矿瓦斯灾害防治、浆体管道输送竖直段管路阻力损失研究。主持市级及以上科研项目4项，主持或参与国家重大专项子课题1项、省部级项目1项、中煤科工集团二级企业技术创新项目1项，横向重点项目40余项；授权国家发明专利4项，撰写科研、咨询报告50余篇。获省部级奖励13项，其中个人证书3项、集体奖10项。发表学术论文20篇，其中中文核心期刊独著5篇、第一作者5篇，中文科技期刊独著4篇、第二作者2篇，EI检索国际会议独著2篇，参编教材1部。牵头申报煤炭行业井工煤矿智能化实训（实习）基地、煤炭行业教育培训贵州基地，培养青年教师5名，在安全工程专业建设、煤矿安全科研与人才培养方面成果显著。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img25.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "王锦 教授 一级建造师，工矿建筑系建筑工程技术专业带头人"
+    },
+    {
+     "type": "text",
+     "content": "2007年毕业于重庆交通大学工程管理专业，获工学学士学位，2007年7月参加工作，从事建筑工程施工管理与教学工作18年。主要研究方向为建筑施工安全管理、建筑材料研究。主持市级及以上科研项目2项，主持或参与省部级质量工程项目和技能贵州项目2项；授权国家发明专利1项。发表学术论文15余篇。牵头申报住房和城乡建设领域现场人员培训（实习）基地、贵州省建设质量检测培训基地，在建筑工程技术专业建设与人才培养方面成果显著。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img26.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "罗根华 工学博士 副教授 工矿建筑系专任教师"
+    },
+    {
+     "type": "text",
+     "content": "深耕环境污染控制技术、矿山环境生态修复等领域科研与教学工作二十余年，主持及参与市级及以上教科研项目7项，其中国家自然科学基金项目2项；承接企业委托横向项目近30项。科研成果先后荣获1项辽宁省科技进步奖二等奖、市厅级科技进步奖一等奖3项；累计发表北大核心及以上级别期刊论文18篇，获授权发明专利3项，主编高职教材1部。从教以来获评校优秀教师、优秀班导师，荣获毕业生“我最喜爱的老师”等多项荣誉称号。"
+    }
+   ]
+  },
+  {
+   "id": "alumni",
+   "title": "优秀校友",
+   "blocks": [
+    {
+     "type": "text",
+     "content": "谢佳丽 毕节职业技术学院工矿建筑系2018级工业机器人专业班学生"
+    },
+    {
+     "type": "text",
+     "content": "2021年就职于广汽乘用车有限公司，担任文化活动专员职务。2021年12月荣获祺盛动力“传祺岗位小能手”称号，2022年7月荣获祺盛动力企业文化宣传系列“优秀宣传个人”称号，2022年12月荣获广汽集团支援疫情防控党员突击队“先进个人”称号。"
+    },
+    {
+     "type": "text",
+     "content": "2024年4月获评广州市团干部讲党团课优秀讲师；2024年5月荣获广州市国资系统宣讲赛特等奖；2024年8月荣获广州市“十佳宣讲员”称号；2025年8月荣获广汽集团优秀团干部称号；2025年9月荣获广州市总工会乡村振兴（“百千万工程”）羊城女能手入围奖。2024年5月被聘请为国资委系统宣讲队员，其事迹被学习强国、《工人日报》等央媒及省市媒体累计报道超18次。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img27.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "王 祥，毕节职业技术学院工矿建筑系2017级广州港班学生"
+    },
+    {
+     "type": "text",
+     "content": "2020年就职于广州港集团股份有限公司南沙集装箱码头分公司，担任龙门吊机械司机。2021年11月在央视《新闻联播》推出系列报道《弘扬伟大建党精神 开创历史新伟业》第一集《百年大党引领中华民族伟大复兴》，栏目接受采访，自2022年起任其作业大队带训师傅一职，2022年至2023年带出任职以来首批职工，2023年至2025年年初带训出第二批职工，2024年12月被评为公司“安全先进个人”。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img28.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img29.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "韩 赟，贵州金沙人，中共党员，毕节职业技术学院2013级煤矿开采技术专业毕业生后就读西南大学法学专业取得本科学历，2024年12月入职毕节市七星关区纪委监委，现任区纪委监委工作员。2013.9—2016.7在校期间曾任系学生会主席、院学生会副主席；2016年8月起以西部计划志愿者身份扎根赫章基层，先后在白果镇政府、金银山街道办事处、松林坡安监站、赫章县委办任职，历任党群办负责人、县委办秘书二股负责人，深耕基层服务近8年。"
+    },
+    {
+     "type": "text",
+     "content": "扎根基层期间全程参与脱贫攻坚、常态化疫情防控重点工作，牵头落地“党建＋积分”“团建＋积分”基层治理创新项目。2017年获评赫章县优秀志愿者；2018年获评毕节市优秀志愿者；2019年获评贵州省优秀志愿者；第十二届中国青年志愿者优秀个人，2020年获评最美赫章人，2022年获评第十九届贵州青年五四奖章（集体），贵州省最美劳动者。转入纪检岗位后，2025年获评七星关区纪委监委优秀共产党员。扎根基层志愿服务与实干履职事迹多次被省、市主流媒体宣传报道，是贵州基层青年党员、青年志愿者先进典型代表。"
+    },
+    {
+     "type": "text",
+     "content": "秦鹏，毕节职业技术学院工矿建筑系，2017级港口机械操作与维护"
+    },
+    {
+     "type": "text",
+     "content": "2020年就职于广州港股份有限公司南沙集装箱码头分公司，担任岸桥司机职务。2024年7月，获得公司龙门吊比武第一名，2025年2月当选广东省工会第十五次代表大会代表。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img30.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img31.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "张启浪，男，汉族，中共党员"
+    },
+    {
+     "type": "text",
+     "content": "在校期间思想积极上进，政治立场坚定，始终以优秀共产党员和优秀大学生的标准严格要求自己，学习、竞赛、工作与实践表现优异，综合成绩突出。"
+    },
+    {
+     "type": "text",
+     "content": "他持之以恒，刻苦钻研，不断夯实专业基础、拓宽知识视野。2015年至2021年，他先后在我校完成工艺美术（中职）、建筑工程技术（高职）专业的学习，2021年7月保送到凯里学院攻读土木工程本科，逐步构建起跨学科、复合型的建筑工程知识体系。在校期间学习态度端正，成绩稳居前列，曾多次获得学院一等奖学金，被评为优秀学生干部，获得国家励志奖学金、国家奖学金等。因综合素质突出，2021年，他获得校级和贵州省优秀毕业生荣誉称号。"
+    },
+    {
+     "type": "text",
+     "content": "他以赛促学，以练促长，积极参加省级、国家级技能竞赛，斩获多项荣誉。2019年4月获贵州省职业院校技能大赛一等奖，同年5月获全国职业院校技能大赛高职组建筑装饰技术应用三等奖，2022年7月获贵州省大学生结构设计竞赛三等奖，专业技能与创新能力获得充分认可。"
+    },
+    {
+     "type": "text",
+     "content": "毕业后他不忘初心、勇于创业，于2023年自主创办贵州青雲工程设计有限公司，将专业知识与竞赛经验运用于实践，脚踏实地，精益求精。未来，他将继续深耕工程设计领域，积极奉献社会，展现新时代优秀毕业生的良好风貌。"
+    },
+    {
+     "type": "text",
+     "content": "欧安进，中共党员，毕节职业技术学院工矿建筑系2019级汽车检测与维修技术专业汽车检测与维修班学生"
+    },
+    {
+     "type": "text",
+     "content": "2022年3月至2023年5月就职于施秉县中等职业技术学校担任汽修专业教师，2023年7月至今就职于贵州永华技工学校担任新能源汽车检测与维修专业组组长。2021年9月至2022年7月，他在校期间担任班级班长，荣获以下奖项：2020年，获得国家励志奖学金，获得学院“三好学生”称号；2021年，获得国家励志奖学金，获得学院“三好学生”称号，获得工矿建筑系汽车检测与维修技能大赛一等奖；2022年，获得院级优秀毕业生称号，获得贵州省三好学生称号。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img32.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "陈胜利，男，年龄：37"
+    },
+    {
+     "type": "text",
+     "content": "一、教育经历"
+    },
+    {
+     "type": "text",
+     "content": "2010年9月--2013年7月毕业于毕节职业技术学院，专业：煤矿开采技术。"
+    },
+    {
+     "type": "text",
+     "content": "二、工作经历"
+    },
+    {
+     "type": "text",
+     "content": "2013年7月毕业后，2013年9月进入贵州众一金彩黔矿业有限公司瑞丰煤矿任技术员，2015年在瑞丰煤矿任技术科长，2018年在瑞丰煤矿任技术副总，2019年在瑞丰煤矿任技术负责人；2020年5月调贵州众一金彩黔矿业有限公司织金县志成煤矿任总工程师；2025年7月调贵州众一金彩黔矿业有限公司岩脚煤矿任总工程师。2020年以来一直负责贵州众一金彩黔矿业有限公司国家安全改造项目，2021年参与贵州省科技重大项目：薄煤层无人/少人采掘系统研究与应用。"
+    },
+    {
+     "type": "text",
+     "content": "三、荣誉奖项"
+    },
+    {
+     "type": "text",
+     "content": "2017年获得众一控股优秀员工，2021年获得众一金彩黔矿业有限公司优秀管理员，2025年获得众一控股有限公司卓越精英奖。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img33.webp",
+     "caption": ""
+    }
+   ]
+  },
+  {
+   "id": "students",
+   "title": "优秀学生",
+   "blocks": [
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img34.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "徐俊，毕节职业技术学院2025级建筑工程技术专业学生"
+    },
+    {
+     "type": "text",
+     "content": "2022年入校就读中职建筑工程施工专业；2025年9月，升入本校高职建筑工程技术专业。中职三年，连续两年获得校级一等奖学金，获评毕节职业技术学院“三好学生”“优秀毕业生”等荣誉。"
+    },
+    {
+     "type": "text",
+     "content": "专业技能方面，在校期间，积极参加各类技能竞赛并斩获多项荣誉：2022年获毕节市教育局举办的职业院校技能大赛工程测量赛项二等奖，2023年获毕节市教育局举办的水利工程制图赛项一等奖，2025年获贵州省职业院校技能大赛水利工程制图赛项一等奖，并代表学校参加世界职业院校技能大赛，获得土木施工赛道铜奖。"
+    },
+    {
+     "type": "text",
+     "content": "专业实践方面，2025年暑假，他曾在贵州青雲工程设计有限公司担任装饰设计师助理，独立完成8户业主的室内施工图绘制与三维建模，协助现场技术交底，掌握了BIM核心建模流程。"
+    },
+    {
+     "type": "text",
+     "content": "成长前景回顾，2025年9月，他升入本校高职层次继续深造；入学后，保持拼搏劲头：2025年10月获教育厅、团省委举办的第四届贵州省大学生创新方法大赛二等奖；2026年，他先后获得教育厅举办的贵州省大学生职业规划大赛铜奖、贵州省职业院校技能大赛水利赛道三等奖。此外，他以专业知识登记1项软件著作权和3项作品版权，并参与老师科研项目。"
+    },
+    {
+     "type": "text",
+     "content": "从中职到高职，从赛场到实习再到科研，他用踏实证明自己：学好技术、做好小事，就能为家乡建设出力。"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img35.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "吴鹏，毕节职业技术学院2025级建筑工程技术专业学生"
+    },
+    {
+     "type": "text",
+     "content": "共青团员。现任班级学习委员以及学院数字素养与技能协会会长。他以踏实的学习态度和扎实过硬的技能应用能力，赢得了师生的一致认可。"
+    },
+    {
+     "type": "text",
+     "content": "2022年，吴鹏进入我校建筑工程施工专业中技班就读。自入学以来，始终保持着专业成绩与综合排名双第一的优异表现。中职三年，他连续位列专业第一，先后荣获多项省市级技能大赛奖项，包括贵州省职业院校技能大赛一等奖、全市中等职业学校师生技能大赛一等奖等，并在2025年8月代表贵州省参加世界职业院校技能大赛总决赛，斩获争夺赛铜奖。此外，他还被评为毕节职业技术学院“优秀班干”和“优秀毕业生”。"
+    },
+    {
+     "type": "text",
+     "content": "升入高职后，吴鹏继续在本校建筑工程技术专业深造。他迅速转变角色，积极投身各类专业竞赛，持续展现出色的学习能力与进取精神。在短短一学期内，他便斩获以下荣誉：获得第四届贵州省大学生创新方法大赛二等奖、第十七届全国高等院校学生斯维尔杯数字城市创新技术与应用大赛三等奖、第三届贵州省大学生职业规划大赛职教组铜奖和贵州省职业院校技能大赛三等奖。与此同时，他依然保持专业与综合排名双第一的优异成绩，充分体现了其进入高职阶段后快速成长、敢于挑战、全面发展的优秀素质。"
+    }
+   ]
+  },
+  {
+   "id": "achievements",
+   "title": "教学成果",
+   "blocks": [
+    {
+     "type": "text",
+     "content": "教科研成果、课题项目..."
+    }
+   ]
+  },
+  {
+   "id": "competitions",
+   "title": "技能大赛",
+   "blocks": [
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img36.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "承办2026年贵州省职业院校技能大赛暨世界职业院校技能大赛贵州省选拔赛高职组“岩矿鉴定与综合地质编录技术”特色赛项"
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img37.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img38.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img39.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img40.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img41.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img42.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img43.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img44.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img45.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img46.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img47.webp",
+     "caption": ""
+    }
+   ]
+  },
+  {
+   "id": "honors",
+   "title": "荣誉资质",
+   "blocks": [
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img48.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img49.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img50.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img51.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img52.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img53.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img54.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img55.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img56.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img57.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img58.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img59.webp",
+     "caption": ""
+    },
+    {
+     "type": "image",
+     "src": "/uploads/blueprint/topics/smart-energy/images/img60.webp",
+     "caption": ""
+    },
+    {
+     "type": "text",
+     "content": "视频资料（专业特色，可于所在区域屏幕循环播放）"
+    }
+   ]
+  }
+ ]
+}

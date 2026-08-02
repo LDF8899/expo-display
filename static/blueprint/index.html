@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>毕节职业技术学院 · 系部数字展厅</title>
+    <link rel="stylesheet" href="/static/blueprint/blueprint.css?v=design-20260803c" />
+  </head>
+  <body>
+    <div class="bp-stage" id="bpStage" aria-live="polite">
+      <!-- 一级页 -->
+      <section class="screen" id="screenHome" hidden>
+        <header class="topbar">
+          <div class="brand-lockup">
+            <img class="brand-logo" src="/uploads/acc2be26d71f4981b3c1f125390266a8.png" alt="学校标识" onerror="this.style.display='none';this.nextElementSibling.removeAttribute('hidden');" />
+            <span class="crest" aria-hidden="true" hidden>校</span>
+            <div class="brand-title">
+              <h1 class="school-name">毕节职业技术学院</h1>
+              <p class="school-meta">BIJIE VOCATIONAL AND TECHNICAL COLLEGE</p>
+            </div>
+          </div>
+          <div class="page-label">系部展示</div>
+          <div class="qr-box" id="homeQr" title="扫码进入数字展厅"></div>
+        </header>
+
+        <main class="home-main">
+          <h2 class="section-title">院系风采</h2>
+          <div class="dept-grid" id="deptGrid"></div>
+
+          <div class="topic-zone">
+            <h3 class="zone-title">创新育人专题</h3>
+            <div class="topic-strip" id="topicStrip"></div>
+          </div>
+        </main>
+
+        <footer class="statusline">触摸卡片进入二级页面 · 长按返回首页</footer>
+      </section>
+
+      <!-- 二级页 -->
+      <section class="screen" id="screenDetail" hidden>
+        <header class="topbar detail-bar">
+          <a class="back-link" id="backHome" href="/departments" tabindex="0">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>返回系部首页</span>
+          </a>
+          <div class="brand-lockup compact">
+            <img class="brand-logo" src="/uploads/acc2be26d71f4981b3c1f125390266a8.png" alt="" onerror="this.style.display='none';this.nextElementSibling.removeAttribute('hidden');" />
+            <span class="crest" aria-hidden="true" hidden>校</span>
+            <div class="brand-title">
+              <h1 class="school-name">毕节职业技术学院</h1>
+              <p class="school-meta" id="detailMeta">BIJIE VOCATIONAL AND TECHNICAL COLLEGE</p>
+            </div>
+          </div>
+          <div class="qr-box" id="detailQr" title="扫码进入当前页面"></div>
+        </header>
+
+        <main class="detail-main">
+          <nav class="chapter-nav" id="chapterNav" aria-label="章节导航"></nav>
+          <div class="chapter-viewport" id="chapterViewport">
+            <article class="chapter-page" id="chapterPage"></article>
+          </div>
+        </main>
+
+        <footer class="chapter-progress" id="chapterProgress">
+          <button class="nav-btn" id="prevChapter" aria-label="上一章" tabindex="0">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <span class="progress-label" id="progressLabel">01 / 06</span>
+          <button class="nav-btn" id="nextChapter" aria-label="下一章" tabindex="0">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <!-- 图片灯箱 -->
+    <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="图片预览">
+      <button class="lb-close" id="lbClose" aria-label="关闭">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <button class="lb-prev" id="lbPrev" aria-label="上一张">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <figure class="lb-figure">
+        <img id="lbImage" alt="" />
+        <figcaption id="lbCaption"></figcaption>
+      </figure>
+      <button class="lb-next" id="lbNext" aria-label="下一张">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <!-- 长文抽屉 -->
+    <div class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-label="阅读全文">
+      <div class="drawer-panel">
+        <button class="drawer-close" id="drawerClose" aria-label="关闭">×</button>
+        <div class="drawer-body" id="drawerBody"></div>
+      </div>
+    </div>
+
+    <script src="/static/blueprint/blueprint.js?v=design-20260803c"></script>
+  </body>
+</html>

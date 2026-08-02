@@ -1,0 +1,59 @@
+{
+ "id": "information",
+ "type": "department",
+ "name": "电子信息工程系",
+ "summary": "人工智能、网络安全与数字技术",
+ "cover": "/uploads/blueprint/departments/information/images/img01.webp",
+ "stats": [
+  {"label": "办学积淀", "value": "30 年"},
+  {"label": "教职工", "value": "40 余人"},
+  {"label": "双师占比", "value": "83.3%"},
+  {"label": "在校生", "value": "1500 人"},
+  {"label": "证书获取率", "value": "92%"}
+ ],
+ "sections": [
+  {
+   "id": "overview",
+   "title": "基本情况",
+   "blocks": [
+    {"type": "image", "src": "/uploads/blueprint/departments/information/images/img01.webp", "caption": "师生在 2025 年省第二届网络安全实战赛获奖"},
+    {"type": "text", "content": "毕节职业技术学院电子信息工程系溯源于 1996 年成立的毕节农业学校计算机教研室，2008 年正式建系，至今已有 30 年办学积淀。现有教职工 40 余人，其中副高以上职称占比 32.3%，“双师型”教师达 83.3%。"},
+    {"type": "text", "content": "现开设计算机应用技术（省级重点特色专业）、人工智能技术应用（省级现场工程师培训基地）、计算机网络技术三个专业，在校生 1500 人。学生职业证书获取率达 92%，毕业生就业去向落实率长期保持在 90% 以上。"}
+   ]
+  },
+  {
+   "id": "majors",
+   "title": "专业设置",
+   "blocks": [
+    {"type": "text", "content": "计算机应用技术：省级重点特色专业，依托国家级高技能人才培养基地，培养计算机应用与软件开发人才。"},
+    {"type": "text", "content": "人工智能技术应用：省级现场工程师培训基地，聚焦人工智能产业应用，培养 AI 工程实施与运维人才。"},
+    {"type": "text", "content": "计算机网络技术：对接网络安全与网络工程岗位，依托 H3C 网络学院，培养网络规划、安全运维人才。"}
+   ]
+  },
+  {
+   "id": "training",
+   "title": "实训基地",
+   "blocks": [
+    {"type": "text", "content": "系部建有国家级计算机应用技术高技能人才培养基地 1 个、国家级小米 AIoT 工程师能力培训中心 1 个、省级重点（特色）专业 1 个、省级人工智能现场工程师培训基地 1 个。"},
+    {"type": "image", "src": "/uploads/blueprint/departments/information/images/img03.webp", "caption": "系部学生参加 2024 全国职业院校技能大赛获奖"}
+   ]
+  },
+  {
+   "id": "cooperation",
+   "title": "产教融合",
+   "blocks": [
+    {"type": "text", "content": "入选全国新一代信息技术、全国大数据、全国人工智能、全国信息安全行业产教融合共同体理事单位，与小米、360、H3C 等头部企业深度合作。"},
+    {"type": "text", "content": "共建人工智能产业学院、360 数智安全产业学院、H3C 网络学院，实现课堂与岗位无缝对接。"},
+    {"type": "image", "src": "/uploads/blueprint/departments/information/images/img04.webp", "caption": "荣获小米优秀合作院校表彰"}
+   ]
+  },
+  {
+   "id": "achievements",
+   "title": "教学成果",
+   "blocks": [
+    {"type": "text", "content": "近三年获省级以上比赛奖项 46 项（国家级三等奖 1 项、省级一等奖 6 项、省级二等奖 10 项、省级三等奖 14 项）；创新创业类比赛获国家级银奖 1 项、省级银奖 2 项、省级铜奖 16 项；“挑战杯”比赛获省级二等奖 1 项、省级三等奖 5 项、省级优秀奖 1 项。"},
+    {"type": "image", "src": "/uploads/blueprint/departments/information/images/img02.webp", "caption": "系部学生王恩利利用数字化技术服务乡村被中央电视台报道"}
+   ]
+  }
+ ]
+}

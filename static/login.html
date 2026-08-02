@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>后台登录</title>
+    <link rel="stylesheet" href="/static/login.css?v=admin-unified-20260714" />
+  </head>
+  <body>
+    <main class="login-shell">
+      <aside class="login-rail" aria-label="系统说明">
+        <div class="brand">
+          <strong>展示后台</strong>
+          <span>Expo Display Admin</span>
+        </div>
+
+        <div class="rail-content">
+          <p class="eyebrow">School Screen</p>
+          <h1>现场扫码展示系统</h1>
+          <p>维护欢迎页、展示项目、二维码内容与部署状态，大屏会读取当前部署方案。</p>
+        </div>
+
+        <div class="deploy-card" aria-hidden="true">
+          <span>当前入口</span>
+          <strong>后台管理</strong>
+          <small>欢迎页配置 / 展示页管理 / 大屏预览</small>
+        </div>
+      </aside>
+
+      <section class="login-panel" aria-labelledby="loginTitle">
+        <form id="loginForm" class="login-form">
+          <div class="panel-head">
+            <p class="eyebrow">Admin Login</p>
+            <h2 id="loginTitle">登录展示后台</h2>
+            <p>请输入账号和密码。</p>
+          </div>
+
+          <label>
+            <span>账号</span>
+            <input id="username" name="username" autocomplete="username" required />
+          </label>
+
+          <label>
+            <span>密码</span>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+          </label>
+
+          <button type="submit">登录</button>
+          <p id="status" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+    </main>
+
+    <script src="/static/login.js?v=admin-unified-20260714"></script>
+  </body>
+</html>

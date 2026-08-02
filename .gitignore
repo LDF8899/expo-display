@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.env
+.env.*
+
+.playwright-cli/
+output/
+backups/
+
+server.out.log
+server.err.log
+
+# 现场数据库与数据（含管理员密码哈希与扫码记录，不入公开仓库）
+expo.db
+*.sqlite
+*.sqlite3
+hatch-pet-runs/
