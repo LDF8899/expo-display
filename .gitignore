@@ -23,3 +23,9 @@ sucai/dumped/
 
 # 素材样例源文档（含真实照片，不入公开仓库）
 sucai/毕节职业技术学院成果样例.docx
+
+# 素材研究存档（官网抓取页等，不入公开仓库）
+sucai/carousel-effect/
+sucai/index.html
+sucai/school-display-research.html
+sucai/view-source_*.htm
