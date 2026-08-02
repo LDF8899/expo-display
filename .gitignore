@@ -17,3 +17,6 @@ expo.db
 *.sqlite
 *.sqlite3
 hatch-pet-runs/
+
+# 素材提取中间产物（含真实师生姓名与学校数据，不入公开仓库）
+sucai/dumped/
