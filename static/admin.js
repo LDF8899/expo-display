@@ -1759,7 +1759,12 @@ function renderLowcodeRecordDetail(record) {
 function renderLowcodeRecords() {
   const listNode = $("lowcodeRecordsList");
   if (!listNode) return;
+  const teacherOnly = isTeacherPortal();
   if ($("lowcodeRecordStatusFilter")) $("lowcodeRecordStatusFilter").value = state.lowcodeRecordStatusFilter || "all";
+  ["exportLowcodeRecords", "exportLowcodeRecordDetails"].forEach((id) => {
+    const node = $(id);
+    if (node) node.hidden = teacherOnly;
+  });
   const records = state.lowcodeRecords || [];
   const visibleRecords = filteredLowcodeRecords();
   const approved = records.filter((record) => (record.effectiveStatus || record.status) === "approved").length;
@@ -1788,7 +1793,7 @@ function renderLowcodeRecords() {
         ${status === "draft" ? `<button class="button small primary" type="button" data-lowcode-record-resume="${record.id}">继续填写</button>` : ""}
         ${status === "rejected" ? `<button class="button small primary" type="button" data-lowcode-record-resume="${record.id}">按意见修改</button>` : ""}
         ${status === "draft" ? `<button class="button small danger" type="button" data-lowcode-record-delete="${record.id}">删除草稿</button>` : ""}
-        ${record.contentItemId ? `<button class="button small primary" type="button" data-lowcode-record-edit="${record.contentItemId}">编辑生成资料</button>` : ""}
+        ${record.contentItemId && !teacherOnly ? `<button class="button small primary" type="button" data-lowcode-record-edit="${record.contentItemId}">编辑生成资料</button>` : ""}
         ${record.previewUrl && status === "approved" ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(record.previewUrl)}">预览</a>` : ""}
       </div>
     </article>`;
@@ -4471,6 +4476,7 @@ $("lowcodeRecordsList").addEventListener("click", (event) => {
     return;
   }
   const edit = event.target.closest("[data-lowcode-record-edit]");
+  if (edit && isTeacherPortal()) return;
   if (!edit) return;
   const item = state.contentItems.find((entry) => String(entry.id) === String(edit.dataset.lowcodeRecordEdit));
   if (item) fillContentItem(item);
