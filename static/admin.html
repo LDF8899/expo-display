@@ -176,7 +176,17 @@
                 <strong>模板提交记录</strong>
                 <span>追踪老师按模板提交的原始记录、模板版本和生成后的结构化资料。</span>
               </div>
-              <span id="lowcodeRecordsSummary" class="badge">0 条记录</span>
+              <div class="lowcode-record-toolbar">
+                <select id="lowcodeRecordStatusFilter" aria-label="筛选模板提交记录状态">
+                  <option value="all">全部状态</option>
+                  <option value="draft">草稿</option>
+                  <option value="pending">待审核</option>
+                  <option value="approved">已通过</option>
+                  <option value="rejected">已驳回</option>
+                </select>
+                <span id="lowcodeRecordsSummary" class="badge">0 条记录</span>
+                <button id="exportLowcodeRecords" class="button small" type="button">导出 CSV</button>
+              </div>
             </div>
             <div id="lowcodeRecordsList" class="lowcode-record-list"></div>
           </section>

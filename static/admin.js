@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -783,14 +783,69 @@ async function showLowcodeVersions(formId) {
   $("pageForm").hidden = true;
   $("lowcodeVersionPanel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
+function lowcodeRecordStatus(record) {
+  return record.effectiveStatus || record.contentReviewStatus || record.status || "";
+}
+function filteredLowcodeRecords() {
+  const filter = state.lowcodeRecordStatusFilter || "all";
+  const records = state.lowcodeRecords || [];
+  return filter === "all" ? records : records.filter((record) => lowcodeRecordStatus(record) === filter);
+}
+function csvCell(value) {
+  const text = String(value ?? "").replaceAll('"', '""');
+  return `"${text}"`;
+}
+function downloadTextFile(filename, text, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+function exportLowcodeRecordsCsv() {
+  const records = filteredLowcodeRecords();
+  if (!records.length) {
+    alert("当前筛选条件下暂无可导出的模板提交记录");
+    return;
+  }
+  const headers = ["记录ID", "模板", "版本", "状态", "标题", "板块", "资料类型", "提交人", "提交时间", "生成资料ID", "预览地址"];
+  const rows = records.map((record) => {
+    const data = record.data && record.data.fields ? record.data.fields : {};
+    const status = lowcodeRecordStatus(record);
+    const previewUrl = record.previewUrl && record.previewUrl.startsWith("/") ? `${location.origin}${record.previewUrl}` : record.previewUrl || "";
+    return [
+      record.id,
+      record.formName || "",
+      record.formVersionNo ? `v${record.formVersionNo}` : "",
+      statusText(status),
+      record.contentTitle || data.title || "",
+      record.contentModuleLabel || "",
+      record.contentTypeLabel || contentTypeLabel(record.contentType),
+      record.submittedBy || "",
+      formatTime(record.submittedAt),
+      record.contentItemId || "",
+      previewUrl,
+    ];
+  });
+  const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  const project = currentProject();
+  const suffix = state.lowcodeRecordStatusFilter === "all" ? "全部" : statusText(state.lowcodeRecordStatusFilter);
+  const projectName = (project && project.name ? project.name : "项目").replace(/[\\/:*?"<>|]/g, "_");
+  downloadTextFile(`模板提交记录-${projectName}-${suffix}.csv`, csv, "text/csv;charset=utf-8");
+}
 function renderLowcodeRecords() {
   const listNode = $("lowcodeRecordsList");
   if (!listNode) return;
   const records = state.lowcodeRecords || [];
+  const visibleRecords = filteredLowcodeRecords();
   const approved = records.filter((record) => (record.effectiveStatus || record.status) === "approved").length;
-  $("lowcodeRecordsSummary").textContent = `${approved}/${records.length || 0} 已通过`;
-  listNode.innerHTML = records.length ? records.slice(0, 12).map((record) => {
-    const status = record.effectiveStatus || record.contentReviewStatus || record.status;
+  $("lowcodeRecordsSummary").textContent = `${approved}/${records.length || 0} 已通过 · 当前 ${visibleRecords.length}`;
+  listNode.innerHTML = visibleRecords.length ? visibleRecords.slice(0, 12).map((record) => {
+    const status = lowcodeRecordStatus(record);
     const data = record.data && record.data.fields ? record.data.fields : {};
     const summary = data.summary || data.subtitle || record.contentTitle || "暂无摘要";
     return `<article class="lowcode-record-card">
@@ -815,7 +870,7 @@ function renderLowcodeRecords() {
         ${record.previewUrl && status === "approved" ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(record.previewUrl)}">预览</a>` : ""}
       </div>
     </article>`;
-  }).join("") : `<div class="empty">暂无模板提交记录</div>`;
+  }).join("") : `<div class="empty">当前筛选条件下暂无模板提交记录</div>`;
 }
 function fillLowcodeRecordForm(form, record = null) {
   if (!form) return;
@@ -2329,6 +2384,11 @@ $("projectPortalType").addEventListener("change", () => {
   renderTemplateActions($("projectPortalType").value);
 });
 $("pageStatusFilter").addEventListener("change", renderPages);
+$("lowcodeRecordStatusFilter").addEventListener("change", (event) => {
+  state.lowcodeRecordStatusFilter = event.target.value;
+  renderLowcodeRecords();
+});
+$("exportLowcodeRecords").addEventListener("click", exportLowcodeRecordsCsv);
 $("deployProject").addEventListener("change", renderDeploy);
 $("filterLogs").addEventListener("click", renderLogs);
 $("exportLogs").addEventListener("click", () => {
