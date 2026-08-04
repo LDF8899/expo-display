@@ -596,6 +596,42 @@ function lowcodeFieldInput(field, submitted = {}) {
   const lengthAttr = type === "text" ? maxLength : "";
   return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required}${lengthAttr} /></label>`;
 }
+function lowcodeTemplatePreviewInput(field) {
+  const label = escapeHtml(field.label || field.key);
+  const placeholder = escapeHtml(field.placeholder || "");
+  const defaultValue = escapeHtml(field.defaultValue || "");
+  const required = field.required ? " *" : "";
+  const maxLength = Number(field.maxLength || 0) > 0 ? ` maxlength="${Number(field.maxLength)}"` : "";
+  const options = Array.isArray(field.options) ? field.options : [];
+  if (field.type === "textarea" || field.type === "richtext") {
+    return `<label class="lowcode-field wide"><span>${label}${required}</span><textarea rows="3" placeholder="${placeholder}" disabled${maxLength}>${defaultValue}</textarea></label>`;
+  }
+  if (field.type === "checkbox" || field.type === "switch") {
+    return `<label class="lowcode-field lowcode-check"><input type="checkbox" disabled ${field.defaultValue === true || field.defaultValue === "true" || field.defaultValue === "1" ? "checked" : ""} /> <span>${label}</span></label>`;
+  }
+  if (field.type === "select" && options.length) {
+    return `<label class="lowcode-field"><span>${label}${required}</span><select disabled>${options.map((option) => `<option>${escapeHtml(option.label || option.value)}</option>`).join("")}</select></label>`;
+  }
+  if (field.type === "radio" && options.length) {
+    return `<fieldset class="lowcode-choice-field"><legend>${label}${required}</legend>${options.map((option, index) => `<label><input type="radio" disabled ${index === 0 ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
+  }
+  if (field.type === "checkbox_group" && options.length) {
+    return `<fieldset class="lowcode-choice-field wide"><legend>${label}${required}</legend>${options.map((option) => `<label><input type="checkbox" disabled /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
+  }
+  const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
+  return `<label class="lowcode-field"><span>${label}${required}</span><input type="${type}" value="${defaultValue}" placeholder="${placeholder}" disabled${type === "text" ? maxLength : ""} /></label>`;
+}
+function renderLowcodeTemplatePreview() {
+  const node = $("lowcodeTemplatePreview");
+  if (!node) return;
+  const fields = state.lowcodeFieldDrafts
+    .map(normalizeLowcodeFieldDraft)
+    .filter((field) => field.type !== "asset_list" && field.type !== "image_upload" && field.type !== "video_upload");
+  node.innerHTML = fields.length ? groupedLowcodeFields(fields).map((group) => `<section class="lowcode-field-group">
+    <h3>${escapeHtml(group.name)}</h3>
+    <div class="lowcode-field-group-grid">${group.fields.map(lowcodeTemplatePreviewInput).join("")}</div>
+  </section>`).join("") : `<div class="empty">暂无可预览字段</div>`;
+}
 function defaultLowcodeFieldGroup(field = {}) {
   const type = String(field.type || "");
   const mapping = String(field.mapping || "");
@@ -797,6 +833,7 @@ function parseLowcodeOptions(value) {
 function setLowcodeFieldDrafts(fields = []) {
   state.lowcodeFieldDrafts = fields.map(normalizeLowcodeFieldDraft);
   renderLowcodeFieldEditor();
+  renderLowcodeTemplatePreview();
 }
 function renderLowcodeTemplatePortalOptions() {
   const select = $("lowcodeTemplatePortalType");
@@ -878,6 +915,7 @@ function updateLowcodeFieldDraft(index, field, value) {
     [field === "optionsText" ? "options" : field]: field === "required" ? Boolean(value) : field === "optionsText" ? parseLowcodeOptions(value) : field === "maxLength" ? Math.max(0, Number.parseInt(value || 0, 10) || 0) : String(value || "").trim(),
   };
   state.lowcodeFieldDrafts = next.map(normalizeLowcodeFieldDraft);
+  renderLowcodeTemplatePreview();
 }
 function moveLowcodeFieldDraft(index, direction) {
   const target = index + direction;
@@ -933,6 +971,7 @@ function fillLowcodeTemplateForm(form = {}) {
   $("contentItemForm").hidden = true;
   $("pageForm").hidden = true;
   setStatus($("lowcodeTemplateStatus"), "", "");
+  renderLowcodeTemplatePreview();
   $("lowcodeTemplateForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function lowcodeTemplatePayload() {

@@ -827,6 +827,24 @@ tr:last-child td { border-bottom: 0; }
   padding: 12px;
   background: #fbfdff;
 }
+.lowcode-template-preview {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dce5ef;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+.lowcode-template-preview .lowcode-field-group {
+  background: #f7fafc;
+}
+.lowcode-template-preview input:disabled,
+.lowcode-template-preview textarea:disabled,
+.lowcode-template-preview select:disabled {
+  color: #53657a;
+  background: #eef4fb;
+  opacity: 1;
+}
 .lowcode-field-editor-list {
   display: grid;
   gap: 10px;
