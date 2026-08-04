@@ -223,6 +223,8 @@ def main():
             )
             if detail["record"]["id"] != lowcode_record["id"] or detail["record"]["submittedBy"] != "bizteacher":
                 raise RuntimeError(f"lowcode detail mismatch: {detail}")
+            if detail["record"].get("submittedDepartment") != "财经商贸":
+                raise RuntimeError(f"lowcode submitter department missing: {detail}")
 
             admin_reviews, _ = json_request(f"{base_url}/api/reviews?status=pending", headers={"Cookie": admin["cookie"]})
             all_pages = admin_reviews["reviews"]["pages"]

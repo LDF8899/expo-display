@@ -1030,7 +1030,7 @@ function exportLowcodeRecordsCsv() {
     alert("当前筛选条件下暂无可导出的模板提交记录");
     return;
   }
-  const headers = ["记录ID", "模板", "版本", "状态", "标题", "板块", "资料类型", "提交人", "提交时间", "审核意见", "生成资料ID", "预览地址"];
+  const headers = ["记录ID", "模板", "版本", "状态", "标题", "板块", "资料类型", "提交账号", "提交人", "提交部门", "提交时间", "审核意见", "生成资料ID", "预览地址"];
   const rows = records.map((record) => {
     const data = record.data && record.data.fields ? record.data.fields : {};
     const status = lowcodeRecordStatus(record);
@@ -1044,6 +1044,8 @@ function exportLowcodeRecordsCsv() {
       record.contentModuleLabel || "",
       record.contentTypeLabel || contentTypeLabel(record.contentType),
       record.submittedBy || "",
+      record.submittedDisplayName || "",
+      record.submittedDepartment || "",
       formatTime(record.submittedAt),
       record.reviewNote || "",
       record.contentItemId || "",
@@ -1084,7 +1086,7 @@ function exportLowcodeRecordDetailsCsv() {
     return;
   }
   const columns = lowcodeRecordFieldColumns(records);
-  const headers = ["记录ID", "模板", "版本", "状态", "生成资料标题", "板块", "资料类型", "提交人", "提交时间", "审核意见", ...columns.map((column) => column.label), "素材数", "素材地址"];
+  const headers = ["记录ID", "模板", "版本", "状态", "生成资料标题", "板块", "资料类型", "提交账号", "提交人", "提交部门", "提交时间", "审核意见", ...columns.map((column) => column.label), "素材数", "素材地址"];
   const rows = records.map((record) => {
     const data = record.data && record.data.fields ? record.data.fields : {};
     const assets = orderedContentAssets(data.assets || []);
@@ -1097,6 +1099,8 @@ function exportLowcodeRecordDetailsCsv() {
       record.contentModuleLabel || "",
       record.contentTypeLabel || contentTypeLabel(record.contentType),
       record.submittedBy || "",
+      record.submittedDisplayName || "",
+      record.submittedDepartment || "",
       formatTime(record.submittedAt),
       record.reviewNote || "",
       ...columns.map((column) => lowcodeDisplayValue(data[column.key])),
@@ -1177,6 +1181,25 @@ function lowcodeTemplateReportRows() {
   });
   return [...rows.values()].sort((a, b) => (b.stats.total - a.stats.total) || a.label.localeCompare(b.label, "zh-Hans-CN"));
 }
+function lowcodeDepartmentReportRows() {
+  const rows = new Map();
+  (state.lowcodeRecords || []).forEach((record) => {
+    const key = record.submittedDepartment || "未记录部门";
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        label: key,
+        subline: "按系部/部门统计资料填报进度",
+        stats: lowcodeRecordStats([]),
+        records: [],
+      });
+    }
+    const row = rows.get(key);
+    row.records.push(record);
+    row.stats = lowcodeRecordStats(row.records);
+  });
+  return [...rows.values()].sort((a, b) => (b.stats.total - a.stats.total) || a.label.localeCompare(b.label, "zh-Hans-CN"));
+}
 function lowcodeSubmitterReportRows() {
   const rows = new Map();
   (state.lowcodeRecords || []).forEach((record) => {
@@ -1184,8 +1207,8 @@ function lowcodeSubmitterReportRows() {
     if (!rows.has(key)) {
       rows.set(key, {
         key,
-        label: key,
-        subline: "填报人提交情况",
+        label: record.submittedDisplayName || key,
+        subline: `${record.submittedDepartment || "未记录部门"} · ${key}`,
         stats: lowcodeRecordStats([]),
         records: [],
       });
@@ -1212,7 +1235,7 @@ function lowcodeReminderAction(module, recordStats, rejectedCount, enabledTempla
   return ["warn", "待完善", "补充一条审核通过的可展示资料。"];
 }
 function lowcodeReminderTarget(moduleRecords, project) {
-  const submitters = [...new Set(moduleRecords.map((record) => record.submittedBy).filter(Boolean))];
+  const submitters = [...new Set(moduleRecords.map((record) => record.submittedDisplayName || record.submittedBy).filter(Boolean))];
   if (submitters.length) return submitters.join("、");
   return project?.ownerDisplayName || project?.ownerUsername || state.user?.displayName || state.user?.username || "待分配";
 }
@@ -1308,18 +1331,21 @@ function renderLowcodeReports() {
   const stats = lowcodeRecordStats(records);
   $("lowcodeReportSummary").textContent = `${stats.approved}/${stats.total || 0} 已通过 · 待审 ${stats.pending} · 驳回 ${stats.rejected}`;
   const templateRows = lowcodeTemplateReportRows();
+  const departmentRows = lowcodeDepartmentReportRows();
   const submitterRows = lowcodeSubmitterReportRows();
   const reminderRows = lowcodeReminderRows();
   grid.innerHTML = [
     renderLowcodeReportGroup("按模板统计", "查看每个资料采集模板的使用和审核状态", templateRows, "当前门户暂无资料采集模板"),
+    renderLowcodeReportGroup("按部门统计", "查看各系部或部门的资料提交进度", departmentRows, "当前门户暂无部门填报记录"),
     renderLowcodeReportGroup("按填报人统计", "查看老师或管理员的资料提交进度", submitterRows, "当前门户暂无填报记录"),
     renderLowcodeReminderReport(reminderRows),
   ].join("");
 }
 function exportLowcodeReportCsv() {
   const templateRows = lowcodeTemplateReportRows();
+  const departmentRows = lowcodeDepartmentReportRows();
   const submitterRows = lowcodeSubmitterReportRows();
-  if (!templateRows.length && !submitterRows.length) {
+  if (!templateRows.length && !departmentRows.length && !submitterRows.length) {
     alert("暂无可导出的资料填报统计");
     return;
   }
@@ -1336,6 +1362,7 @@ function exportLowcodeReportCsv() {
   ];
   const rows = [
     ...templateRows.map((row) => rowFromReport("按模板", row)),
+    ...departmentRows.map((row) => rowFromReport("按部门", row)),
     ...submitterRows.map((row) => rowFromReport("按填报人", row)),
   ];
   const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
@@ -1580,6 +1607,12 @@ function lowcodeDisplayValue(value) {
   if (value === false) return "否";
   return String(value ?? "");
 }
+function lowcodeSubmitterLabel(record) {
+  const name = record.submittedDisplayName || record.submittedBy || "-";
+  const department = record.submittedDepartment ? ` · ${record.submittedDepartment}` : "";
+  const username = record.submittedBy && record.submittedDisplayName && record.submittedDisplayName !== record.submittedBy ? `（${record.submittedBy}）` : "";
+  return `${name}${username}${department}`;
+}
 function renderLowcodeRecordDetail(record) {
   const panel = $("lowcodeRecordDetailPanel");
   const node = $("lowcodeRecordDetail");
@@ -1608,7 +1641,7 @@ function renderLowcodeRecordDetail(record) {
   });
   const assets = orderedContentAssets(fields.assets || []);
   $("lowcodeRecordDetailTitle").textContent = record.contentTitle || fields.title || "模板填报详情";
-  $("lowcodeRecordDetailMeta").textContent = `${record.formName || "资料采集模板"} · v${record.formVersionNo || "-"} · ${statusText(lowcodeRecordStatus(record))} · ${record.submittedBy || "-"} · ${formatTime(record.submittedAt)}`;
+  $("lowcodeRecordDetailMeta").textContent = `${record.formName || "资料采集模板"} · v${record.formVersionNo || "-"} · ${statusText(lowcodeRecordStatus(record))} · ${lowcodeSubmitterLabel(record)} · ${formatTime(record.submittedAt)}`;
   const reviewNoteHtml = record.reviewNote ? `<section class="lowcode-record-note">
       <strong>审核意见</strong>
       <p>${escapeHtml(record.reviewNote)}</p>
@@ -1648,7 +1681,7 @@ function renderLowcodeRecords() {
       <header>
         <div>
           <strong>${escapeHtml(record.contentTitle || data.title || "未命名资料")}</strong>
-          <span>${escapeHtml(record.formName || "资料采集模板")} · v${escapeHtml(record.formVersionNo || "-")} · ${escapeHtml(record.submittedBy || "-")} · ${formatTime(record.submittedAt)}</span>
+          <span>${escapeHtml(record.formName || "资料采集模板")} · v${escapeHtml(record.formVersionNo || "-")} · ${escapeHtml(lowcodeSubmitterLabel(record))} · ${formatTime(record.submittedAt)}</span>
         </div>
         ${badge(status)}
       </header>

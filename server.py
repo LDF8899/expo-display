@@ -4153,6 +4153,8 @@ def row_to_lowcode_record(row):
         "previewUrl": f"/display?project={row['project_id']}&code={content_code}" if content_code else "",
         "data": record_data,
         "submittedBy": row["submitted_by"],
+        "submittedDisplayName": row["submitted_display_name"] if "submitted_display_name" in keys else row["submitted_by"],
+        "submittedDepartment": row["submitted_department"] if "submitted_department" in keys else "",
         "submittedAt": row["submitted_at"],
         "reviewedBy": row["reviewed_by"],
         "reviewedAt": row["reviewed_at"],
@@ -4176,12 +4178,15 @@ def get_lowcode_record(record_id, actor=None):
                 content_items.module_key AS content_module_key,
                 content_items.content_type AS content_type,
                 content_items.review_status AS content_review_status,
-                projects.portal_type AS project_portal_type
+                projects.portal_type AS project_portal_type,
+                submitters.display_name AS submitted_display_name,
+                submitters.department AS submitted_department
             FROM lowcode_records
             LEFT JOIN lowcode_forms ON lowcode_forms.id = lowcode_records.form_id
             LEFT JOIN lowcode_form_versions ON lowcode_form_versions.id = lowcode_records.form_version_id
             LEFT JOIN content_items ON content_items.id = lowcode_records.content_item_id
             LEFT JOIN projects ON projects.id = lowcode_records.project_id
+            LEFT JOIN users submitters ON submitters.username = lowcode_records.submitted_by
             WHERE lowcode_records.id = ?
             """,
             (record_id,),
@@ -4216,12 +4221,15 @@ def list_lowcode_records(project_id, actor=None):
                 content_items.module_key AS content_module_key,
                 content_items.content_type AS content_type,
                 content_items.review_status AS content_review_status,
-                projects.portal_type AS project_portal_type
+                projects.portal_type AS project_portal_type,
+                submitters.display_name AS submitted_display_name,
+                submitters.department AS submitted_department
             FROM lowcode_records
             LEFT JOIN lowcode_forms ON lowcode_forms.id = lowcode_records.form_id
             LEFT JOIN lowcode_form_versions ON lowcode_form_versions.id = lowcode_records.form_version_id
             LEFT JOIN content_items ON content_items.id = lowcode_records.content_item_id
             LEFT JOIN projects ON projects.id = lowcode_records.project_id
+            LEFT JOIN users submitters ON submitters.username = lowcode_records.submitted_by
             {where}
             ORDER BY lowcode_records.submitted_at DESC, lowcode_records.id DESC
             """,
