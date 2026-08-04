@@ -3712,7 +3712,7 @@ def lowcode_scalar_text(value):
     return str(value or "").strip()
 
 
-def lowcode_record_payload(form, submitted):
+def lowcode_record_payload(form, submitted, validate_required=True):
     schema = form.get("schema") or {}
     submitted = submitted if isinstance(submitted, dict) else {}
     fields = schema.get("fields") if isinstance(schema.get("fields"), list) else []
@@ -3740,7 +3740,7 @@ def lowcode_record_payload(form, submitted):
         if (value is None or lowcode_scalar_text(value) == "") and field.get("defaultValue") not in (None, ""):
             value = field.get("defaultValue")
         text_value = lowcode_scalar_text(value)
-        if field.get("required") and (value is None or text_value == ""):
+        if validate_required and field.get("required") and (value is None or text_value == ""):
             errors.append(f"{field.get('label') or key}不能为空")
             continue
         mapping = str(field.get("mapping") or "")
@@ -3783,12 +3783,18 @@ def row_to_lowcode_record(row):
     if not row:
         return None
     keys = row.keys()
+    record_data = json_value(row["data_json"], {})
+    payload = record_data.get("contentItemPayload") if isinstance(record_data, dict) else {}
+    payload = payload if isinstance(payload, dict) else {}
+    fields = record_data.get("fields") if isinstance(record_data, dict) else {}
+    fields = fields if isinstance(fields, dict) else {}
     project_portal_type = normalize_portal_type(row["project_portal_type"] if "project_portal_type" in keys else "department")
-    module_key = row["content_module_key"] if "content_module_key" in keys and row["content_module_key"] else ""
+    module_key = row["content_module_key"] if "content_module_key" in keys and row["content_module_key"] else payload.get("moduleKey", "")
     module_meta = module_meta_for_key(module_key, project_portal_type)
-    content_type = normalize_content_type(row["content_type"] if "content_type" in keys and row["content_type"] else "article")
+    content_type = normalize_content_type(row["content_type"] if "content_type" in keys and row["content_type"] else payload.get("contentType", "article"))
     content_status = row["content_review_status"] if "content_review_status" in keys and row["content_review_status"] else ""
     content_code = row["content_code"] if "content_code" in keys and row["content_code"] else ""
+    content_title = row["content_title"] if "content_title" in keys and row["content_title"] else payload.get("title") or fields.get("title") or ""
     return {
         "id": row["id"],
         "formId": row["form_id"],
@@ -3796,11 +3802,11 @@ def row_to_lowcode_record(row):
         "projectId": row["project_id"],
         "contentItemId": row["content_item_id"],
         "status": row["status"],
-        "effectiveStatus": content_status or row["status"],
+        "effectiveStatus": row["status"] if row["status"] == "draft" else content_status or row["status"],
         "formName": row["form_name"] if "form_name" in keys else "",
         "formCode": row["form_code"] if "form_code" in keys else "",
         "formVersionNo": int_value(row["form_version_no"] if "form_version_no" in keys else 0),
-        "contentTitle": row["content_title"] if "content_title" in keys else "",
+        "contentTitle": content_title,
         "contentCode": content_code,
         "contentModuleKey": module_key,
         "contentModuleLabel": module_meta["label"] if module_meta else module_key,
@@ -3808,7 +3814,7 @@ def row_to_lowcode_record(row):
         "contentTypeLabel": content_type_label(content_type),
         "contentReviewStatus": content_status,
         "previewUrl": f"/display?project={row['project_id']}&code={content_code}" if content_code else "",
-        "data": json_value(row["data_json"], {}),
+        "data": record_data,
         "submittedBy": row["submitted_by"],
         "submittedAt": row["submitted_at"],
         "reviewedBy": row["reviewed_by"],
@@ -3819,10 +3825,15 @@ def row_to_lowcode_record(row):
     }
 
 
-def list_lowcode_records(project_id):
+def list_lowcode_records(project_id, actor=None):
+    where = "WHERE lowcode_records.project_id = ?"
+    params = [project_id]
+    if actor and actor.get("role") != "admin":
+        where += " AND lowcode_records.submitted_by = ?"
+        params.append(actor.get("username", ""))
     with db_connect() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 lowcode_records.*,
                 lowcode_forms.name AS form_name,
@@ -3839,15 +3850,24 @@ def list_lowcode_records(project_id):
             LEFT JOIN lowcode_form_versions ON lowcode_form_versions.id = lowcode_records.form_version_id
             LEFT JOIN content_items ON content_items.id = lowcode_records.content_item_id
             LEFT JOIN projects ON projects.id = lowcode_records.project_id
-            WHERE lowcode_records.project_id = ?
+            {where}
             ORDER BY lowcode_records.submitted_at DESC, lowcode_records.id DESC
             """,
-            (project_id,),
+            params,
         ).fetchall()
     return [row_to_lowcode_record(row) for row in rows]
 
 
-def submit_lowcode_record(project_id, form_id, data, actor):
+def lowcode_submitted_data(data):
+    data = data if isinstance(data, dict) else {}
+    submitted = data.get("data") if isinstance(data.get("data"), dict) else data
+    submitted = dict(submitted or {})
+    if isinstance(data.get("assets"), list):
+        submitted["assets"] = data.get("assets")
+    return submitted
+
+
+def ensure_lowcode_form_for_project(project_id, form_id):
     project = get_project(project_id)
     if not project:
         raise ValueError("项目不存在")
@@ -3857,79 +3877,182 @@ def submit_lowcode_record(project_id, form_id, data, actor):
     project_portal_type = normalize_portal_type(project.get("portalType"))
     if normalize_portal_type(form.get("targetPortalType")) != project_portal_type:
         raise ValueError("资料采集模板不适用于当前门户")
-    submitted = data.get("data") if isinstance(data.get("data"), dict) else data
-    submitted = dict(submitted or {})
-    if isinstance(data.get("assets"), list):
-        submitted["assets"] = data.get("assets")
+    version_id = (form.get("version") or {}).get("id")
+    if not version_id:
+        raise ValueError("资料采集模板缺少有效版本")
+    return project, form, version_id
+
+
+def assert_lowcode_draft_owner(conn, record_id, project_id, form_id, actor):
+    row = conn.execute(
+        """
+        SELECT * FROM lowcode_records
+        WHERE id = ? AND project_id = ? AND form_id = ? AND status = 'draft'
+        """,
+        (record_id, project_id, form_id),
+    ).fetchone()
+    if not row:
+        raise ValueError("草稿不存在或已提交")
+    if actor.get("role") != "admin" and row["submitted_by"] != actor.get("username", ""):
+        raise ValueError("只能继续提交自己的草稿")
+    return row
+
+
+def replace_lowcode_record_assets(conn, record_id, assets, now):
+    conn.execute("DELETE FROM lowcode_record_assets WHERE record_id = ?", (record_id,))
+    for index, asset in enumerate(assets or []):
+        conn.execute(
+            """
+            INSERT INTO lowcode_record_assets (
+                record_id, asset_id, role, title, caption, url, sort_order, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record_id,
+                asset.get("assetId"),
+                asset.get("role") or "gallery",
+                asset.get("title") or "",
+                asset.get("caption") or "",
+                asset.get("url") or "",
+                int_value(asset.get("sortOrder"), index),
+                now,
+            ),
+        )
+
+
+def lowcode_record_result(project_id, record_id, item=None):
+    record = next((entry for entry in list_lowcode_records(project_id) if entry["id"] == record_id), None)
+    result = {"record": record}
+    if item is not None:
+        result["item"] = item
+    return result
+
+
+def save_lowcode_record_draft(project_id, form_id, data, actor):
+    _, form, version_id = ensure_lowcode_form_for_project(project_id, form_id)
+    data = data if isinstance(data, dict) else {}
+    submitted = lowcode_submitted_data(data)
+    payload = lowcode_record_payload(form, submitted, validate_required=False)
+    validate_content_asset_access(payload.get("coverAssetId"), payload.get("assets", []), actor)
+    now = now_iso()
+    draft_record_id = int_value(data.get("draftRecordId"))
+    with db_connect() as conn:
+        if draft_record_id:
+            assert_lowcode_draft_owner(conn, draft_record_id, project_id, form_id, actor)
+            conn.execute(
+                """
+                UPDATE lowcode_records SET
+                    form_version_id = ?, content_item_id = NULL, status = 'draft',
+                    data_json = ?, submitted_by = ?, submitted_at = ?,
+                    reviewed_by = '', reviewed_at = '', review_note = '',
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    version_id,
+                    json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    now,
+                    draft_record_id,
+                ),
+            )
+            record_id = draft_record_id
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO lowcode_records (
+                    form_id, form_version_id, project_id, content_item_id, status,
+                    data_json, submitted_by, submitted_at, reviewed_by, reviewed_at,
+                    review_note, created_at, updated_at
+                )
+                VALUES (?, ?, ?, NULL, 'draft', ?, ?, ?, '', '', '', ?, ?)
+                """,
+                (
+                    form_id,
+                    version_id,
+                    project_id,
+                    json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    now,
+                    now,
+                ),
+            )
+            record_id = cursor.lastrowid
+        replace_lowcode_record_assets(conn, record_id, payload.get("assets", []), now)
+    return lowcode_record_result(project_id, record_id)
+
+
+def submit_lowcode_record(project_id, form_id, data, actor):
+    _, form, version_id = ensure_lowcode_form_for_project(project_id, form_id)
+    data = data if isinstance(data, dict) else {}
+    submitted = lowcode_submitted_data(data)
+    draft_record_id = int_value(data.get("draftRecordId"))
+    if draft_record_id:
+        with db_connect() as conn:
+            assert_lowcode_draft_owner(conn, draft_record_id, project_id, form_id, actor)
     payload = lowcode_record_payload(form, submitted)
     validate_content_asset_access(payload.get("coverAssetId"), payload.get("assets", []), actor)
     approve_now = actor.get("role") == "admin"
     item = save_content_item(project_id, None, payload, actor, approve_now=approve_now)
     now = now_iso()
     status = "approved" if approve_now else "pending"
-    version_id = (form.get("version") or {}).get("id")
-    if not version_id:
-        raise ValueError("资料采集模板缺少有效版本")
     with db_connect() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO lowcode_records (
-                form_id, form_version_id, project_id, content_item_id, status,
-                data_json, submitted_by, submitted_at, reviewed_by, reviewed_at,
-                review_note, created_at, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
-            """,
-            (
-                form_id,
-                version_id,
-                project_id,
-                item["id"],
-                status,
-                json_text({"fields": submitted, "contentItemPayload": payload}, {}),
-                actor.get("username", ADMIN_USERNAME),
-                now,
-                actor.get("username", ADMIN_USERNAME) if approve_now else "",
-                now if approve_now else "",
-                now,
-                now,
-            ),
-        )
-        record_id = cursor.lastrowid
-        for index, asset in enumerate(payload.get("assets", [])):
+        if draft_record_id:
+            assert_lowcode_draft_owner(conn, draft_record_id, project_id, form_id, actor)
             conn.execute(
                 """
-                INSERT INTO lowcode_record_assets (
-                    record_id, asset_id, role, title, caption, url, sort_order, created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                UPDATE lowcode_records SET
+                    form_version_id = ?, content_item_id = ?, status = ?,
+                    data_json = ?, submitted_by = ?, submitted_at = ?,
+                    reviewed_by = ?, reviewed_at = ?, review_note = '',
+                    updated_at = ?
+                WHERE id = ?
                 """,
                 (
-                    record_id,
-                    asset.get("assetId"),
-                    asset.get("role") or "gallery",
-                    asset.get("title") or "",
-                    asset.get("caption") or "",
-                    asset.get("url") or "",
-                    int_value(asset.get("sortOrder"), index),
+                    version_id,
+                    item["id"],
+                    status,
+                    json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    actor.get("username", ADMIN_USERNAME) if approve_now else "",
+                    now if approve_now else "",
+                    now,
+                    draft_record_id,
+                ),
+            )
+            record_id = draft_record_id
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO lowcode_records (
+                    form_id, form_version_id, project_id, content_item_id, status,
+                    data_json, submitted_by, submitted_at, reviewed_by, reviewed_at,
+                    review_note, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+                """,
+                (
+                    form_id,
+                    version_id,
+                    project_id,
+                    item["id"],
+                    status,
+                    json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    actor.get("username", ADMIN_USERNAME) if approve_now else "",
+                    now if approve_now else "",
+                    now,
                     now,
                 ),
             )
-    return {"record": row_to_lowcode_record({**{"id": record_id}, **{
-        "form_id": form_id,
-        "form_version_id": version_id,
-        "project_id": project_id,
-        "content_item_id": item["id"],
-        "status": status,
-        "data_json": json_text({"fields": submitted, "contentItemPayload": payload}, {}),
-        "submitted_by": actor.get("username", ADMIN_USERNAME),
-        "submitted_at": now,
-        "reviewed_by": actor.get("username", ADMIN_USERNAME) if approve_now else "",
-        "reviewed_at": now if approve_now else "",
-        "review_note": "",
-        "created_at": now,
-        "updated_at": now,
-    }}), "item": item}
+            record_id = cursor.lastrowid
+        replace_lowcode_record_assets(conn, record_id, payload.get("assets", []), now)
+    return lowcode_record_result(project_id, record_id, item)
 
 
 def content_modules_payload(items, portal_type="department"):
@@ -7292,7 +7415,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
-                self.send_json(200, {"ok": True, "project": project, "records": list_lowcode_records(project_id)})
+                self.send_json(200, {"ok": True, "project": project, "records": list_lowcode_records(project_id, user)})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
@@ -7645,18 +7768,20 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
+                data = self.read_json()
                 try:
-                    result = submit_lowcode_record(project_id, form_id, self.read_json(), user)
+                    result = save_lowcode_record_draft(project_id, form_id, data, user) if data.get("draft") else submit_lowcode_record(project_id, form_id, data, user)
                 except ValueError as exc:
                     self.send_json(400, {"ok": False, "error": str(exc)})
                     return
+                log_title = (result.get("item") or {}).get("title") or (result.get("record") or {}).get("contentTitle") or "低代码资料草稿"
                 self.log_admin(
-                    "submit_lowcode_record" if user["role"] != "admin" else "save_lowcode_record",
+                    "save_lowcode_draft" if data.get("draft") else ("submit_lowcode_record" if user["role"] != "admin" else "save_lowcode_record"),
                     "lowcode_record",
                     result["record"]["id"],
-                    result["item"]["title"],
+                    log_title,
                     f"project {project_id}",
-                    changes="lowcode-to-content-item",
+                    changes="lowcode-draft" if data.get("draft") else "lowcode-to-content-item",
                 )
                 self.send_json(200, {"ok": True, **result})
                 return
