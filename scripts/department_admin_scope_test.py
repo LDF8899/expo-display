@@ -74,6 +74,16 @@ def create_user(base_url, admin, username, password, department, role):
     return result["user"]
 
 
+def import_users_csv(base_url, admin, csv_text):
+    result, _ = json_request(
+        f"{base_url}/api/users/import-csv",
+        method="POST",
+        headers=admin["headers"],
+        payload={"csv": csv_text},
+    )
+    return result["result"]
+
+
 def create_project(base_url, admin, owner, name):
     result, _ = json_request(
         f"{base_url}/api/projects",
@@ -165,7 +175,14 @@ def main():
         try:
             time.sleep(2)
             admin = login(base_url, "admin", "Admin-Department-Scope-2026")
-            create_user(base_url, admin, "deptboss", "Dept-Boss-Password-2026", "财经商贸", "department_admin")
+            import_result = import_users_csv(
+                base_url,
+                admin,
+                "username,name,password,department,role,projects\n"
+                "deptboss,Dept Boss,Dept-Boss-Password-2026,财经商贸,系部管理员,\n",
+            )
+            if import_result["roles"].get("department_admin") != 1:
+                raise RuntimeError(f"CSV role import failed: {import_result}")
             create_user(base_url, admin, "bizteacher", "Biz-Teacher-Password-2026", "财经商贸", "teacher")
             create_user(base_url, admin, "agriteacher", "Agri-Teacher-Password-2026", "现代农业", "teacher")
 

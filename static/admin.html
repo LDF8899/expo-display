@@ -40,8 +40,8 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-              <h2>老师管理</h2>
-              <p>创建老师账号、重置密码、启用或禁用账号，禁用后其内容下线。</p>
+              <h2>账号管理</h2>
+              <p>创建老师、系部管理员和管理员账号，维护部门、角色和启用状态。</p>
             </div>
           </div>
           <form id="userForm" class="form-grid four">
@@ -57,8 +57,8 @@
             <button class="button primary" type="submit">保存账号</button>
           </form>
           <label class="stack">
-            <span>CSV 导入 username,name,password,department,projects</span>
-            <textarea id="csvImport" rows="5" placeholder="username,name,password,department,projects"></textarea>
+            <span>CSV 导入 username,name,password,department,role,projects</span>
+            <textarea id="csvImport" rows="5" placeholder="username,name,password,department,role,projects"></textarea>
           </label>
           <button id="importUsers" class="button ghost" type="button">导入 CSV</button>
           <p id="userStatus" class="status-text"></p>

@@ -225,7 +225,7 @@ const allowedRichTags = new Set(["A", "B", "BLOCKQUOTE", "BR", "DIV", "EM", "FIG
 
 const views = {
   dashboard: ["门户总览", "查看欢迎页、学校门户、系部门户、专题门户和发布状态。"],
-  users: ["老师管理", "创建、导入、禁用和维护老师账号。"],
+  users: ["账号管理", "创建、导入、禁用和维护老师、系部管理员与管理员账号。"],
   projects: ["门户管理", "统一维护学校门户、系部门户和专题门户，并分配归属老师。"],
   pages: ["板块资料", "维护门户下的板块资料，审核通过后进入展示。"],
   assets: ["素材库", "上传、复用和删除图片、视频和附件素材。"],
@@ -3888,7 +3888,8 @@ $("userForm").addEventListener("submit", async (event) => {
 $("importUsers").addEventListener("click", async () => {
   try {
     const data = await jsonApi("/api/users/import-csv", body({ csv: $("csvImport").value }));
-    setStatus($("userStatus"), `导入完成：新增 ${data.result.created}，更新 ${data.result.updated}，项目 ${data.result.projects}`, "success");
+    const roles = data.result.roles || {};
+    setStatus($("userStatus"), `导入完成：新增 ${data.result.created}，更新 ${data.result.updated}，项目 ${data.result.projects}，老师 ${roles.teacher || 0}，系部管理员 ${roles.department_admin || 0}，管理员 ${roles.admin || 0}`, "success");
     await refreshView("users");
   } catch (err) { setStatus($("userStatus"), err.message, "error"); }
 });

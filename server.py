@@ -2346,6 +2346,24 @@ def user_role_label(role):
     }.get(role or "", "老师")
 
 
+def normalize_user_role(role, default=ROLE_TEACHER):
+    text = str(role or "").strip().lower()
+    aliases = {
+        "admin": ROLE_ADMIN,
+        "管理员": ROLE_ADMIN,
+        "超级管理员": ROLE_ADMIN,
+        "department_admin": ROLE_DEPARTMENT_ADMIN,
+        "dept_admin": ROLE_DEPARTMENT_ADMIN,
+        "department-admin": ROLE_DEPARTMENT_ADMIN,
+        "系部管理员": ROLE_DEPARTMENT_ADMIN,
+        "部门管理员": ROLE_DEPARTMENT_ADMIN,
+        "teacher": ROLE_TEACHER,
+        "老师": ROLE_TEACHER,
+        "教师": ROLE_TEACHER,
+    }
+    return aliases.get(text, default if default in VALID_USER_ROLES else ROLE_TEACHER)
+
+
 def project_owner_department(username):
     if not username:
         return ""
@@ -2406,9 +2424,7 @@ def upsert_user(data, actor="admin"):
         raise ValueError("username 不能为空")
     if not re.match(r"^[A-Za-z0-9_.-]{2,64}$", username):
         raise ValueError("username 只能使用字母、数字、点、短横线或下划线")
-    role = str(data.get("role") or ROLE_TEACHER).strip()
-    if role not in VALID_USER_ROLES:
-        role = ROLE_TEACHER
+    role = normalize_user_role(data.get("role"), ROLE_TEACHER)
     display_name = str(data.get("displayName") or data.get("name") or username).strip()
     department = str(data.get("department") or "").strip()
     enabled = 1 if data.get("enabled", True) else 0
@@ -8136,7 +8152,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 return
             data = self.read_json()
             text_csv = str(data.get("csv") or "")
-            result = {"created": 0, "updated": 0, "projects": 0, "errors": []}
+            result = {"created": 0, "updated": 0, "projects": 0, "roles": {ROLE_ADMIN: 0, ROLE_DEPARTMENT_ADMIN: 0, ROLE_TEACHER: 0}, "errors": []}
             reader = csv.DictReader(io.StringIO(text_csv))
             for line_no, row in enumerate(reader, start=2):
                 try:
@@ -8144,8 +8160,17 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     if not username:
                         raise ValueError("username 不能为空")
                     existed = get_user(username)
-                    user = upsert_user({"username": username, "displayName": row.get("name") or row.get("displayName") or username, "password": row.get("password"), "department": row.get("department") or "", "role": "teacher", "enabled": True}, actor["username"])
+                    role = normalize_user_role(row.get("role") or row.get("角色"), ROLE_TEACHER)
+                    user = upsert_user({
+                        "username": username,
+                        "displayName": row.get("name") or row.get("displayName") or row.get("姓名") or username,
+                        "password": row.get("password") or row.get("密码"),
+                        "department": row.get("department") or row.get("部门") or "",
+                        "role": role,
+                        "enabled": True,
+                    }, actor["username"])
                     result["updated" if existed else "created"] += 1
+                    result["roles"][user["role"]] = result["roles"].get(user["role"], 0) + 1
                     projects_text = str(row.get("projects") or "").strip()
                     for name in [item.strip() for item in re.split(r"[;；]", projects_text) if item.strip()]:
                         save_project(None, {"name": name, "ownerUsername": user["username"]}, actor)
