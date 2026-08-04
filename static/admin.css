@@ -766,6 +766,9 @@ tr:last-child td { border-bottom: 0; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
+.lowcode-report-grid .lowcode-reminder-card {
+  grid-column: 1 / -1;
+}
 .lowcode-report-card {
   min-width: 0;
   border: 1px solid #dce5ef;
@@ -836,6 +839,53 @@ tr:last-child td { border-bottom: 0; }
   display: block;
   color: #143b66;
   font-size: 15px;
+}
+.lowcode-reminder-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(0, 1fr) minmax(160px, 0.65fr);
+  gap: 10px;
+  align-items: start;
+  margin-top: 10px;
+  border: 1px solid #dce5ef;
+  border-left: 4px solid #94a3b8;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfdff;
+}
+.lowcode-reminder-row.warn {
+  border-left-color: #f59e0b;
+  background: #fffaf0;
+}
+.lowcode-reminder-row.danger {
+  border-left-color: #dc2626;
+  background: #fff5f5;
+}
+.lowcode-reminder-row.ok {
+  border-left-color: #16a34a;
+  background: #f2fbf5;
+}
+.lowcode-reminder-row div {
+  min-width: 0;
+}
+.lowcode-reminder-row strong {
+  color: #203246;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.lowcode-reminder-row span,
+.lowcode-reminder-row p,
+.lowcode-reminder-row small {
+  margin: 0;
+  color: #53657a;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.lowcode-reminder-row p {
+  color: #203246;
+}
+.lowcode-reminder-row small {
+  color: #7890a8;
 }
 .content-item-toolbar {
   display: flex;
@@ -2005,6 +2055,7 @@ tr:last-child td { border-bottom: 0; }
   .content-asset-card,
   .content-asset-fields,
   .content-quality-card,
+  .lowcode-reminder-row,
   .lowcode-record-detail-grid,
   .lowcode-record-detail-assets a,
   .lowcode-field-editor-row,
