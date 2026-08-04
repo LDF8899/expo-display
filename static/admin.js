@@ -84,51 +84,51 @@ const lowcodeFieldTypes = [
 ];
 const lowcodeMetaFieldTemplates = {
   person: [
-    ["personName", "姓名", "text", "content_item.meta_json.姓名", "人物姓名", 40],
-    ["identity", "身份/职务", "text", "content_item.meta_json.身份", "教师职务、校友岗位或学生班级", 80],
+    ["personName", "姓名", "text", "content_item.meta_json.姓名", "人物姓名", 40, true],
+    ["identity", "身份/职务", "text", "content_item.meta_json.身份", "教师职务、校友岗位或学生班级", 80, true],
     ["tags", "荣誉标签", "text", "content_item.meta_json.标签", "技能能手、优秀毕业生等", 120],
-    ["story", "主要事迹", "textarea", "content_item.body_text", "成长经历、代表成果和可展示亮点", 2000],
+    ["story", "主要事迹", "textarea", "content_item.body_text", "成长经历、代表成果和可展示亮点", 2000, true],
   ],
   activity: [
-    ["eventDate", "时间", "text", "content_item.meta_json.时间", "活动或比赛时间", 60],
+    ["eventDate", "时间", "text", "content_item.meta_json.时间", "活动或比赛时间", 60, true],
     ["location", "地点", "text", "content_item.meta_json.地点", "举办地点或实践场景", 80],
     ["units", "参与单位", "text", "content_item.meta_json.参与单位", "主办、承办或合作单位", 120],
-    ["outcome", "活动成效", "textarea", "content_item.body_text", "活动过程、学生参与和成果", 2000],
+    ["outcome", "活动成效", "textarea", "content_item.body_text", "活动过程、学生参与和成果", 2000, true],
   ],
   honor: [
-    ["honorName", "荣誉名称", "text", "content_item.meta_json.荣誉名称", "奖项、资质或认定名称", 120],
+    ["honorName", "荣誉名称", "text", "content_item.meta_json.荣誉名称", "奖项、资质或认定名称", 120, true],
     ["level", "级别", "text", "content_item.meta_json.级别", "国家级、省级、市级、校级等", 40],
-    ["year", "年份", "text", "content_item.meta_json.年份", "获评或获奖年份", 20],
-    ["recipient", "获奖单位/个人", "text", "content_item.meta_json.获奖单位或个人", "对应团队或人员", 120],
-    ["value", "展示说明", "textarea", "content_item.body_text", "荣誉对专业建设或人才培养的价值", 1600],
+    ["year", "年份", "text", "content_item.meta_json.年份", "获评或获奖年份", 20, true],
+    ["recipient", "获奖单位/个人", "text", "content_item.meta_json.获奖单位或个人", "对应团队或人员", 120, true],
+    ["value", "展示说明", "textarea", "content_item.body_text", "荣誉对专业建设或人才培养的价值", 1600, true],
   ],
   achievement: [
-    ["achievementName", "成果名称", "text", "content_item.meta_json.成果名称", "项目、课程、案例或建设成果", 120],
+    ["achievementName", "成果名称", "text", "content_item.meta_json.成果名称", "项目、课程、案例或建设成果", 120, true],
     ["period", "建设周期", "text", "content_item.meta_json.建设周期", "起止时间或阶段", 60],
     ["team", "参与团队", "text", "content_item.meta_json.参与团队", "教师、学生或合作单位", 120],
     ["metrics", "关键指标", "textarea", "content_item.meta_json.关键指标", "获奖、立项、服务人数等数据", 1000],
-    ["value", "成果价值", "textarea", "content_item.body_text", "成果如何支撑人才培养、专业建设或服务地方", 2000],
+    ["value", "成果价值", "textarea", "content_item.body_text", "成果如何支撑人才培养、专业建设或服务地方", 2000, true],
   ],
   scene: [
-    ["sceneName", "场景名称", "text", "content_item.meta_json.场景名称", "实训室、基地或设备名称", 100],
-    ["positioning", "功能定位", "text", "content_item.meta_json.功能定位", "服务课程、训练项目和开放对象", 160],
+    ["sceneName", "场景名称", "text", "content_item.meta_json.场景名称", "实训室、基地或设备名称", 100, true],
+    ["positioning", "功能定位", "text", "content_item.meta_json.功能定位", "服务课程、训练项目和开放对象", 160, true],
     ["equipment", "设备条件", "textarea", "content_item.meta_json.设备条件", "关键设备、软件平台或工位数量", 1200],
-    ["application", "教学应用", "textarea", "content_item.body_text", "支撑课程教学、技能训练或社会培训的方式", 2000],
+    ["application", "教学应用", "textarea", "content_item.body_text", "支撑课程教学、技能训练或社会培训的方式", 2000, true],
   ],
   video: [
     ["duration", "视频时长", "text", "content_item.meta_json.视频时长", "如 02:30", 20],
-    ["videoUrl", "视频地址", "text", "content_item.assets.video", "视频文件地址或外部链接", 600],
+    ["videoUrl", "视频地址", "text", "content_item.assets.video", "视频文件地址或外部链接", 600, true],
     ["scenario", "适用场景", "text", "content_item.meta_json.适用场景", "宣传片、访谈、课堂展示或纪实片", 120],
-    ["intro", "内容简介", "textarea", "content_item.body_text", "概括视频重点", 1000],
+    ["intro", "内容简介", "textarea", "content_item.body_text", "概括视频重点", 1000, true],
   ],
   attachment: [
-    ["fileTitle", "附件名称", "text", "content_item.meta_json.附件名称", "文件、资料包或表格名称", 120],
+    ["fileTitle", "附件名称", "text", "content_item.meta_json.附件名称", "文件、资料包或表格名称", 120, true],
     ["fileType", "附件类型", "text", "content_item.meta_json.附件类型", "PDF、Word、Excel、PPT、压缩包等", 80],
-    ["fileUrl", "附件地址", "text", "content_item.assets.attachment", "上传附件或粘贴附件地址", 600],
-    ["fileIntro", "附件说明", "textarea", "content_item.body_text", "说明附件用途、适用对象和查看要点", 1000],
+    ["fileUrl", "附件地址", "text", "content_item.assets.attachment", "上传附件或粘贴附件地址", 600, true],
+    ["fileIntro", "附件说明", "textarea", "content_item.body_text", "说明附件用途、适用对象和查看要点", 1000, true],
   ],
   article: [
-    ["bodyText", "正文内容", "textarea", "content_item.body_text", "按短段落填写，一段一行或空行分隔", 3000],
+    ["bodyText", "正文内容", "textarea", "content_item.body_text", "按短段落填写，一段一行或空行分隔", 3000, true],
   ],
 };
 const moduleDefaultContentTypes = {
@@ -2093,8 +2093,8 @@ function lowcodeStandardFields(moduleKey, contentType, portalType = $("lowcodeTe
     lowcodeStandardField("subtitle", "副标题/身份信息", "text", "content_item.subtitle", module.description || "", "基础信息", 120),
     lowcodeStandardField("summary", "卡片摘要", "textarea", "content_item.summary", "用于门户卡片和抽屉开头，建议 40 到 100 字", "基础信息", 180, true),
   ];
-  (lowcodeMetaFieldTemplates[normalizedType] || lowcodeMetaFieldTemplates.article).forEach(([key, label, type, mapping, placeholder, maxLength]) => {
-    fields.push(lowcodeStandardField(key, label, type, mapping, placeholder, "详情内容", maxLength));
+  (lowcodeMetaFieldTemplates[normalizedType] || lowcodeMetaFieldTemplates.article).forEach(([key, label, type, mapping, placeholder, maxLength, required]) => {
+    fields.push(lowcodeStandardField(key, label, type, mapping, placeholder, "详情内容", maxLength, !!required));
   });
   fields.push(
     lowcodeStandardField("sortOrder", "排序", "number", "content_item.sort_order", "数字越小越靠前", "展示设置"),
