@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeAssetDrafts: [], activeLowcodeFormId: "", editingLowcodeFormId: "", lowcodeFieldDrafts: [], assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], activeLowcodeFormId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -530,21 +530,58 @@ function renderLowcodeForms() {
     const moduleLabel = schema.moduleLabel || (moduleMeta(form.targetModuleKey, form.targetPortalType) || {}).label || form.targetModuleKey || "-";
     const contentType = form.targetContentType || schema.contentType || "article";
     const fieldCount = (schema.fields || []).filter((field) => field.type !== "asset_list").length;
+    const enabled = form.enabled !== false;
     return `<article class="lowcode-form-card">
       <header>
         <div>
           <strong>${escapeHtml(form.name)}</strong>
-          <span>${escapeHtml(moduleLabel)} · ${escapeHtml(contentTypeLabel(contentType))}</span>
+          <span>${escapeHtml(moduleLabel)} · ${escapeHtml(contentTypeLabel(contentType))}${enabled ? "" : " · 已停用"}</span>
         </div>
-        <span class="badge">${fieldCount} 项</span>
+        <span class="badge ${enabled ? "" : "warn"}">${fieldCount} 项</span>
       </header>
       <p>${escapeHtml(form.description || "按模板规范填写资料。")}</p>
       <div class="actions">
-        <button class="button small primary" type="button" data-lowcode-start="${form.id}">按模板填写</button>
-        ${isAdmin() ? `<button class="button small" type="button" data-lowcode-edit="${form.id}">编辑模板</button>` : ""}
+        <button class="button small primary" type="button" data-lowcode-start="${form.id}" ${enabled ? "" : "disabled"}>按模板填写</button>
+        ${isAdmin() ? `<button class="button small" type="button" data-lowcode-edit="${form.id}">编辑模板</button>
+        <button class="button small" type="button" data-lowcode-copy="${form.id}">复制</button>
+        <button class="button small" type="button" data-lowcode-versions="${form.id}">版本</button>` : ""}
       </div>
     </article>`;
   }).join("") : `<div class="empty">当前门户暂无资料采集模板</div>`;
+}
+function renderLowcodeVersions(form, versions) {
+  const list = $("lowcodeVersionList");
+  if (!list) return;
+  $("lowcodeVersionTitle").textContent = `模板版本历史：${form ? form.name : "资料采集模板"}`;
+  list.innerHTML = versions.length ? versions.map((version) => {
+    const schema = version.schema || {};
+    const fields = (schema.fields || []).filter((field) => field.type !== "asset_list");
+    return `<article class="lowcode-version-card">
+      <header>
+        <div>
+          <strong>版本 v${escapeHtml(version.versionNo)}</strong>
+          <span>${escapeHtml(version.createdBy || "-")} · ${formatTime(version.createdAt)}</span>
+        </div>
+        <span class="badge ${version.status === "active" ? "success" : ""}">${escapeHtml(version.status === "active" ? "当前" : "归档")}</span>
+      </header>
+      <p>${escapeHtml((schema.moduleLabel || form?.targetModuleKey || "-"))} · ${escapeHtml(contentTypeLabel(schema.contentType || form?.targetContentType))} · ${fields.length} 个字段</p>
+      <div class="lowcode-version-fields">
+        ${fields.slice(0, 12).map((field) => `<span>${escapeHtml(field.label || field.key)}${field.required ? " *" : ""}</span>`).join("")}
+      </div>
+    </article>`;
+  }).join("") : `<div class="empty">暂无版本记录</div>`;
+}
+async function showLowcodeVersions(formId) {
+  const data = await jsonApi(`/api/lowcode/forms/${formId}/versions`);
+  state.viewingLowcodeFormId = formId;
+  state.lowcodeVersions = data.versions || [];
+  renderLowcodeVersions(data.form, state.lowcodeVersions);
+  $("lowcodeVersionPanel").hidden = false;
+  $("lowcodeTemplateForm").hidden = true;
+  $("lowcodeRecordForm").hidden = true;
+  $("contentItemForm").hidden = true;
+  $("pageForm").hidden = true;
+  $("lowcodeVersionPanel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function renderLowcodeRecords() {
   const listNode = $("lowcodeRecordsList");
@@ -593,6 +630,7 @@ function fillLowcodeRecordForm(form) {
   $("lowcodeAssetFile").value = "";
   $("lowcodeRecordForm").hidden = false;
   $("lowcodeTemplateForm").hidden = true;
+  $("lowcodeVersionPanel").hidden = true;
   $("contentItemForm").hidden = true;
   $("pageForm").hidden = true;
   setStatus($("lowcodeRecordStatus"), "", "");
@@ -719,6 +757,7 @@ function fillLowcodeTemplateForm(form = {}) {
   setLowcodeFieldDrafts(((form.schema || {}).fields || []).filter((field) => field.type !== "asset_list"));
   $("lowcodeTemplateForm").hidden = false;
   $("lowcodeRecordForm").hidden = true;
+  $("lowcodeVersionPanel").hidden = true;
   $("contentItemForm").hidden = true;
   $("pageForm").hidden = true;
   setStatus($("lowcodeTemplateStatus"), "", "");
@@ -1852,6 +1891,7 @@ function fillContentItem(item = {}) {
   $("contentItemForm").hidden = false;
   $("lowcodeRecordForm").hidden = true;
   $("lowcodeTemplateForm").hidden = true;
+  $("lowcodeVersionPanel").hidden = true;
   $("pageForm").hidden = true;
   updateContentPreview();
   $("contentItemForm").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1908,6 +1948,7 @@ function fillPage(page) {
   $("pageForm").hidden = false;
   $("lowcodeRecordForm").hidden = true;
   $("lowcodeTemplateForm").hidden = true;
+  $("lowcodeVersionPanel").hidden = true;
   $("contentItemForm").hidden = true;
   updatePagePreview();
 }
@@ -2085,12 +2126,32 @@ $("moduleLibrary").addEventListener("click", (event) => {
 $("lowcodeFormsGrid").addEventListener("click", (event) => {
   const start = event.target.closest("[data-lowcode-start]");
   const edit = event.target.closest("[data-lowcode-edit]");
+  const copy = event.target.closest("[data-lowcode-copy]");
+  const versions = event.target.closest("[data-lowcode-versions]");
   if (start) {
     fillLowcodeRecordForm(state.lowcodeForms.find((form) => String(form.id) === String(start.dataset.lowcodeStart)));
     return;
   }
   if (edit) {
     fillLowcodeTemplateForm(state.lowcodeForms.find((form) => String(form.id) === String(edit.dataset.lowcodeEdit)));
+    return;
+  }
+  if (copy) {
+    const form = state.lowcodeForms.find((item) => String(item.id) === String(copy.dataset.lowcodeCopy));
+    if (!form) return;
+    const name = prompt("复制后的模板名称", `${form.name} 副本`);
+    if (!name) return;
+    jsonApi(`/api/lowcode/forms/${form.id}/copy`, body({ name, enabled: false }))
+      .then(async (data) => {
+        await loadPages();
+        fillLowcodeTemplateForm(data.form);
+        setStatus($("lowcodeTemplateStatus"), "模板副本已创建，检查字段后可启用。", "success");
+      })
+      .catch((err) => alert(err.message));
+    return;
+  }
+  if (versions) {
+    showLowcodeVersions(versions.dataset.lowcodeVersions).catch((err) => alert(err.message));
   }
 });
 $("lowcodeRecordsList").addEventListener("click", (event) => {
@@ -2102,6 +2163,7 @@ $("lowcodeRecordsList").addEventListener("click", (event) => {
 $("newLowcodeTemplate").addEventListener("click", () => fillLowcodeTemplateForm({}));
 $("closeLowcodeRecordForm").addEventListener("click", () => { $("lowcodeRecordForm").hidden = true; });
 $("closeLowcodeTemplateForm").addEventListener("click", () => { $("lowcodeTemplateForm").hidden = true; });
+$("closeLowcodeVersionPanel").addEventListener("click", () => { $("lowcodeVersionPanel").hidden = true; });
 $("lowcodeTemplatePortalType").addEventListener("change", () => {
   const portalType = normalizePortalType($("lowcodeTemplatePortalType").value);
   renderLowcodeTemplateModuleOptions(portalType);

@@ -3455,6 +3455,66 @@ def latest_lowcode_version_no(conn, form_id):
     return int(row["value"] or 0) if row else 0
 
 
+def row_to_lowcode_form_version(row):
+    if not row:
+        return None
+    schema = json_value(row["schema_json"], {})
+    fields = schema.get("fields") if isinstance(schema, dict) and isinstance(schema.get("fields"), list) else []
+    return {
+        "id": row["id"],
+        "formId": row["form_id"],
+        "versionNo": int(row["version_no"] or 0),
+        "status": row["status"],
+        "fieldCount": len([field for field in fields if isinstance(field, dict) and field.get("type") != "asset_list"]),
+        "schema": schema,
+        "createdBy": row["created_by"],
+        "createdAt": row["created_at"],
+    }
+
+
+def list_lowcode_form_versions(form_id):
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM lowcode_form_versions
+            WHERE form_id = ?
+            ORDER BY version_no DESC, id DESC
+            """,
+            (form_id,),
+        ).fetchall()
+    return [row_to_lowcode_form_version(row) for row in rows]
+
+
+def unique_lowcode_form_code(conn, base_code):
+    base = re.sub(r"[^A-Za-z0-9_-]+", "-", str(base_code or "LC-COPY").strip()).strip("-").upper()[:100] or "LC-COPY"
+    code = base
+    index = 2
+    while conn.execute("SELECT id FROM lowcode_forms WHERE code = ? LIMIT 1", (code,)).fetchone():
+        code = f"{base}-{index}"
+        index += 1
+    return code
+
+
+def copy_lowcode_form(form_id, data, actor):
+    source = get_lowcode_form(form_id)
+    if not source:
+        raise ValueError("模板不存在")
+    with db_connect() as conn:
+        code = unique_lowcode_form_code(conn, data.get("code") or f"{source['code']}-COPY")
+    name = str(data.get("name") or f"{source['name']} 副本").strip()
+    payload = {
+        "name": name,
+        "code": code,
+        "description": str(data.get("description") or source.get("description") or "").strip(),
+        "targetPortalType": source.get("targetPortalType"),
+        "targetModuleKey": source.get("targetModuleKey"),
+        "targetContentType": source.get("targetContentType"),
+        "enabled": bool_value(data.get("enabled"), False),
+        "schema": source.get("schema") or {},
+    }
+    return save_lowcode_form(None, payload, actor)
+
+
 def normalize_lowcode_schema(schema, form):
     schema = json_value(schema, {})
     if not isinstance(schema, dict):
@@ -7125,7 +7185,19 @@ class ExpoHandler(BaseHTTPRequestHandler):
             user = self.require_auth()
             if not user:
                 return
-            form_id_text = path.rsplit("/", 1)[-1]
+            parts = path.strip("/").split("/")
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "lowcode" and parts[2] == "forms" and parts[4] == "versions":
+                actor = self.require_admin()
+                if not actor:
+                    return
+                form_id = int(parts[3]) if parts[3].isdigit() else 0
+                form = get_lowcode_form(form_id)
+                if not form:
+                    self.send_json(404, {"ok": False, "error": "资料采集模板不存在"})
+                    return
+                self.send_json(200, {"ok": True, "form": form, "versions": list_lowcode_form_versions(form_id)})
+                return
+            form_id_text = parts[-1]
             form_id = int(form_id_text) if form_id_text.isdigit() else 0
             form = get_lowcode_form(form_id)
             if not form or (not form.get("enabled") and user.get("role") != "admin"):
@@ -7180,8 +7252,9 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     return
                 filters = {
                     "portalType": project.get("portalType"),
-                    "enabled": "1",
                 }
+                if user.get("role") != "admin":
+                    filters["enabled"] = "1"
                 self.send_json(200, {"ok": True, "project": project, "forms": list_lowcode_forms(filters)})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "records":
@@ -7442,6 +7515,22 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.log_admin("save_lowcode_form", "lowcode_form", form["id"], form["name"], "create form")
             self.send_json(200, {"ok": True, "form": form})
             return
+
+        if path.startswith("/api/lowcode/forms/") and path.endswith("/copy"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "lowcode" and parts[2] == "forms" and parts[4] == "copy":
+                form_id = int(parts[3]) if parts[3].isdigit() else 0
+                try:
+                    form = copy_lowcode_form(form_id, self.read_json(), actor)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self.log_admin("copy_lowcode_form", "lowcode_form", form["id"], form["name"], f"copy from {form_id}")
+                self.send_json(200, {"ok": True, "form": form})
+                return
 
         if path == "/api/deploy/content":
             actor = self.require_admin()
