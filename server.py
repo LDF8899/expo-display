@@ -4111,6 +4111,52 @@ def lowcode_template_quality_summary(fields, content_type, module_key, portal_ty
     }
 
 
+def lowcode_template_quality_report(project_id, actor=None):
+    project = get_project(project_id)
+    if not project:
+        return None
+    filters = {"portalType": project.get("portalType")}
+    if actor and not is_admin_user(actor):
+        filters["enabled"] = "1"
+    forms = list_lowcode_forms(filters)
+    entries = []
+    for form in forms:
+        quality = form.get("quality") or {}
+        checks = quality.get("checks") or []
+        entries.append(
+            {
+                "formId": form.get("id"),
+                "name": form.get("name", ""),
+                "code": form.get("code", ""),
+                "enabled": bool(form.get("enabled")),
+                "targetPortalType": form.get("targetPortalType", ""),
+                "targetModuleKey": form.get("targetModuleKey", ""),
+                "targetContentType": form.get("targetContentType", ""),
+                "targetContentTypeLabel": content_type_label(form.get("targetContentType")),
+                "moduleLabel": (module_meta_for_key(form.get("targetModuleKey"), form.get("targetPortalType")) or {}).get("label", form.get("targetModuleKey", "")),
+                "quality": quality,
+                "issues": [item for item in checks if item.get("kind") in {"danger", "warn"}],
+            }
+        )
+    summary = {
+        "total": len(entries),
+        "danger": sum(1 for entry in entries if (entry.get("quality") or {}).get("kind") == "danger"),
+        "warn": sum(1 for entry in entries if (entry.get("quality") or {}).get("kind") == "warn"),
+        "ok": sum(1 for entry in entries if (entry.get("quality") or {}).get("kind") == "ok"),
+        "enabled": sum(1 for entry in entries if entry.get("enabled")),
+        "disabled": sum(1 for entry in entries if not entry.get("enabled")),
+    }
+    return {
+        "projectId": project_id,
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "generatedAt": now_iso(),
+        "summary": summary,
+        "entries": entries,
+    }
+
+
 def row_to_lowcode_form(row, version_row=None):
     if not row:
         return None
@@ -8771,6 +8817,14 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
                 self.send_json(200, {"ok": True, "project": project, "report": lowcode_progress_report(project_id, user)})
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "template-quality":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "report": lowcode_template_quality_report(project_id, user)})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0

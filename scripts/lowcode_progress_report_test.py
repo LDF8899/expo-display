@@ -157,6 +157,16 @@ def main():
             reminder = next((row for row in reminders if row["key"] == record["contentModuleKey"]), None)
             if not reminder or reminder["stats"]["pending"] != 1:
                 raise RuntimeError(f"reminder stats missing: {reminders}")
+            template_quality_data, _ = json_request(
+                f"{base_url}/api/projects/{project['id']}/lowcode/template-quality",
+                headers={"Cookie": admin["cookie"]},
+            )
+            template_quality = template_quality_data["report"]
+            if template_quality["summary"]["total"] < 1:
+                raise RuntimeError(f"template quality report empty: {template_quality}")
+            quality_entry = next((entry for entry in template_quality["entries"] if str(entry["formId"]) == str(form["id"])), None)
+            if not quality_entry or not quality_entry.get("quality", {}).get("checks"):
+                raise RuntimeError(f"template quality entry missing: {template_quality}")
 
             dept_admin = login(base_url, "reportdept", "Report-Dept-2026")
             scoped_data, _ = json_request(
@@ -168,6 +178,17 @@ def main():
             expect_status(
                 404,
                 f"{base_url}/api/projects/{other_project['id']}/lowcode/report",
+                headers={"Cookie": dept_admin["cookie"]},
+            )
+            scoped_quality, _ = json_request(
+                f"{base_url}/api/projects/{project['id']}/lowcode/template-quality",
+                headers={"Cookie": dept_admin["cookie"]},
+            )
+            if scoped_quality["report"]["summary"]["total"] < 1:
+                raise RuntimeError(f"department admin template quality empty: {scoped_quality}")
+            expect_status(
+                404,
+                f"{base_url}/api/projects/{other_project['id']}/lowcode/template-quality",
                 headers={"Cookie": dept_admin["cookie"]},
             )
             print("lowcode_progress_report_ok=true")

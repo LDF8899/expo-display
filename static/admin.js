@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -930,6 +930,11 @@ function lowcodeTemplateUsageText(formId) {
   const stats = lowcodeTemplateUsageStats(formId);
   return `填报 ${stats.total || 0} · 草稿 ${stats.draft || 0} · 待审 ${stats.pending || 0} · 通过 ${stats.approved || 0} · 驳回 ${stats.rejected || 0}`;
 }
+function lowcodeTemplateQualityForForm(form) {
+  const entry = (state.lowcodeTemplateQualityReport?.entries || [])
+    .find((item) => String(item.formId) === String(form?.id));
+  return entry?.quality || form?.quality || null;
+}
 function renderLowcodeForms() {
   const grid = $("lowcodeFormsGrid");
   if (!grid) return;
@@ -943,7 +948,7 @@ function renderLowcodeForms() {
     const contentType = form.targetContentType || schema.contentType || "article";
     const fieldCount = (schema.fields || []).filter((field) => field.type !== "asset_list").length;
     const enabled = form.enabled !== false;
-    const quality = form.quality || lowcodeTemplateQualitySummary(schema.fields || [], contentType, form.targetModuleKey || schema.moduleKey, form.targetPortalType || schema.portalType);
+    const quality = lowcodeTemplateQualityForForm(form) || lowcodeTemplateQualitySummary(schema.fields || [], contentType, form.targetModuleKey || schema.moduleKey, form.targetPortalType || schema.portalType);
     return `<article class="lowcode-form-card">
       <header>
         <div>
@@ -3327,13 +3332,14 @@ async function loadPages(projectId = $("projectSelect").value) {
     state.contentQualityReport = null;
     state.assetArchiveReport = null;
     state.lowcodeReport = null;
+    state.lowcodeTemplateQualityReport = null;
     renderCurrentPortalStrip();
     renderTemplateActions();
     renderContentModuleOptions();
     renderPages();
     return;
   }
-  const [data, contentData, lowcodeData, lowcodeRecordsData, qualityData, archiveData, lowcodeReportData] = await Promise.all([
+  const [data, contentData, lowcodeData, lowcodeRecordsData, qualityData, archiveData, lowcodeReportData, templateQualityData] = await Promise.all([
     jsonApi(`/api/projects/${projectId}/pages`),
     jsonApi(`/api/projects/${projectId}/content-items`),
     jsonApi(`/api/projects/${projectId}/lowcode/forms`),
@@ -3341,6 +3347,7 @@ async function loadPages(projectId = $("projectSelect").value) {
     jsonApi(`/api/projects/${projectId}/content-quality`),
     jsonApi(`/api/projects/${projectId}/asset-archive`),
     jsonApi(`/api/projects/${projectId}/lowcode/report`),
+    jsonApi(`/api/projects/${projectId}/lowcode/template-quality`),
   ]);
   state.pages = data.pages || [];
   state.contentItems = contentData.items || [];
@@ -3350,6 +3357,7 @@ async function loadPages(projectId = $("projectSelect").value) {
   state.contentQualityReport = qualityData.report || null;
   state.assetArchiveReport = archiveData.report || null;
   state.lowcodeReport = lowcodeReportData.report || null;
+  state.lowcodeTemplateQualityReport = templateQualityData.report || null;
   renderTemplateActions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentModuleOptions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentTypeOptions();
