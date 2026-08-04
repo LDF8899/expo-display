@@ -3118,6 +3118,127 @@ def content_quality_report(project_id):
     }
 
 
+def asset_kind_label(asset):
+    if looks_like_video_asset(asset):
+        return "VIDEO"
+    if looks_like_attachment_asset(asset):
+        return "FILE"
+    return "IMAGE"
+
+
+def content_item_archive_assets(item):
+    assets = content_assets_from_data(item.get("assets") or [])
+    cover_asset_id = int_value(item.get("coverAssetId"))
+    if cover_asset_id and not any(int_value(asset.get("assetId")) == cover_asset_id for asset in assets):
+        asset = get_asset(cover_asset_id)
+        if asset:
+            assets.insert(
+                0,
+                {
+                    "assetId": cover_asset_id,
+                    "role": "cover",
+                    "title": asset.get("originalFilename", ""),
+                    "caption": asset.get("originalFilename", ""),
+                    "url": asset.get("url", ""),
+                    "mimeType": asset.get("mimeType", ""),
+                    "sortOrder": -1,
+                },
+            )
+    return sorted(assets, key=lambda asset: int_value(asset.get("sortOrder")))
+
+
+def asset_archive_entry(project, source, owner, asset, index):
+    role = str(asset.get("role") or "gallery").strip() or "gallery"
+    return {
+        "projectId": project.get("id"),
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "source": source,
+        "ownerId": owner.get("id") or "",
+        "ownerCode": owner.get("code") or "",
+        "ownerTitle": owner.get("title") or "",
+        "moduleKey": owner.get("moduleKey") or "",
+        "moduleLabel": owner.get("moduleLabel") or "",
+        "contentType": owner.get("contentType") or "",
+        "contentTypeLabel": owner.get("contentTypeLabel") or "",
+        "reviewStatus": owner.get("reviewStatus") or "",
+        "submittedBy": owner.get("submittedBy") or "",
+        "submittedDisplayName": owner.get("submittedDisplayName") or owner.get("submittedBy") or "",
+        "submittedDepartment": owner.get("submittedDepartment") or "",
+        "sortOrder": index + 1,
+        "assetId": asset.get("assetId") or "",
+        "role": role,
+        "roleLabel": {
+            "cover": "封面",
+            "portrait": "人物照",
+            "certificate": "证书/荣誉",
+            "gallery": "图集",
+            "video": "视频",
+            "attachment": "附件",
+        }.get(role, role or "素材"),
+        "kind": asset_kind_label(asset),
+        "caption": asset.get("caption") or asset.get("title") or "",
+        "url": asset.get("url") or "",
+        "mimeType": asset.get("mimeType") or "",
+    }
+
+
+def asset_archive_report(project_id, actor=None):
+    project = get_project(project_id)
+    if not project:
+        return None
+    entries = []
+    for item in list_content_items(project_id):
+        owner = {
+            "id": item.get("id"),
+            "code": item.get("code", ""),
+            "title": item.get("title", ""),
+            "moduleKey": item.get("moduleKey", ""),
+            "moduleLabel": item.get("moduleLabel", ""),
+            "contentType": item.get("contentType", ""),
+            "contentTypeLabel": item.get("contentTypeLabel", ""),
+            "reviewStatus": item.get("reviewStatus", ""),
+            "submittedBy": item.get("submittedBy", ""),
+        }
+        for index, asset in enumerate(content_item_archive_assets(item)):
+            if asset.get("url") or asset.get("assetId"):
+                entries.append(asset_archive_entry(project, "结构化资料", owner, asset, index))
+    for record in list_lowcode_records(project_id, actor):
+        fields = (record.get("data") or {}).get("fields") if isinstance(record.get("data"), dict) else {}
+        fields = fields if isinstance(fields, dict) else {}
+        owner = {
+            "id": record.get("id"),
+            "code": record.get("contentCode", ""),
+            "title": record.get("contentTitle") or fields.get("title") or "",
+            "moduleKey": record.get("contentModuleKey", ""),
+            "moduleLabel": record.get("contentModuleLabel", ""),
+            "contentType": record.get("contentType", ""),
+            "contentTypeLabel": record.get("contentTypeLabel", ""),
+            "reviewStatus": record.get("effectiveStatus") or record.get("contentReviewStatus") or record.get("status", ""),
+            "submittedBy": record.get("submittedBy", ""),
+            "submittedDisplayName": record.get("submittedDisplayName", ""),
+            "submittedDepartment": record.get("submittedDepartment", ""),
+        }
+        for index, asset in enumerate(content_assets_from_data(fields.get("assets") or [])):
+            if asset.get("url") or asset.get("assetId"):
+                entries.append(asset_archive_entry(project, "模板填报", owner, asset, index))
+    return {
+        "projectId": project_id,
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "generatedAt": now_iso(),
+        "total": len(entries),
+        "byKind": {
+            "IMAGE": sum(1 for entry in entries if entry["kind"] == "IMAGE"),
+            "VIDEO": sum(1 for entry in entries if entry["kind"] == "VIDEO"),
+            "FILE": sum(1 for entry in entries if entry["kind"] == "FILE"),
+        },
+        "entries": entries,
+    }
+
+
 def create_admin_log(action, target_type="", target_id="", target_label="", detail="", username="", role="", ip="", changes=""):
     try:
         with db_connect() as conn:
@@ -8154,6 +8275,14 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
                 self.send_json(200, {"ok": True, "project": project, "report": content_quality_report(project_id)})
+                return
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "asset-archive":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "report": asset_archive_report(project_id, user)})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "forms":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0

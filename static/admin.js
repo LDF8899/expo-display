@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -2616,25 +2616,28 @@ function exportContentQualityCsv() {
   const projectName = (project?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
   downloadTextFile(`资料质量检查-${projectName}.csv`, csv, "text/csv;charset=utf-8");
 }
-function exportAssetArchiveCsv() {
+function assetArchiveFallbackReport() {
   const project = currentProject();
-  const rows = [];
+  const entries = [];
   const pushAssetRows = (source, owner, assets) => {
     orderedContentAssets(assets || []).forEach((asset, index) => {
-      rows.push([
-        project?.name || "",
+      entries.push({
+        projectName: project?.name || "",
         source,
-        owner.id || "",
-        owner.code || "",
-        owner.title || "",
-        owner.moduleLabel || "",
-        owner.contentTypeLabel || "",
-        index + 1,
-        contentAssetRoleLabels[asset.role] || asset.role || "素材",
-        assetKindLabel(asset),
-        asset.caption || "",
-        asset.url || "",
-      ]);
+        ownerId: owner.id || "",
+        ownerCode: owner.code || "",
+        ownerTitle: owner.title || "",
+        moduleLabel: owner.moduleLabel || "",
+        contentTypeLabel: owner.contentTypeLabel || "",
+        sortOrder: index + 1,
+        roleLabel: contentAssetRoleLabels[asset.role] || asset.role || "素材",
+        kind: assetKindLabel(asset),
+        caption: asset.caption || "",
+        url: asset.url || "",
+        submittedDisplayName: owner.submittedDisplayName || "",
+        submittedDepartment: owner.submittedDepartment || "",
+        reviewStatus: owner.reviewStatus || "",
+      });
     });
   };
   (state.contentItems || []).forEach((item) => {
@@ -2644,6 +2647,8 @@ function exportAssetArchiveCsv() {
       title: item.title,
       moduleLabel: item.moduleLabel || (moduleMeta(item.moduleKey) || {}).label || item.moduleKey || "",
       contentTypeLabel: item.contentTypeLabel || contentTypeLabel(item.contentType),
+      reviewStatus: item.reviewStatus,
+      submittedDisplayName: item.submittedBy || "",
     }, item.assets || []);
   });
   (state.lowcodeRecords || []).forEach((record) => {
@@ -2654,15 +2659,49 @@ function exportAssetArchiveCsv() {
       title: record.contentTitle || fields.title || "",
       moduleLabel: record.contentModuleLabel || "",
       contentTypeLabel: record.contentTypeLabel || contentTypeLabel(record.contentType),
+      reviewStatus: lowcodeRecordStatus(record),
+      submittedDisplayName: record.submittedDisplayName || record.submittedBy || "",
+      submittedDepartment: record.submittedDepartment || "",
     }, fields.assets || []);
   });
-  if (!rows.length) {
+  return {
+    projectName: project?.name || "",
+    total: entries.length,
+    entries,
+  };
+}
+function currentAssetArchiveReport() {
+  return state.assetArchiveReport && Array.isArray(state.assetArchiveReport.entries)
+    ? state.assetArchiveReport
+    : assetArchiveFallbackReport();
+}
+function exportAssetArchiveCsv() {
+  const report = currentAssetArchiveReport();
+  const entries = report.entries || [];
+  if (!entries.length) {
     alert("当前门户暂无可归档的素材或附件");
     return;
   }
-  const headers = ["门户", "来源", "资料/记录ID", "编号", "标题", "标准板块", "资料类型", "序号", "素材角色", "文件类型", "说明", "地址"];
+  const rows = entries.map((entry) => [
+    entry.projectName || "",
+    entry.source || "",
+    entry.ownerId || "",
+    entry.ownerCode || "",
+    entry.ownerTitle || "",
+    entry.moduleLabel || "",
+    entry.contentTypeLabel || "",
+    statusText(entry.reviewStatus),
+    entry.submittedDisplayName || "",
+    entry.submittedDepartment || "",
+    entry.sortOrder || "",
+    entry.roleLabel || entry.role || "素材",
+    entry.kind || "",
+    entry.caption || "",
+    entry.url || "",
+  ]);
+  const headers = ["门户", "来源", "资料/记录ID", "编号", "标题", "标准板块", "资料类型", "状态", "提交人", "提交部门", "序号", "素材角色", "文件类型", "说明", "地址"];
   const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
-  const projectName = (project?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
+  const projectName = (report.projectName || currentProject()?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
   downloadTextFile(`素材附件归档-${projectName}.csv`, csv, "text/csv;charset=utf-8");
 }
 function generatedModuleCode(moduleKey) {
@@ -3268,18 +3307,20 @@ async function loadPages(projectId = $("projectSelect").value) {
     state.lowcodeRecords = [];
     state.moduleCoverage = buildCoverageFromPages([]);
     state.contentQualityReport = null;
+    state.assetArchiveReport = null;
     renderCurrentPortalStrip();
     renderTemplateActions();
     renderContentModuleOptions();
     renderPages();
     return;
   }
-  const [data, contentData, lowcodeData, lowcodeRecordsData, qualityData] = await Promise.all([
+  const [data, contentData, lowcodeData, lowcodeRecordsData, qualityData, archiveData] = await Promise.all([
     jsonApi(`/api/projects/${projectId}/pages`),
     jsonApi(`/api/projects/${projectId}/content-items`),
     jsonApi(`/api/projects/${projectId}/lowcode/forms`),
     jsonApi(`/api/projects/${projectId}/lowcode/records`),
     jsonApi(`/api/projects/${projectId}/content-quality`),
+    jsonApi(`/api/projects/${projectId}/asset-archive`),
   ]);
   state.pages = data.pages || [];
   state.contentItems = contentData.items || [];
@@ -3287,6 +3328,7 @@ async function loadPages(projectId = $("projectSelect").value) {
   state.lowcodeRecords = lowcodeRecordsData.records || [];
   state.moduleCoverage = data.coverage || buildCoverageFromPages(state.pages);
   state.contentQualityReport = qualityData.report || null;
+  state.assetArchiveReport = archiveData.report || null;
   renderTemplateActions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentModuleOptions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentTypeOptions();
