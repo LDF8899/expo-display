@@ -4146,6 +4146,41 @@ def row_to_lowcode_record(row):
     }
 
 
+def get_lowcode_record(record_id, actor=None):
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                lowcode_records.*,
+                lowcode_forms.name AS form_name,
+                lowcode_forms.code AS form_code,
+                lowcode_form_versions.version_no AS form_version_no,
+                content_items.code AS content_code,
+                content_items.title AS content_title,
+                content_items.module_key AS content_module_key,
+                content_items.content_type AS content_type,
+                content_items.review_status AS content_review_status,
+                projects.portal_type AS project_portal_type
+            FROM lowcode_records
+            LEFT JOIN lowcode_forms ON lowcode_forms.id = lowcode_records.form_id
+            LEFT JOIN lowcode_form_versions ON lowcode_form_versions.id = lowcode_records.form_version_id
+            LEFT JOIN content_items ON content_items.id = lowcode_records.content_item_id
+            LEFT JOIN projects ON projects.id = lowcode_records.project_id
+            WHERE lowcode_records.id = ?
+            """,
+            (record_id,),
+        ).fetchone()
+    record = row_to_lowcode_record(row) if row else None
+    if not record or not actor:
+        return record
+    project = get_project(record["projectId"])
+    if not project_accessible(project, actor):
+        return None
+    if not can_review_user(actor) and record.get("submittedBy") != actor.get("username", ""):
+        return None
+    return record
+
+
 def list_lowcode_records(project_id, actor=None):
     where = "WHERE lowcode_records.project_id = ?"
     params = [project_id]
@@ -4177,6 +4212,46 @@ def list_lowcode_records(project_id, actor=None):
             params,
         ).fetchall()
     return [row_to_lowcode_record(row) for row in rows]
+
+
+def lowcode_review_source_for_content_item(content_item_id):
+    if not content_item_id:
+        return None
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                lowcode_records.id AS record_id,
+                lowcode_records.form_id,
+                lowcode_records.form_version_id,
+                lowcode_records.status,
+                lowcode_records.submitted_by,
+                lowcode_records.submitted_at,
+                lowcode_forms.name AS form_name,
+                lowcode_forms.code AS form_code,
+                lowcode_form_versions.version_no AS form_version_no
+            FROM lowcode_records
+            LEFT JOIN lowcode_forms ON lowcode_forms.id = lowcode_records.form_id
+            LEFT JOIN lowcode_form_versions ON lowcode_form_versions.id = lowcode_records.form_version_id
+            WHERE lowcode_records.content_item_id = ?
+            ORDER BY lowcode_records.updated_at DESC, lowcode_records.id DESC
+            LIMIT 1
+            """,
+            (content_item_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "recordId": row["record_id"],
+        "formId": row["form_id"],
+        "formVersionId": row["form_version_id"],
+        "formName": row["form_name"] or "",
+        "formCode": row["form_code"] or "",
+        "formVersionNo": int_value(row["form_version_no"]),
+        "status": row["status"],
+        "submittedBy": row["submitted_by"],
+        "submittedAt": row["submitted_at"],
+    }
 
 
 def lowcode_submitted_data(data):
@@ -4933,6 +5008,7 @@ def row_to_content_item_version(row):
         "reviewedAt": row["reviewed_at"],
         "reviewNote": row["review_note"],
         "changes": row["changes"],
+        "lowcodeRecord": lowcode_review_source_for_content_item(row["content_item_id"]),
     }
 
 
@@ -7775,6 +7851,19 @@ class ExpoHandler(BaseHTTPRequestHandler):
             if not is_admin_user(user):
                 filters["enabled"] = "1"
             self.send_json(200, {"ok": True, "forms": list_lowcode_forms(filters)})
+            return
+
+        if path.startswith("/api/lowcode/records/"):
+            user = self.require_auth()
+            if not user:
+                return
+            record_id_text = path.rsplit("/", 1)[-1]
+            record_id = int(record_id_text) if record_id_text.isdigit() else 0
+            record = get_lowcode_record(record_id, user)
+            if not record:
+                self.send_json(404, {"ok": False, "error": "模板填报记录不存在"})
+                return
+            self.send_json(200, {"ok": True, "record": record})
             return
 
         if path.startswith("/api/lowcode/forms/"):

@@ -3345,6 +3345,15 @@ async function showPageHistory(code) {
   $("pageHistoryPanel").hidden = false;
   $("pageHistoryPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
+function reviewLowcodeSourceHtml(record) {
+  if (!record || !record.recordId) return "";
+  const version = record.formVersionNo ? `v${record.formVersionNo}` : "未标记版本";
+  return `<p class="muted">采集模板：${escapeHtml(record.formName || record.formCode || "资料采集模板")} · ${escapeHtml(version)} · 填报记录 ${escapeHtml(record.recordId)}</p>`;
+}
+async function showReviewLowcodeRecord(recordId) {
+  const data = await jsonApi(`/api/lowcode/records/${recordId}`);
+  if (data.record) renderLowcodeRecordDetail(data.record);
+}
 async function renderReviews() {
   const data = await jsonApi("/api/reviews?status=pending");
   const pages = data.reviews.pages || [];
@@ -3365,12 +3374,14 @@ async function renderReviews() {
         <strong>${escapeHtml((r.snapshot && (r.snapshot.title || r.snapshot.name)) || r.code || "")}</strong>
         <p>${escapeHtml(r.changes || "无变更摘要")}</p>
         ${r.snapshot && r.snapshot.subtitle ? `<p>${escapeHtml(r.snapshot.subtitle)}</p>` : ""}
+        ${reviewLowcodeSourceHtml(r.lowcodeRecord)}
         ${renderReviewDiffs(r)}
       </div>
       <div class="actions">
         ${r.type === "pages" ? `<a class="button small" target="_blank" href="/display?project=${r.projectId}&code=${encodeURIComponent(r.code)}">当前发布版</a>` : ""}
         ${r.type === "pages" && r.previewUrl ? `<a class="button small" target="_blank" href="${escapeHtml(r.previewUrl)}">草稿预览</a>` : ""}
         ${r.type === "content-items" && r.snapshot && r.snapshot.code ? `<a class="button small" target="_blank" href="/display?project=${r.projectId}&code=${encodeURIComponent(r.snapshot.code)}">同步页预览</a>` : ""}
+        ${r.lowcodeRecord && r.lowcodeRecord.recordId ? `<button class="button small" type="button" data-review-lowcode-record="${r.lowcodeRecord.recordId}">查看填报</button>` : ""}
         <button class="button small primary" data-review-approve="${r.type}:${r.id}">通过</button>
         <button class="button small danger" data-review-reject="${r.type}:${r.id}">驳回</button>
       </div>
@@ -4425,6 +4436,11 @@ async function reviewAction(type, id, action) {
   await jsonApi(`/api/reviews/${type}/${id}/${action}`, body({ note }));
 }
 $("reviewsList").addEventListener("click", async (event) => {
+  const lowcodeRecord = event.target.closest("[data-review-lowcode-record]");
+  if (lowcodeRecord) {
+    try { await showReviewLowcodeRecord(lowcodeRecord.dataset.reviewLowcodeRecord); } catch (err) { alert(err.message); }
+    return;
+  }
   const approve = event.target.closest("[data-review-approve]");
   const reject = event.target.closest("[data-review-reject]");
   if (!approve && !reject) return;

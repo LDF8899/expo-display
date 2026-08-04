@@ -101,6 +101,24 @@ def submit_page(base_url, teacher, project_id, code, title):
     return result["page"]
 
 
+def submit_lowcode_record(base_url, teacher, project_id):
+    forms, _ = json_request(f"{base_url}/api/projects/{project_id}/lowcode/forms", headers={"Cookie": teacher["cookie"]})
+    form = forms["forms"][0]
+    result, _ = json_request(
+        f"{base_url}/api/projects/{project_id}/lowcode/forms/{form['id']}/records",
+        method="POST",
+        headers=teacher["headers"],
+        payload={
+            "data": {
+                "title": "模板填报待审资料",
+                "summary": "这是一条通过资料采集模板提交的待审核资料。",
+                "bodyText": "用于验证审核列表可以追溯到低代码原始填报记录。",
+            }
+        },
+    )
+    return result["record"]
+
+
 def visible_review_project_ids(reviews):
     ids = set()
     for key in ("pages", "projects", "contentItems"):
@@ -158,6 +176,7 @@ def main():
             agri_teacher = login(base_url, "agriteacher", "Agri-Teacher-Password-2026")
             submit_page(base_url, biz_teacher, biz_project["id"], "SCOPE-BIZ", "财经商贸待审")
             submit_page(base_url, agri_teacher, agri_project["id"], "SCOPE-AGRI", "现代农业待审")
+            lowcode_record = submit_lowcode_record(base_url, biz_teacher, biz_project["id"])
 
             insert_asset(db_path, "bizteacher")
             insert_asset(db_path, "agriteacher")
@@ -175,6 +194,18 @@ def main():
             visible_reviews = visible_review_project_ids(reviews["reviews"])
             if visible_reviews != {biz_project["id"]}:
                 raise RuntimeError(f"department admin review scope leaked: {reviews}")
+            lowcode_reviews = [
+                item for item in reviews["reviews"]["contentItems"]
+                if item.get("lowcodeRecord") and item["lowcodeRecord"].get("recordId") == lowcode_record["id"]
+            ]
+            if len(lowcode_reviews) != 1:
+                raise RuntimeError(f"lowcode review source missing: {reviews}")
+            detail, _ = json_request(
+                f"{base_url}/api/lowcode/records/{lowcode_record['id']}",
+                headers={"Cookie": dept_admin["cookie"]},
+            )
+            if detail["record"]["id"] != lowcode_record["id"] or detail["record"]["submittedBy"] != "bizteacher":
+                raise RuntimeError(f"lowcode detail mismatch: {detail}")
 
             admin_reviews, _ = json_request(f"{base_url}/api/reviews?status=pending", headers={"Cookie": admin["cookie"]})
             all_pages = admin_reviews["reviews"]["pages"]
