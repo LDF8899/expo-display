@@ -1440,6 +1440,68 @@ function renderModuleLibrary(coverage = state.moduleCoverage) {
     </article>`;
   }).join("");
 }
+function exportModuleCoverageCsv() {
+  const project = currentProject();
+  const coverage = state.moduleCoverage && state.moduleCoverage.modules
+    ? state.moduleCoverage
+    : buildCoverageFromPages(state.pages, project?.portalType || selectedPortalType());
+  const modules = coverage.modules || [];
+  if (!modules.length) {
+    alert("当前门户暂无标准板块定义");
+    return;
+  }
+  const records = state.lowcodeRecords || [];
+  const headers = ["门户", "门户类型", "板块key", "标准板块", "板块说明", "结构化资料数", "已通过", "待审核", "已驳回", "模板记录数", "模板草稿", "模板待审", "模板已通过", "模板已驳回", "是否缺失"];
+  const rows = modules.map((module) => {
+    const moduleRecords = records.filter((record) => record.contentModuleKey === module.key);
+    const recordStats = lowcodeRecordStats(moduleRecords);
+    const rejectedCount = (module.pages || []).filter((page) => page.reviewStatus === "rejected").length;
+    return [
+      project?.name || "",
+      portalTypeLabel(project?.portalType || coverage.portalType),
+      module.key,
+      module.label,
+      module.description || "",
+      module.count || 0,
+      module.approvedCount || 0,
+      module.pendingCount || 0,
+      rejectedCount,
+      recordStats.total,
+      recordStats.draft,
+      recordStats.pending,
+      recordStats.approved,
+      recordStats.rejected,
+      module.covered ? "否" : "是",
+    ];
+  });
+  const moduleKeys = new Set(modules.map((module) => module.key));
+  const unmatched = (state.pages || []).filter((page) => {
+    const key = page.moduleKey || localModuleKeyForCategory(page.category, coverage.portalType);
+    return !key || !moduleKeys.has(key);
+  });
+  unmatched.forEach((item) => {
+    rows.push([
+      project?.name || "",
+      portalTypeLabel(project?.portalType || coverage.portalType),
+      "",
+      "未匹配标准板块",
+      "",
+      1,
+      item.reviewStatus === "approved" ? 1 : 0,
+      ["pending", "pending_delete"].includes(item.reviewStatus) ? 1 : 0,
+      item.reviewStatus === "rejected" ? 1 : 0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      "需归类",
+    ]);
+  });
+  const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  const projectName = (project?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
+  downloadTextFile(`标准板块覆盖-${projectName}.csv`, csv, "text/csv;charset=utf-8");
+}
 function contentItemQualityIssues(item) {
   const issues = [];
   const assets = orderedContentAssets(item.assets || []);
@@ -2814,6 +2876,7 @@ $("moduleLibrary").addEventListener("click", (event) => {
   if (!button) return;
   startContentItemDraft(button.dataset.moduleCreate);
 });
+$("exportModuleCoverage").addEventListener("click", exportModuleCoverageCsv);
 $("exportContentQuality").addEventListener("click", exportContentQualityCsv);
 $("contentQualityList").addEventListener("click", (event) => {
   const edit = event.target.closest("[data-quality-edit]");
