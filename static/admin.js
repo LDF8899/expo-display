@@ -1127,6 +1127,51 @@ function safeImportedLowcodeTemplate(raw) {
     },
   };
 }
+function lowcodeTemplateImportSummary(form) {
+  const schema = form && form.schema ? form.schema : {};
+  const fields = Array.isArray(schema.fields) ? schema.fields.filter((field) => field && field.type !== "asset_list") : [];
+  const issues = [];
+  const seenKeys = new Set();
+  fields.forEach((field, index) => {
+    const displayName = String(field.label || field.key || `第 ${index + 1} 个字段`).trim();
+    const key = String(field.key || "").trim();
+    const type = String(field.type || "text").trim();
+    if (!String(field.label || "").trim()) issues.push(`${displayName}缺少字段名称`);
+    if (!key) {
+      issues.push(`${displayName}缺少字段编码`);
+    } else if (!/^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(key)) {
+      issues.push(`${displayName}字段编码格式不正确`);
+    } else {
+      const identity = key.toLowerCase();
+      if (seenKeys.has(identity)) issues.push(`${displayName}字段编码重复`);
+      seenKeys.add(identity);
+    }
+    if (!lowcodeFieldTypes.some((item) => item.key === type)) issues.push(`${displayName}控件类型会按单行文本处理`);
+    if (["select", "radio", "checkbox_group"].includes(type) && !(Array.isArray(field.options) && field.options.length)) {
+      issues.push(`${displayName}缺少选项`);
+    }
+    if (!String(field.mapping || "").trim()) issues.push(`${displayName}未绑定展示目标`);
+    if (field.pattern) {
+      try {
+        new RegExp(String(field.pattern));
+      } catch (err) {
+        issues.push(`${displayName}格式规则不合法`);
+      }
+    }
+  });
+  const mappings = fields.map((field) => String(field.mapping || "").trim()).filter(Boolean);
+  if (!mappings.includes("content_item.title")) issues.push("缺少标题绑定");
+  if (!mappings.includes("content_item.summary")) issues.push("缺少卡片摘要绑定");
+  const moduleLabel = (moduleMeta(form.targetModuleKey, form.targetPortalType) || {}).label || form.targetModuleKey || "未绑定板块";
+  const requiredCount = fields.filter((field) => field.required).length;
+  const issueText = issues.length
+    ? `需检查：${issues.slice(0, 5).join("；")}${issues.length > 5 ? `；另有 ${issues.length - 5} 项` : ""}`
+    : "未发现明显问题，保存后会作为未启用副本。";
+  return {
+    type: issues.length ? "warn" : "success",
+    text: `导入摘要：${form.name || "资料采集模板"}，${moduleLabel} · ${contentTypeLabel(form.targetContentType)}，字段 ${fields.length}，必填 ${requiredCount}，已绑定 ${mappings.length}。${issueText}`,
+  };
+}
 function exportLowcodeTemplateJson(form) {
   if (!form) return;
   const json = JSON.stringify(lowcodeTemplateJsonPayload(form), null, 2);
@@ -1140,8 +1185,9 @@ function importLowcodeTemplateJson(file) {
     try {
       const parsed = JSON.parse(String(reader.result || "{}"));
       const form = safeImportedLowcodeTemplate(parsed);
+      const summary = lowcodeTemplateImportSummary(form);
       fillLowcodeTemplateForm(form);
-      setStatus($("lowcodeTemplateStatus"), "模板 JSON 已导入为未启用副本，检查字段后保存。", "success");
+      setStatus($("lowcodeTemplateStatus"), summary.text, summary.type);
     } catch (err) {
       alert(`导入失败：${err.message}`);
     } finally {

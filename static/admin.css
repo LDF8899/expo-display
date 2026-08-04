@@ -235,6 +235,7 @@ tr:last-child td { border-bottom: 0; }
 .status-text { min-height: 22px; color: #53657a; }
 .status-text[data-state="error"] { color: #b92f2f; }
 .status-text[data-state="success"] { color: #17643a; }
+.status-text[data-state="warn"] { color: #9a6700; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .metric { background: #fff; border: 1px solid #dce5ef; border-radius: 8px; padding: 16px; }
 .metric span { color: #53657a; font-size: 13px; }
