@@ -621,6 +621,68 @@ tr:last-child td { border-bottom: 0; }
   font-size: 13px;
   line-height: 1.5;
 }
+.dashboard-recent-panel {
+  margin-top: 2px;
+}
+.dashboard-recent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.dashboard-recent-grid > article {
+  min-width: 0;
+  border: 1px solid #dce5ef;
+  border-radius: 8px;
+  background: #fbfdff;
+  overflow: hidden;
+}
+.dashboard-recent-grid header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid #e4ebf2;
+  background: #fff;
+}
+.dashboard-recent-grid header strong {
+  color: #203246;
+  font-size: 14px;
+}
+.dashboard-recent-grid header span {
+  flex: 0 0 auto;
+  color: #7890a8;
+  font-size: 12px;
+}
+.dashboard-recent-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-bottom: 1px solid #eaf0f6;
+}
+.dashboard-recent-item:last-child {
+  border-bottom: 0;
+}
+.dashboard-recent-item div {
+  min-width: 0;
+}
+.dashboard-recent-item strong {
+  display: block;
+  color: #203246;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.dashboard-recent-item span {
+  display: block;
+  margin-top: 4px;
+  color: #53657a;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
 .module-coverage-panel {
   margin: -2px 0 16px;
   display: grid;
@@ -2217,7 +2279,7 @@ tr:last-child td { border-bottom: 0; }
   .sidebar { position: static; height: auto; }
   .main { padding: 16px; }
   .topbar, .panel-head { flex-direction: column; }
-  .form-grid.two, .form-grid.three, .form-grid.four, .form-grid.portal-config-grid, .form-grid.quality-rules-grid, .metric-grid, .ops-grid, .portal-rules, .portal-completion-grid, .deploy-policy-grid, .content-items-grid, .lowcode-forms-grid, .lowcode-report-grid, .lowcode-quality-list, .module-quality-list, .lowcode-dynamic-fields, .lowcode-field-group-grid, .content-preview { grid-template-columns: 1fr; }
+  .form-grid.two, .form-grid.three, .form-grid.four, .form-grid.portal-config-grid, .form-grid.quality-rules-grid, .metric-grid, .ops-grid, .portal-rules, .portal-completion-grid, .dashboard-recent-grid, .deploy-policy-grid, .content-items-grid, .lowcode-forms-grid, .lowcode-report-grid, .lowcode-quality-list, .module-quality-list, .lowcode-dynamic-fields, .lowcode-field-group-grid, .content-preview { grid-template-columns: 1fr; }
   .content-asset-entry,
   .content-asset-card,
   .content-asset-fields,

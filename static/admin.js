@@ -3353,6 +3353,87 @@ function renderDashboardLowcodeTodos(rows) {
   `;
 }
 
+function adminActionLabel(action) {
+  const labels = {
+    approve_content_item: "通过结构化资料",
+    copy_lowcode_form: "复制采集模板",
+    delete_lowcode_draft: "删除低代码草稿",
+    deploy_content: "发布展厅资料",
+    import_users: "导入账号",
+    login: "登录",
+    reject_content_item: "驳回结构化资料",
+    restore_lowcode_form_version: "恢复模板版本",
+    review_approve: "审核通过",
+    review_reject: "审核驳回",
+    save_content_item: "保存结构化资料",
+    save_lowcode_draft: "保存低代码草稿",
+    save_lowcode_form: "保存采集模板",
+    save_lowcode_record: "保存低代码资料",
+    submit_content_item: "提交结构化资料",
+    submit_lowcode_record: "提交低代码资料",
+    upsert_project: "保存门户",
+    upsert_user: "保存账号",
+  };
+  return labels[action] || action || "操作";
+}
+
+function renderDashboardRecentUpdates(dashboard) {
+  const recentProjects = dashboard.recentProjects || [];
+  const recentLogs = dashboard.logs || [];
+  const recentScans = dashboard.recentScans || [];
+  const projectItems = recentProjects.slice(0, 5).map((project) => `
+    <article class="dashboard-recent-item">
+      <div>
+        <strong>${escapeHtml(project.name)}</strong>
+        <span>${escapeHtml(portalTypeLabel(project.portalType))} · ${escapeHtml(project.ownerDisplayName || project.ownerUsername || "-")} · ${formatTime(project.updatedAt)}</span>
+      </div>
+      <button class="button small" type="button" data-dashboard-pages="${project.id}">资料</button>
+    </article>
+  `).join("");
+  const logItems = recentLogs.slice(0, 5).map((log) => `
+    <article class="dashboard-recent-item">
+      <div>
+        <strong>${escapeHtml(adminActionLabel(log.action))}</strong>
+        <span>${escapeHtml(log.username || "-")} · ${escapeHtml(log.targetLabel || log.targetId || "-")} · ${formatTime(log.createdAt)}</span>
+      </div>
+      ${isAdmin() ? `<button class="button small" type="button" data-dashboard-logs>日志</button>` : ""}
+    </article>
+  `).join("");
+  const scanItems = recentScans.slice(0, 5).map((scan) => `
+    <article class="dashboard-recent-item">
+      <div>
+        <strong>${escapeHtml(scan.title || scan.code || "扫码访问")}</strong>
+        <span>${escapeHtml(scan.projectName || "-")} · ${escapeHtml(scan.code || "-")} · ${formatTime(scan.createdAt)}</span>
+      </div>
+      ${scan.url ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(scan.url)}">打开</a>` : ""}
+    </article>
+  `).join("");
+  return `
+    <section class="panel dashboard-recent-panel">
+      <div class="panel-head">
+        <div>
+          <h2>最近更新</h2>
+          <p>快速查看近期门户维护、后台操作和扫码访问，方便确认资料流转是否顺畅。</p>
+        </div>
+      </div>
+      <div class="dashboard-recent-grid">
+        <article>
+          <header><strong>门户更新</strong><span>${recentProjects.length} 项</span></header>
+          ${projectItems || `<div class="empty">暂无门户更新</div>`}
+        </article>
+        <article>
+          <header><strong>后台操作</strong><span>${recentLogs.length} 项</span></header>
+          ${logItems || `<div class="empty">暂无后台操作</div>`}
+        </article>
+        <article>
+          <header><strong>扫码访问</strong><span>${recentScans.length} 项</span></header>
+          ${scanItems || `<div class="empty">暂无扫码访问</div>`}
+        </article>
+      </div>
+    </section>
+  `;
+}
+
 async function renderDashboard() {
   if (!state.projects.length) await loadProjects();
   const [data, portalRows] = await Promise.all([
@@ -3362,6 +3443,7 @@ async function renderDashboard() {
   const portalCompletionHtml = renderPortalCompletionOverview(portalRows);
   const portalPriorityHtml = renderPortalPriorityTasks(portalRows);
   const lowcodeTodoHtml = renderDashboardLowcodeTodos(portalRows);
+  const recentUpdatesHtml = renderDashboardRecentUpdates(data.dashboard || {});
   const s = data.dashboard.summary || {};
   const ops = data.dashboard.operations || {};
   const ready = ops.ready || {};
@@ -3399,6 +3481,7 @@ async function renderDashboard() {
     </div>
     ${portalPriorityHtml}
     ${lowcodeTodoHtml}
+    ${recentUpdatesHtml}
     ${portalCompletionHtml}
     <section class="panel ops-panel">
       <div class="panel-head"><div><h2>运行状态</h2><p>${formatTime(ready.time)}</p></div><span class="badge ${readyOk ? "success" : "danger"}">${readyOk ? "Ready" : "异常"}</span></div>
@@ -4225,6 +4308,11 @@ $("dashboardView").addEventListener("click", async (event) => {
   const exportCompletion = event.target.closest("[data-export-portal-completion]");
   if (exportCompletion) {
     exportPortalCompletionCsv();
+    return;
+  }
+  const logs = event.target.closest("[data-dashboard-logs]");
+  if (logs) {
+    await showView("logs");
     return;
   }
   const lowcodeRecords = event.target.closest("[data-dashboard-lowcode-records]");
