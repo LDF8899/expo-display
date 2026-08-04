@@ -807,6 +807,7 @@ async function showLowcodeVersions(formId) {
   $("lowcodeVersionPanel").hidden = false;
   $("lowcodeTemplateForm").hidden = true;
   $("lowcodeRecordForm").hidden = true;
+  $("lowcodeRecordDetailPanel").hidden = true;
   $("contentItemForm").hidden = true;
   $("pageForm").hidden = true;
   $("lowcodeVersionPanel").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -980,6 +981,61 @@ function importLowcodeTemplateJson(file) {
   });
   reader.readAsText(file, "utf-8");
 }
+function lowcodeDisplayValue(value) {
+  if (Array.isArray(value)) return value.join("、");
+  if (value && typeof value === "object") return JSON.stringify(value);
+  if (value === true) return "是";
+  if (value === false) return "否";
+  return String(value ?? "");
+}
+function renderLowcodeRecordDetail(record) {
+  const panel = $("lowcodeRecordDetailPanel");
+  const node = $("lowcodeRecordDetail");
+  if (!panel || !node || !record) return;
+  const form = state.lowcodeForms.find((entry) => String(entry.id) === String(record.formId));
+  const fields = record.data && record.data.fields ? record.data.fields : {};
+  const schemaFields = ((form && form.schema && form.schema.fields) || [])
+    .filter((field) => field.type !== "asset_list" && field.key !== "assets");
+  const renderedKeys = new Set();
+  const rows = schemaFields.map((field) => {
+    renderedKeys.add(field.key);
+    const value = lowcodeDisplayValue(Object.prototype.hasOwnProperty.call(fields, field.key) ? fields[field.key] : field.defaultValue);
+    return `<article>
+      <span>${escapeHtml(field.group || defaultLowcodeFieldGroup(field))}</span>
+      <strong>${escapeHtml(field.label || field.key)}</strong>
+      <p>${escapeHtml(value || "-")}</p>
+    </article>`;
+  });
+  Object.entries(fields).forEach(([key, value]) => {
+    if (renderedKeys.has(key) || key === "assets") return;
+    rows.push(`<article>
+      <span>扩展字段</span>
+      <strong>${escapeHtml(key)}</strong>
+      <p>${escapeHtml(lowcodeDisplayValue(value) || "-")}</p>
+    </article>`);
+  });
+  const assets = orderedContentAssets(fields.assets || []);
+  $("lowcodeRecordDetailTitle").textContent = record.contentTitle || fields.title || "模板填报详情";
+  $("lowcodeRecordDetailMeta").textContent = `${record.formName || "资料采集模板"} · v${record.formVersionNo || "-"} · ${statusText(lowcodeRecordStatus(record))} · ${record.submittedBy || "-"} · ${formatTime(record.submittedAt)}`;
+  node.innerHTML = `
+    <section class="lowcode-record-detail-grid">${rows.join("") || `<div class="empty">暂无字段数据</div>`}</section>
+    <section class="lowcode-record-detail-assets">
+      <div class="field-head"><span>素材与附件</span><small>${assets.length} 个</small></div>
+      ${assets.length ? assets.map((asset, index) => `<a target="_blank" rel="noopener" href="${escapeHtml(asset.url)}">
+        <span>${assetKindLabel(asset)}</span>
+        <strong>${escapeHtml(asset.caption || asset.url || `素材 ${index + 1}`)}</strong>
+        <em>${escapeHtml(contentAssetRoleLabels[asset.role] || asset.role || "素材")}</em>
+      </a>`).join("") : `<div class="content-asset-empty">暂无素材或附件</div>`}
+    </section>
+  `;
+  panel.hidden = false;
+  $("lowcodeRecordForm").hidden = true;
+  $("lowcodeTemplateForm").hidden = true;
+  $("lowcodeVersionPanel").hidden = true;
+  $("contentItemForm").hidden = true;
+  $("pageForm").hidden = true;
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 function renderLowcodeRecords() {
   const listNode = $("lowcodeRecordsList");
   if (!listNode) return;
@@ -1007,6 +1063,7 @@ function renderLowcodeRecords() {
       </div>
       ${record.reviewNote ? `<p class="warn-text">审核意见：${escapeHtml(record.reviewNote)}</p>` : ""}
       <div class="actions">
+        <button class="button small" type="button" data-lowcode-record-detail="${record.id}">查看填报</button>
         ${status === "draft" ? `<button class="button small primary" type="button" data-lowcode-record-resume="${record.id}">继续填写</button>` : ""}
         ${status === "rejected" ? `<button class="button small primary" type="button" data-lowcode-record-resume="${record.id}">按意见修改</button>` : ""}
         ${status === "draft" ? `<button class="button small danger" type="button" data-lowcode-record-delete="${record.id}">删除草稿</button>` : ""}
@@ -1038,6 +1095,7 @@ function fillLowcodeRecordForm(form, record = null) {
   $("lowcodeAssetRole").value = "gallery";
   $("lowcodeAssetFile").value = "";
   $("lowcodeRecordForm").hidden = false;
+  $("lowcodeRecordDetailPanel").hidden = true;
   $("lowcodeTemplateForm").hidden = true;
   $("lowcodeVersionPanel").hidden = true;
   $("contentItemForm").hidden = true;
@@ -1290,6 +1348,7 @@ function fillLowcodeTemplateForm(form = {}) {
   setLowcodeFieldDrafts(schemaFields.length ? schemaFields : lowcodeStandardFields(moduleKey, contentType, portalType));
   $("lowcodeTemplateForm").hidden = false;
   $("lowcodeRecordForm").hidden = true;
+  $("lowcodeRecordDetailPanel").hidden = true;
   $("lowcodeVersionPanel").hidden = true;
   $("contentItemForm").hidden = true;
   $("pageForm").hidden = true;
@@ -2921,6 +2980,12 @@ $("lowcodeFormsGrid").addEventListener("click", (event) => {
   }
 });
 $("lowcodeRecordsList").addEventListener("click", (event) => {
+  const detail = event.target.closest("[data-lowcode-record-detail]");
+  if (detail) {
+    const record = state.lowcodeRecords.find((entry) => String(entry.id) === String(detail.dataset.lowcodeRecordDetail));
+    if (record) renderLowcodeRecordDetail(record);
+    return;
+  }
   const remove = event.target.closest("[data-lowcode-record-delete]");
   if (remove) {
     if (!confirm("确定删除这个草稿？")) return;
@@ -2945,6 +3010,7 @@ $("newLowcodeTemplate").addEventListener("click", () => fillLowcodeTemplateForm(
 $("importLowcodeTemplate").addEventListener("click", () => $("lowcodeTemplateImportFile").click());
 $("lowcodeTemplateImportFile").addEventListener("change", (event) => importLowcodeTemplateJson(event.target.files[0]));
 $("closeLowcodeRecordForm").addEventListener("click", () => { $("lowcodeRecordForm").hidden = true; });
+$("closeLowcodeRecordDetail").addEventListener("click", () => { $("lowcodeRecordDetailPanel").hidden = true; });
 $("closeLowcodeTemplateForm").addEventListener("click", () => { $("lowcodeTemplateForm").hidden = true; });
 $("closeLowcodeVersionPanel").addEventListener("click", () => { $("lowcodeVersionPanel").hidden = true; });
 $("lowcodeVersionList").addEventListener("click", async (event) => {
