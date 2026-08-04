@@ -301,6 +301,13 @@ async (page) => {{
   await page.waitForURL(/\\/departments\\/finance/, {{ timeout: 10000 }});
   await page.goBack();
   await page.waitForURL({json.dumps(base_url + "/departments")}, {{ timeout: 10000 }});
+  await page.goto({json.dumps(base_url + "/topics/smart-energy")});
+  await page.waitForSelector(".chapter-tab", {{ timeout: 10000 }});
+  const topicTabs = await page.locator(".chapter-tab").allTextContents();
+  const expectedTabs = ["专题概况", "专业群布局", "实训场景", "产教协同", "名师名匠", "优秀校友", "优秀学生", "专题成果", "技能大赛", "荣誉资质", "视频资源"];
+  if (JSON.stringify(topicTabs) !== JSON.stringify(expectedTabs)) {{
+    throw new Error(`topic tabs should use fixed 11-section template, got ${{JSON.stringify(topicTabs)}}`);
+  }}
 }}
 """
 
@@ -348,6 +355,7 @@ async (page) => {{
   if (!routes.includes("/topics/modern-agriculture")) throw new Error("project table missing modern agriculture route");
   if (!routes.includes("/topics/smart-energy")) throw new Error("project table missing topic route");
   if (!routes.includes("/topics/campus-culture")) throw new Error("project table missing campus culture route");
+  if (routes.includes("/topics/smart-construction")) throw new Error("project table should not seed smart construction as a ninth topic");
   await page.goto({json.dumps(base_url + "/admin?view=pages")});
   await page.waitForSelector("#projectSelect option", {{ timeout: 10000 }});
   await page.waitForSelector("#currentPortalStrip code", {{ timeout: 10000 }});
