@@ -571,9 +571,10 @@ function lowcodeFieldInput(field, submitted = {}) {
   const rawValue = Object.prototype.hasOwnProperty.call(submitted, field.key) ? submitted[field.key] : field.defaultValue;
   const defaultValue = escapeHtml(rawValue == null ? "" : rawValue);
   const required = field.required ? " required" : "";
+  const maxLength = Number(field.maxLength || 0) > 0 ? ` maxlength="${Number(field.maxLength)}"` : "";
   const options = Array.isArray(field.options) ? field.options : [];
   if (field.type === "textarea" || field.type === "richtext") {
-    return `<label class="lowcode-field wide"><span>${label}${field.required ? " *" : ""}</span><textarea data-lowcode-field="${key}" rows="4" placeholder="${placeholder}"${required}>${defaultValue}</textarea></label>`;
+    return `<label class="lowcode-field wide"><span>${label}${field.required ? " *" : ""}</span><textarea data-lowcode-field="${key}" rows="4" placeholder="${placeholder}"${required}${maxLength}>${defaultValue}</textarea></label>`;
   }
   if (field.type === "checkbox" || field.type === "switch") {
     return `<label class="lowcode-field lowcode-check"><input data-lowcode-field="${key}" type="checkbox" ${rawValue === true || rawValue === "true" || rawValue === "1" ? "checked" : ""} /> <span>${label}</span></label>`;
@@ -592,7 +593,8 @@ function lowcodeFieldInput(field, submitted = {}) {
     return "";
   }
   const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
-  return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required} /></label>`;
+  const lengthAttr = type === "text" ? maxLength : "";
+  return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required}${lengthAttr} /></label>`;
 }
 function defaultLowcodeFieldGroup(field = {}) {
   const type = String(field.type || "");
@@ -774,6 +776,7 @@ function normalizeLowcodeFieldDraft(field = {}, index = 0) {
     placeholder: String(field.placeholder || "").trim(),
     defaultValue: field.defaultValue == null ? "" : String(field.defaultValue),
     group: String(field.group || defaultLowcodeFieldGroup(field)).trim(),
+    maxLength: Math.max(0, Number.parseInt(field.maxLength || 0, 10) || 0),
     options,
     sortOrder: index,
   };
@@ -849,6 +852,7 @@ function lowcodeFieldEditorRow(field, index) {
       <input data-lowcode-config-field="mapping" list="lowcodeMappingOptions" value="${escapeHtml(field.mapping)}" placeholder="映射目标" />
       <input data-lowcode-config-field="placeholder" value="${escapeHtml(field.placeholder)}" placeholder="提示语" />
       <input data-lowcode-config-field="defaultValue" value="${escapeHtml(field.defaultValue)}" placeholder="默认值" />
+      <input data-lowcode-config-field="maxLength" type="number" min="0" max="20000" step="1" value="${escapeHtml(field.maxLength || "")}" placeholder="字数限制" />
       <input data-lowcode-config-field="optionsText" value="${escapeHtml(lowcodeOptionsText(field.options))}" placeholder="选项：一项一行或逗号分隔" />
     </div>
     <div class="lowcode-field-editor-actions">
@@ -871,7 +875,7 @@ function updateLowcodeFieldDraft(index, field, value) {
   const next = [...state.lowcodeFieldDrafts];
   next[index] = {
     ...next[index],
-    [field === "optionsText" ? "options" : field]: field === "required" ? Boolean(value) : field === "optionsText" ? parseLowcodeOptions(value) : String(value || "").trim(),
+    [field === "optionsText" ? "options" : field]: field === "required" ? Boolean(value) : field === "optionsText" ? parseLowcodeOptions(value) : field === "maxLength" ? Math.max(0, Number.parseInt(value || 0, 10) || 0) : String(value || "").trim(),
   };
   state.lowcodeFieldDrafts = next.map(normalizeLowcodeFieldDraft);
 }
@@ -902,6 +906,7 @@ function addLowcodeFieldDraft() {
     placeholder: "",
     defaultValue: "",
     group: "详情内容",
+    maxLength: 0,
     options: [],
   }]);
 }
@@ -947,6 +952,7 @@ function lowcodeTemplatePayload() {
     placeholder: "可上传、从素材库选择，或一行一个素材地址",
     defaultValue: "",
     group: "媒体素材",
+    maxLength: 0,
     sortOrder: fields.length,
   });
   return {

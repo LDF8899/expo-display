@@ -505,7 +505,7 @@ def content_templates_payload():
     }
 
 
-def lowcode_field(key, label, field_type="text", required=False, mapping="", placeholder="", options=None, default_value="", group=""):
+def lowcode_field(key, label, field_type="text", required=False, mapping="", placeholder="", options=None, default_value="", group="", max_length=0):
     field = {
         "key": key,
         "label": label,
@@ -516,6 +516,12 @@ def lowcode_field(key, label, field_type="text", required=False, mapping="", pla
         "defaultValue": default_value,
         "group": group,
     }
+    try:
+        normalized_max_length = int(max_length or 0)
+    except (TypeError, ValueError):
+        normalized_max_length = 0
+    if normalized_max_length > 0:
+        field["maxLength"] = normalized_max_length
     if options:
         field["options"] = options
     return field
@@ -569,9 +575,9 @@ LOWCODE_META_FIELDS = {
 def lowcode_schema_for_module(portal_type, module):
     content_type = default_content_type_for_module(module["key"])
     fields = [
-        lowcode_field("title", "资料标题", "text", True, "content_item.title", f"{module['label']}标题", group="基础信息"),
-        lowcode_field("subtitle", "副标题/身份信息", "text", False, "content_item.subtitle", module.get("description", ""), group="基础信息"),
-        lowcode_field("summary", "卡片摘要", "textarea", True, "content_item.summary", "用于门户卡片和抽屉开头，建议 40 到 100 字", group="基础信息"),
+        lowcode_field("title", "资料标题", "text", True, "content_item.title", f"{module['label']}标题", group="基础信息", max_length=80),
+        lowcode_field("subtitle", "副标题/身份信息", "text", False, "content_item.subtitle", module.get("description", ""), group="基础信息", max_length=120),
+        lowcode_field("summary", "卡片摘要", "textarea", True, "content_item.summary", "用于门户卡片和抽屉开头，建议 40 到 100 字", group="基础信息", max_length=180),
     ]
     fields.extend([
         {**field, "group": field.get("group") or "详情内容"}
@@ -3578,6 +3584,7 @@ def normalize_lowcode_schema(schema, form):
             "placeholder": str(field.get("placeholder") or "").strip()[:512],
             "defaultValue": str(field.get("defaultValue") if "defaultValue" in field else field.get("default_value") or "").strip()[:1024],
             "group": str(field.get("group") or "").strip()[:80],
+            "maxLength": max(0, min(int_value(field.get("maxLength")), 20000)),
             "sortOrder": int_value(field.get("sortOrder"), index),
         }
         if not normalized["group"]:
@@ -3766,6 +3773,10 @@ def lowcode_record_payload(form, submitted, validate_required=True):
         text_value = lowcode_scalar_text(value)
         if validate_required and field.get("required") and (value is None or text_value == ""):
             errors.append(f"{field.get('label') or key}不能为空")
+            continue
+        max_length = int_value(field.get("maxLength"))
+        if max_length > 0 and text_value and len(text_value) > max_length:
+            errors.append(f"{field.get('label') or key}不能超过{max_length}字")
             continue
         mapping = str(field.get("mapping") or "")
         if mapping == "content_item.title":
