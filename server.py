@@ -383,13 +383,6 @@ BLUEPRINT_PORTALS = [
         "image": "/uploads/blueprint/topics/smart-manufacturing/images/img01.webp",
     },
     {
-        "name": "智慧建造",
-        "portal_type": "topic",
-        "portal_slug": "smart-construction",
-        "summary": "现代建造、工程管理、测绘应用与绿色施工。",
-        "image": "/uploads/blueprint/departments/mining-construction/images/img01.webp",
-    },
-    {
         "name": "同心校园文化",
         "portal_type": "topic",
         "portal_slug": "campus-culture",

@@ -117,7 +117,7 @@ def run_browser_qr_check(base_url):
         ("/display", True, 0),
         ("/departments", True, 0),
         ("/departments/finance?section=overview", False, 5),
-        ("/topics/smart-energy?section=majors", False, 9),
+        ("/topics/smart-energy?section=majors", False, 8),
     ]
 
     def run_cli(args, raw=False):

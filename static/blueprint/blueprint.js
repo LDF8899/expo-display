@@ -21,7 +21,6 @@
       "digital-intelligence",
       "smart-energy",
       "smart-manufacturing",
-      "smart-construction",
       "campus-culture"
     ]
   };
@@ -40,7 +39,6 @@
     "smart-manufacturing": "智能装备、新能源汽车与无人机应用",
     "finance-commerce": "数字商贸、电商物流与产教融合",
     "digital-intelligence": "人工智能、网络安全、数据应用与跨专业赋能",
-    "smart-construction": "现代建造、工程管理、测绘应用与绿色施工",
     "campus-culture": "同心育人、校园文化、学生成长与服务地方"
   };
   var TOPIC_DEPARTMENTS = {
@@ -51,7 +49,6 @@
     "digital-intelligence": ["电子信息工程系", "财政经济系", "工矿建筑系", "医学护理系", "旅游管理系"],
     "smart-energy": ["工矿建筑系", "电子信息工程系"],
     "smart-manufacturing": ["工矿建筑系", "电子信息工程系", "财政经济系"],
-    "smart-construction": ["工矿建筑系", "电子信息工程系", "财政经济系"],
     "campus-culture": ["工矿建筑系", "财政经济系", "电子信息工程系", "医学护理系", "旅游管理系"]
   };
   var MODULE_META = {
