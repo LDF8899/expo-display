@@ -35,6 +35,20 @@ def expect_status(code, url, method="GET", headers=None, payload=None):
     raise RuntimeError(f"expected {code}, request succeeded")
 
 
+def expect_json_status(code, url, method="GET", headers=None, payload=None):
+    try:
+        request(url, method=method, headers=headers, payload=payload)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        if exc.code != code:
+            raise RuntimeError(f"expected {code}, got {exc.code}: {body}") from exc
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError as decode_error:
+            raise RuntimeError(f"expected json error body, got: {body}") from decode_error
+    raise RuntimeError(f"expected {code}, request succeeded")
+
+
 def login(base_url, username, password):
     _, response = json_request(
         f"{base_url}/api/login",
@@ -101,6 +115,51 @@ def submit_lowcode_record(base_url, teacher, project_id):
     return form, result["record"]
 
 
+def assert_required_field_submit_rules(base_url, teacher, project_id):
+    forms, _ = json_request(f"{base_url}/api/projects/{project_id}/lowcode/forms", headers={"Cookie": teacher["cookie"]})
+    form = None
+    missing_required_keys = []
+    for candidate in forms["forms"]:
+        fields = (candidate.get("schema") or {}).get("fields") or []
+        required_keys = [
+            field.get("key")
+            for field in fields
+            if field.get("required") and field.get("key") not in {"title", "summary"}
+        ]
+        if required_keys:
+            form = candidate
+            missing_required_keys = required_keys
+            break
+    if not form:
+        raise RuntimeError(f"no lowcode form with content required fields: {forms}")
+
+    incomplete_payload = {
+        "data": {
+            "title": "缺字段验证",
+            "summary": "用于验证正式提交会拦截模板必填字段。",
+        }
+    }
+    error = expect_json_status(
+        400,
+        f"{base_url}/api/projects/{project_id}/lowcode/forms/{form['id']}/records",
+        method="POST",
+        headers=teacher["headers"],
+        payload=incomplete_payload,
+    )
+    if "不能为空" not in str(error.get("error", "")):
+        raise RuntimeError(f"required field error missing: {error}; keys={missing_required_keys}")
+
+    draft_result, _ = json_request(
+        f"{base_url}/api/projects/{project_id}/lowcode/forms/{form['id']}/records",
+        method="POST",
+        headers=teacher["headers"],
+        payload={"draft": True, **incomplete_payload},
+    )
+    draft = draft_result["record"]
+    if draft["status"] != "draft" or draft.get("contentItemId"):
+        raise RuntimeError(f"incomplete draft should be saved without publishing content: {draft}")
+
+
 def main():
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
         temp_path = Path(temp)
@@ -131,7 +190,9 @@ def main():
             create_user(base_url, admin, "reportdept", "Report-Dept-2026", "财经商贸", "department_admin")
             project = create_project(base_url, admin, "reportteacher", "财经商贸低代码报告门户")
             other_project = create_project(base_url, admin, "otherteacher", "现代农业低代码报告门户")
+            validation_project = create_project(base_url, admin, "reportteacher", "低代码必填校验门户")
             teacher = login(base_url, "reportteacher", "Report-Teacher-2026")
+            assert_required_field_submit_rules(base_url, teacher, validation_project["id"])
             form, record = submit_lowcode_record(base_url, teacher, project["id"])
 
             report_data, _ = json_request(
