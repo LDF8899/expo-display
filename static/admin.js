@@ -935,6 +935,71 @@ function lowcodeTemplateQualityForForm(form) {
     .find((item) => String(item.formId) === String(form?.id));
   return entry?.quality || form?.quality || null;
 }
+function lowcodeTemplateQualityEntries() {
+  if (state.lowcodeTemplateQualityReport?.entries?.length) return state.lowcodeTemplateQualityReport.entries;
+  return (state.lowcodeForms || []).map((form) => {
+    const schema = form.schema || {};
+    const moduleKey = form.targetModuleKey || schema.moduleKey || "";
+    const portalType = form.targetPortalType || schema.portalType || selectedPortalType();
+    const contentType = form.targetContentType || schema.contentType || "article";
+    const quality = form.quality || lowcodeTemplateQualitySummary(schema.fields || [], contentType, moduleKey, portalType);
+    return {
+      formId: form.id,
+      name: form.name || "",
+      code: form.code || "",
+      enabled: form.enabled !== false,
+      targetPortalType: portalType,
+      targetModuleKey: moduleKey,
+      targetContentType: contentType,
+      targetContentTypeLabel: contentTypeLabel(contentType),
+      moduleLabel: schema.moduleLabel || (moduleMeta(moduleKey, portalType) || {}).label || moduleKey || "",
+      quality,
+      issues: (quality.checks || []).filter((item) => item.kind === "danger" || item.kind === "warn"),
+    };
+  });
+}
+function exportLowcodeTemplateQualityCsv() {
+  const entries = lowcodeTemplateQualityEntries();
+  if (!entries.length) {
+    alert("当前门户暂无资料采集模板");
+    return;
+  }
+  const project = currentProject();
+  const headers = ["门户", "模板ID", "模板名称", "模板编码", "启用", "标准板块", "资料类型", "质量状态", "通过项", "建议项", "需处理项", "检查项", "问题级别", "问题标题", "问题说明", "整改建议"];
+  const rows = [];
+  entries.forEach((entry) => {
+    const quality = entry.quality || {};
+    const issues = entry.issues && entry.issues.length
+      ? entry.issues
+      : [{ kind: "ok", title: "模板质量", detail: "未发现需要处理的问题。", fix: "" }];
+    const base = [
+      project?.name || "",
+      entry.formId || "",
+      entry.name || "",
+      entry.code || "",
+      entry.enabled ? "是" : "否",
+      entry.moduleLabel || "",
+      entry.targetContentTypeLabel || contentTypeLabel(entry.targetContentType),
+      quality.label || "",
+      quality.ok || 0,
+      quality.warn || 0,
+      quality.danger || 0,
+      (quality.checks || []).length,
+    ];
+    issues.forEach((issue) => {
+      rows.push([
+        ...base,
+        lowcodeQualityKindText(issue.kind),
+        issue.title || "",
+        issue.detail || "",
+        issue.fix || "",
+      ]);
+    });
+  });
+  const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  const projectName = (project?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
+  downloadTextFile(`资料采集模板质量-${projectName}.csv`, csv, "text/csv;charset=utf-8");
+}
 function renderLowcodeForms() {
   const grid = $("lowcodeFormsGrid");
   if (!grid) return;
@@ -4129,6 +4194,7 @@ $("exportModuleCoverage").addEventListener("click", exportModuleCoverageCsv);
 $("exportModuleGaps").addEventListener("click", exportModuleGapsCsv);
 $("exportContentQuality").addEventListener("click", exportContentQualityCsv);
 $("exportAssetArchive").addEventListener("click", exportAssetArchiveCsv);
+$("exportLowcodeTemplateQuality").addEventListener("click", exportLowcodeTemplateQualityCsv);
 $("contentQualityList").addEventListener("click", (event) => {
   const edit = event.target.closest("[data-quality-edit]");
   if (!edit) return;
