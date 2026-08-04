@@ -807,10 +807,12 @@ function lowcodeFieldInput(field, submitted = {}) {
     return `<label class="lowcode-field lowcode-check"${conditionAttrs}><input data-lowcode-field="${key}" type="checkbox" ${rawValue === true || rawValue === "true" || rawValue === "1" ? "checked" : ""} /> <span>${label}</span></label>`;
   }
   if (field.type === "select" && Array.isArray(field.options) && field.options.length) {
-    return `<label class="lowcode-field"${conditionAttrs}><span>${label}${field.required ? " *" : ""}</span><select data-lowcode-field="${key}"${required}>${field.options.map((option) => `<option value="${escapeHtml(option.value)}"${String(option.value) === String(rawValue || "") ? " selected" : ""}>${escapeHtml(option.label || option.value)}</option>`).join("")}</select></label>`;
+    const optionsHtml = field.options.map((option) => `<option value="${escapeHtml(option.value)}"${String(option.value) === String(rawValue || "") ? " selected" : ""}>${escapeHtml(option.label || option.value)}</option>`).join("");
+    const emptyOption = rawValue ? "" : `<option value="" selected>${field.required ? "请选择" : "不选择"}</option>`;
+    return `<label class="lowcode-field"${conditionAttrs}><span>${label}${field.required ? " *" : ""}</span><select data-lowcode-field="${key}"${required}>${emptyOption}${optionsHtml}</select></label>`;
   }
   if (field.type === "radio" && options.length) {
-    return `<fieldset class="lowcode-choice-field"${conditionAttrs}><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option, index) => `<label><input data-lowcode-field="${key}" name="lowcode_${key}" type="radio" value="${escapeHtml(option.value)}" ${String(option.value) === String(rawValue || "") || (!rawValue && index === 0) ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
+    return `<fieldset class="lowcode-choice-field"${conditionAttrs}><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option) => `<label><input data-lowcode-field="${key}" name="lowcode_${key}" type="radio" value="${escapeHtml(option.value)}" ${field.required ? "required" : ""} ${String(option.value) === String(rawValue || "") ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
   }
   if (field.type === "checkbox_group" && options.length) {
     const defaults = new Set((Array.isArray(rawValue) ? rawValue : String(rawValue || "").split(/[，,、]/)).map((item) => String(item).trim()).filter(Boolean));
@@ -870,10 +872,12 @@ function lowcodeTemplatePreviewInput(field) {
     return `<label class="lowcode-field lowcode-check"><input type="checkbox" disabled ${field.defaultValue === true || field.defaultValue === "true" || field.defaultValue === "1" ? "checked" : ""} /> <span>${label}</span></label>`;
   }
   if (field.type === "select" && options.length) {
-    return `<label class="lowcode-field"><span>${label}${required}</span><select disabled>${options.map((option) => `<option>${escapeHtml(option.label || option.value)}</option>`).join("")}</select></label>`;
+    const selectedValue = String(field.defaultValue || "");
+    return `<label class="lowcode-field"><span>${label}${required}</span><select disabled>${!selectedValue ? `<option>${field.required ? "请选择" : "不选择"}</option>` : ""}${options.map((option) => `<option${String(option.value) === selectedValue ? " selected" : ""}>${escapeHtml(option.label || option.value)}</option>`).join("")}</select></label>`;
   }
   if (field.type === "radio" && options.length) {
-    return `<fieldset class="lowcode-choice-field"><legend>${label}${required}</legend>${options.map((option, index) => `<label><input type="radio" disabled ${index === 0 ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
+    const selectedValue = String(field.defaultValue || "");
+    return `<fieldset class="lowcode-choice-field"><legend>${label}${required}</legend>${options.map((option) => `<label><input type="radio" disabled ${String(option.value) === selectedValue ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
   }
   if (field.type === "checkbox_group" && options.length) {
     return `<fieldset class="lowcode-choice-field wide"><legend>${label}${required}</legend>${options.map((option) => `<label><input type="checkbox" disabled /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
