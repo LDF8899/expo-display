@@ -1652,6 +1652,55 @@ function exportContentQualityCsv() {
   const projectName = (project?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
   downloadTextFile(`资料质量检查-${projectName}.csv`, csv, "text/csv;charset=utf-8");
 }
+function exportAssetArchiveCsv() {
+  const project = currentProject();
+  const rows = [];
+  const pushAssetRows = (source, owner, assets) => {
+    orderedContentAssets(assets || []).forEach((asset, index) => {
+      rows.push([
+        project?.name || "",
+        source,
+        owner.id || "",
+        owner.code || "",
+        owner.title || "",
+        owner.moduleLabel || "",
+        owner.contentTypeLabel || "",
+        index + 1,
+        contentAssetRoleLabels[asset.role] || asset.role || "素材",
+        assetKindLabel(asset),
+        asset.caption || "",
+        asset.url || "",
+      ]);
+    });
+  };
+  (state.contentItems || []).forEach((item) => {
+    pushAssetRows("结构化资料", {
+      id: item.id,
+      code: item.code,
+      title: item.title,
+      moduleLabel: item.moduleLabel || (moduleMeta(item.moduleKey) || {}).label || item.moduleKey || "",
+      contentTypeLabel: item.contentTypeLabel || contentTypeLabel(item.contentType),
+    }, item.assets || []);
+  });
+  (state.lowcodeRecords || []).forEach((record) => {
+    const fields = record.data && record.data.fields ? record.data.fields : {};
+    pushAssetRows("模板填报", {
+      id: record.id,
+      code: record.contentCode || "",
+      title: record.contentTitle || fields.title || "",
+      moduleLabel: record.contentModuleLabel || "",
+      contentTypeLabel: record.contentTypeLabel || contentTypeLabel(record.contentType),
+    }, fields.assets || []);
+  });
+  if (!rows.length) {
+    alert("当前门户暂无可归档的素材或附件");
+    return;
+  }
+  const headers = ["门户", "来源", "资料/记录ID", "编号", "标题", "标准板块", "资料类型", "序号", "素材角色", "文件类型", "说明", "地址"];
+  const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  const projectName = (project?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
+  downloadTextFile(`素材附件归档-${projectName}.csv`, csv, "text/csv;charset=utf-8");
+}
 function generatedModuleCode(moduleKey) {
   const meta = moduleMeta(moduleKey) || modulesForPortalType()[0];
   const projectId = $("projectSelect") ? $("projectSelect").value || "P" : "P";
@@ -2937,6 +2986,7 @@ $("moduleLibrary").addEventListener("click", (event) => {
 });
 $("exportModuleCoverage").addEventListener("click", exportModuleCoverageCsv);
 $("exportContentQuality").addEventListener("click", exportContentQualityCsv);
+$("exportAssetArchive").addEventListener("click", exportAssetArchiveCsv);
 $("contentQualityList").addEventListener("click", (event) => {
   const edit = event.target.closest("[data-quality-edit]");
   if (!edit) return;
