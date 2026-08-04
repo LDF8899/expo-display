@@ -31,6 +31,7 @@ const contentTypes = [
   { key: "achievement", label: "成果类", description: "摘要和关键指标优先，适合成果、案例和项目" },
   { key: "scene", label: "场景类", description: "适合实训室、设备条件、服务课程和开放对象" },
   { key: "video", label: "视频类", description: "播放器或封面为主，适合宣传片、访谈和纪实片" },
+  { key: "attachment", label: "附件资料", description: "附件列表优先，适合 PDF、Word、Excel、PPT 和压缩包" },
 ];
 const contentTypeLabels = Object.fromEntries(contentTypes.map((item) => [item.key, item.label]));
 const defaultQualityRules = {
@@ -116,6 +117,12 @@ const lowcodeMetaFieldTemplates = {
     ["videoUrl", "视频地址", "text", "content_item.assets.video", "视频文件地址或外部链接", 600],
     ["scenario", "适用场景", "text", "content_item.meta_json.适用场景", "宣传片、访谈、课堂展示或纪实片", 120],
     ["intro", "内容简介", "textarea", "content_item.body_text", "概括视频重点", 1000],
+  ],
+  attachment: [
+    ["fileTitle", "附件名称", "text", "content_item.meta_json.附件名称", "文件、资料包或表格名称", 120],
+    ["fileType", "附件类型", "text", "content_item.meta_json.附件类型", "PDF、Word、Excel、PPT、压缩包等", 80],
+    ["fileUrl", "附件地址", "text", "content_item.assets.attachment", "上传附件或粘贴附件地址", 600],
+    ["fileIntro", "附件说明", "textarea", "content_item.body_text", "说明附件用途、适用对象和查看要点", 1000],
   ],
   article: [
     ["bodyText", "正文内容", "textarea", "content_item.body_text", "按短段落填写，一段一行或空行分隔", 3000],
@@ -374,6 +381,7 @@ function contentBodyTemplate(contentType, label) {
     achievement: `<p>请先写成果摘要，再补充关键指标和佐证材料。</p><h2>成果摘要</h2><ul><li>成果名称：填写项目、课程、案例或建设成果。</li><li>建设周期：填写起止时间或阶段。</li><li>关键指标：填写获奖、立项、服务人数、就业质量等数据。</li></ul><h2>成果价值</h2><p>说明成果如何支撑${name}的人才培养、专业建设或服务地方。</p>`,
     scene: `<p>请围绕真实场景组织资料，优先上传实训室、设备或教学现场图片。</p><h2>场景信息</h2><ul><li>场景名称：填写实训室、基地或设备名称。</li><li>功能定位：填写服务课程、训练项目和开放对象。</li><li>设备条件：填写关键设备、软件平台或工位数量。</li></ul><h2>教学应用</h2><p>说明该场景如何支撑课程教学、技能训练、竞赛备赛或社会培训。</p>`,
     video: `<p>请填写视频标题、时长、主题和适用场景，并在图片地址或正文中放入视频封面/视频链接。</p><h2>视频信息</h2><ul><li>视频标题：填写视频名称。</li><li>时长：填写视频长度。</li><li>适用场景：填写宣传片、访谈、课堂展示或纪实片。</li></ul><h2>内容简介</h2><p>概括视频重点，建议控制在 1 到 3 分钟，优先使用横屏高清素材。</p>`,
+    attachment: `<p>请上传或粘贴 PDF、Word、Excel、PPT、压缩包等附件资料，并补充简短说明。</p><h2>附件信息</h2><ul><li>附件名称：填写文件、资料包或表格名称。</li><li>附件类型：填写 PDF、Word、Excel、PPT、压缩包等。</li><li>适用对象：说明给谁查看、用于什么场景。</li></ul><h2>查看说明</h2><p>概括附件重点，避免只上传文件没有说明。</p>`,
     article: `<p>请围绕“${name}”整理资料，优先使用短段落、清单和真实图片。</p><h2>内容要点</h2><ul><li>填写本板块最重要的事实、项目或成果。</li><li>补充关键数据、参与团队、服务对象或建设进度。</li><li>配套上传现场图片、证书图片或代表性资源。</li></ul><h2>展示说明</h2><p>建议控制文字密度，卡片页会显示摘要，抽屉页会展示完整内容。</p>`,
   };
   return templates[normalizeContentType(contentType)] || templates.article;
@@ -1940,14 +1948,16 @@ function contentItemQualityIssues(item) {
   const hasVideo = assets.some((asset) => asset.role === "video" || looksLikeVideoAsset(asset));
   const hasPortrait = assets.some((asset) => ["portrait", "cover"].includes(asset.role)) || Boolean(item.coverAssetId);
   const hasCertificate = assets.some((asset) => ["certificate", "cover", "gallery"].includes(asset.role)) || Boolean(item.coverAssetId);
+  const hasAttachment = assets.some((asset) => asset.role === "attachment" || looksLikeAttachmentAsset(asset));
   if (rules.requireModule && !item.moduleKey && !localModuleKeyForCategory(item.category)) issues.push(["high", "未匹配标准板块"]);
   if (!String(item.title || "").trim()) issues.push(["high", "缺少标题"]);
   if (rules.requireSummary && !summaryText) issues.push(["medium", "缺少卡片摘要"]);
   if (rules.minBodyChars > 0 && (!bodyText || bodyText.length < rules.minBodyChars)) issues.push(["medium", `正文少于 ${rules.minBodyChars} 字`]);
-  if (rules.requireMedia && !hasVisualAsset) issues.push(["medium", "缺少图片/视频素材"]);
+  if (rules.requireMedia && type !== "attachment" && !hasVisualAsset) issues.push(["medium", "缺少图片/视频素材"]);
   if (rules.requireTypeAssets && type === "video" && !hasVideo) issues.push(["high", "视频类资料缺少视频素材"]);
   if (rules.requireTypeAssets && type === "person" && !hasPortrait) issues.push(["medium", "人物类资料建议配置人物照"]);
   if (rules.requireTypeAssets && type === "honor" && !hasCertificate) issues.push(["medium", "荣誉类资料建议配置证书/荣誉图"]);
+  if (rules.requireTypeAssets && type === "attachment" && !hasAttachment) issues.push(["high", "附件资料缺少附件"]);
   if (item.reviewStatus === "rejected") issues.push(["high", "资料已驳回，需修改后重新提交"]);
   if (item.reviewStatus === "pending" || item.reviewStatus === "pending_delete") issues.push(["medium", "资料仍在审核中"]);
   return issues;

@@ -265,6 +265,11 @@ CONTENT_TYPES = [
         "label": "视频类",
         "description": "适合视频资源，播放器或封面为主，下方展示说明",
     },
+    {
+        "key": "attachment",
+        "label": "附件资料",
+        "description": "适合 PDF、Word、Excel、PPT、压缩包等附件资料，附件列表优先展示",
+    },
 ]
 CONTENT_TYPE_KEYS = {item["key"] for item in CONTENT_TYPES}
 CONTENT_TYPE_LABELS = {item["key"]: item["label"] for item in CONTENT_TYPES}
@@ -565,6 +570,12 @@ LOWCODE_META_FIELDS = {
         lowcode_field("videoUrl", "视频地址", "text", False, "content_item.assets.video", "视频文件地址或外部链接"),
         lowcode_field("scenario", "适用场景", "text", False, "content_item.meta_json.适用场景", "宣传片、访谈、课堂展示或纪实片"),
         lowcode_field("intro", "内容简介", "textarea", False, "content_item.body_text", "概括视频重点"),
+    ],
+    "attachment": [
+        lowcode_field("fileTitle", "附件名称", "text", False, "content_item.meta_json.附件名称", "文件、资料包或表格名称"),
+        lowcode_field("fileType", "附件类型", "text", False, "content_item.meta_json.附件类型", "PDF、Word、Excel、PPT、压缩包等"),
+        lowcode_field("fileUrl", "附件地址", "text", False, "content_item.assets.attachment", "上传附件或粘贴附件地址"),
+        lowcode_field("fileIntro", "附件说明", "textarea", False, "content_item.body_text", "说明附件用途、适用对象和查看要点"),
     ],
     "article": [
         lowcode_field("bodyText", "正文内容", "textarea", False, "content_item.body_text", "按短段落填写，一段一行或空行分隔"),

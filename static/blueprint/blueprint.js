@@ -105,7 +105,8 @@
     honor: "荣誉类",
     achievement: "成果类",
     scene: "场景类",
-    video: "视频类"
+    video: "视频类",
+    attachment: "附件资料"
   };
   var TOPIC_DEFAULT_CONTENT_TYPES = {
     training: "scene",
@@ -341,6 +342,23 @@
       text = String(text || "").replace(/\s+/g, " ").trim();
       if (text) blocks.push({ type: "text", content: text });
     };
+    var isAttachmentHref = function (href) {
+      return /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip)(\?|#|$)/i.test(String(href || ""));
+    };
+    var pushAttachmentLinks = function (node) {
+      var links = Array.prototype.slice.call(node.querySelectorAll ? node.querySelectorAll("a[href]") : []);
+      links.forEach(function (link) {
+        var href = link.getAttribute("href") || "";
+        if (isAttachmentHref(href)) {
+          blocks.push({
+            type: "attachment",
+            href: href,
+            title: link.textContent.trim() || href
+          });
+        }
+      });
+      return links.some(function (link) { return isAttachmentHref(link.getAttribute("href") || ""); });
+    };
     var walk = function (node) {
       if (!node) return;
       if (node.nodeType === 3) {
@@ -377,7 +395,12 @@
         blocks.push({ type: "image", src: node.getAttribute("src"), caption: node.getAttribute("alt") || "" });
         return;
       }
+      if (tag === "a" && node.getAttribute("href") && isAttachmentHref(node.getAttribute("href"))) {
+        blocks.push({ type: "attachment", href: node.getAttribute("href"), title: node.textContent.trim() || node.getAttribute("href") });
+        return;
+      }
       if (/^(p|li|blockquote|h2|h3|h4)$/.test(tag)) {
+        if (pushAttachmentLinks(node)) return;
         pushText(node.textContent);
         return;
       }
@@ -390,9 +413,9 @@
   function uniqueMediaBlocks(blocks) {
     var seen = {};
     return blocks.filter(function (block) {
-      if (!block || (block.type !== "image" && block.type !== "video")) return true;
-      var key = block.type + ":" + (block.src || "");
-      if (!block.src || seen[key]) return false;
+      if (!block || (block.type !== "image" && block.type !== "video" && block.type !== "attachment")) return true;
+      var key = block.type + ":" + (block.src || block.href || "");
+      if ((!block.src && !block.href) || seen[key]) return false;
       seen[key] = true;
       return true;
     });
@@ -1087,6 +1110,7 @@
     if (type === "person") return renderPersonFullSequence(blocks, title);
     if (type === "honor") return renderHonorFullSequence(blocks, title);
     if (type === "video") return renderVideoFullSequence(blocks, title);
+    if (type === "attachment") return renderAttachmentFullSequence(blocks, title);
     return renderFullBlockSequence(blocks, title);
   }
 
@@ -1095,7 +1119,8 @@
     return {
       texts: blocks.filter(function (b) { return b.type === "text" && String(b.content || "").trim(); }),
       images: blocks.filter(function (b) { return b.type === "image" && b.src; }),
-      videos: blocks.filter(function (b) { return b.type === "video" && (b.src || b.poster); })
+      videos: blocks.filter(function (b) { return b.type === "video" && (b.src || b.poster); }),
+      attachments: blocks.filter(function (b) { return b.type === "attachment" && b.href; })
     };
   }
 
@@ -1150,9 +1175,29 @@
     return videoHtml + (copy ? '<section class="topic-video-copy">' + copy + '</section>' : "") + photoHtml || '<p>视频资料正在整理中。</p>';
   }
 
+  function renderAttachmentFullSequence(blocks, title) {
+    var grouped = splitTopicBlocks(blocks);
+    var copy = renderTopicTextFlow(grouped.texts);
+    var attachmentHtml = grouped.attachments.length
+      ? '<div class="topic-attachment-list">' + grouped.attachments.map(function (b, index) {
+        return renderTopicAttachmentItem(b, index);
+      }).join("") + '</div>'
+      : '<p>附件资料正在整理中。</p>';
+    return (copy ? '<section class="topic-video-copy">' + copy + '</section>' : "") + attachmentHtml;
+  }
+
+  function renderTopicAttachmentItem(b, index) {
+    return '<a class="topic-attachment-item" href="' + esc(b.href) + '" target="_blank" rel="noopener">' +
+      '<span>附件 ' + String(index + 1).padStart(2, "0") + '</span>' +
+      '<strong>' + esc(b.title || b.href || "查看附件") + '</strong>' +
+      '<em>' + esc(b.href || "") + '</em>' +
+      '</a>';
+  }
+
   function renderFullBlockSequence(blocks, title) {
     var html = "";
     var photoGroup = [];
+    var attachmentIndex = 0;
     var i = 0;
     var flushPhotos = function () {
       if (!photoGroup.length) return;
@@ -1197,6 +1242,10 @@
       } else if (b.type === "video" && (b.src || b.poster)) {
         flushPhotos();
         html += '<div class="topic-display-video">' + renderVideo(b) + '</div>';
+      } else if (b.type === "attachment" && b.href) {
+        flushPhotos();
+        html += '<div class="topic-attachment-list">' + renderTopicAttachmentItem(b, attachmentIndex) + '</div>';
+        attachmentIndex += 1;
       }
       i += 1;
     }
