@@ -1495,6 +1495,42 @@ function renderContentQuality() {
     </article>`;
   }).join("") : `<div class="empty">当前结构化资料质量良好</div>`;
 }
+function exportContentQualityCsv() {
+  const items = state.contentItems || [];
+  if (!items.length) {
+    alert("当前门户暂无结构化资料");
+    return;
+  }
+  const project = currentProject();
+  const headers = ["门户", "资料ID", "编号", "标题", "标准板块", "资料类型", "审核状态", "启用", "素材数", "问题级别", "问题", "预览地址"];
+  const rows = [];
+  items.forEach((item) => {
+    const issues = contentItemQualityIssues(item);
+    const moduleLabel = item.moduleLabel || (moduleMeta(item.moduleKey) || {}).label || item.moduleKey || "-";
+    const previewUrl = item.reviewStatus === "approved" && item.enabled ? buildQrUrl(item.projectId, item.code) : "";
+    const base = [
+      project?.name || "",
+      item.id || "",
+      item.code || "",
+      item.title || "",
+      moduleLabel,
+      item.contentTypeLabel || contentTypeLabel(item.contentType),
+      statusText(item.reviewStatus),
+      item.enabled ? "是" : "否",
+      (item.assets || []).length,
+    ];
+    if (!issues.length) {
+      rows.push([...base, "良好", "无", previewUrl]);
+    } else {
+      issues.forEach(([level, text]) => {
+        rows.push([...base, level === "high" ? "高" : "中", text, previewUrl]);
+      });
+    }
+  });
+  const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  const projectName = (project?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
+  downloadTextFile(`资料质量检查-${projectName}.csv`, csv, "text/csv;charset=utf-8");
+}
 function generatedModuleCode(moduleKey) {
   const meta = moduleMeta(moduleKey) || modulesForPortalType()[0];
   const projectId = $("projectSelect") ? $("projectSelect").value || "P" : "P";
@@ -2778,6 +2814,7 @@ $("moduleLibrary").addEventListener("click", (event) => {
   if (!button) return;
   startContentItemDraft(button.dataset.moduleCreate);
 });
+$("exportContentQuality").addEventListener("click", exportContentQualityCsv);
 $("contentQualityList").addEventListener("click", (event) => {
   const edit = event.target.closest("[data-quality-edit]");
   if (!edit) return;
