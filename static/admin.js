@@ -928,6 +928,124 @@ function lowcodeRecordStats(records) {
   });
   return stats;
 }
+function lowcodeReportStatsHtml(stats) {
+  return `<div class="lowcode-report-stats">
+    <span><b>${stats.total || 0}</b>总数</span>
+    <span><b>${stats.draft || 0}</b>草稿</span>
+    <span><b>${stats.pending || 0}</b>待审</span>
+    <span><b>${stats.approved || 0}</b>通过</span>
+    <span><b>${stats.rejected || 0}</b>驳回</span>
+  </div>`;
+}
+function lowcodeTemplateReportRows() {
+  const rows = new Map();
+  (state.lowcodeForms || []).forEach((form) => {
+    const moduleLabel = (moduleMeta(form.targetModuleKey, form.targetPortalType) || {}).label || form.targetModuleKey || "未绑定板块";
+    rows.set(String(form.id), {
+      key: String(form.id),
+      label: form.name || `模板 ${form.id}`,
+      subline: `${moduleLabel} · ${contentTypeLabel(form.targetContentType)}${form.enabled === false ? " · 已停用" : ""}`,
+      stats: lowcodeRecordStats([]),
+    });
+  });
+  (state.lowcodeRecords || []).forEach((record) => {
+    const key = String(record.formId || "unknown");
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        label: record.formName || "未匹配模板",
+        subline: `${record.contentModuleLabel || "未绑定板块"} · ${record.contentTypeLabel || contentTypeLabel(record.contentType)}`,
+        stats: lowcodeRecordStats([]),
+      });
+    }
+    const row = rows.get(key);
+    row.records = row.records || [];
+    row.records.push(record);
+    row.stats = lowcodeRecordStats(row.records);
+  });
+  return [...rows.values()].sort((a, b) => (b.stats.total - a.stats.total) || a.label.localeCompare(b.label, "zh-Hans-CN"));
+}
+function lowcodeSubmitterReportRows() {
+  const rows = new Map();
+  (state.lowcodeRecords || []).forEach((record) => {
+    const key = record.submittedBy || "未记录提交人";
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        label: key,
+        subline: "填报人提交情况",
+        stats: lowcodeRecordStats([]),
+        records: [],
+      });
+    }
+    const row = rows.get(key);
+    row.records.push(record);
+    row.stats = lowcodeRecordStats(row.records);
+  });
+  return [...rows.values()].sort((a, b) => (b.stats.total - a.stats.total) || a.label.localeCompare(b.label, "zh-Hans-CN"));
+}
+function renderLowcodeReportGroup(title, subtitle, rows, emptyText) {
+  const visibleRows = rows.slice(0, 8);
+  return `<article class="lowcode-report-card">
+    <header>
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(subtitle)}</span>
+      </div>
+      <span class="badge">${rows.length} 项</span>
+    </header>
+    ${visibleRows.length ? visibleRows.map((row) => `
+      <section class="lowcode-report-row">
+        <div>
+          <strong>${escapeHtml(row.label)}</strong>
+          <span>${escapeHtml(row.subline || "")}</span>
+        </div>
+        ${lowcodeReportStatsHtml(row.stats || lowcodeRecordStats([]))}
+      </section>
+    `).join("") : `<div class="empty">${escapeHtml(emptyText)}</div>`}
+    ${rows.length > visibleRows.length ? `<p class="muted">仅展示前 ${visibleRows.length} 项，完整数据可导出 CSV。</p>` : ""}
+  </article>`;
+}
+function renderLowcodeReports() {
+  const grid = $("lowcodeReportGrid");
+  if (!grid) return;
+  const records = state.lowcodeRecords || [];
+  const stats = lowcodeRecordStats(records);
+  $("lowcodeReportSummary").textContent = `${stats.approved}/${stats.total || 0} 已通过 · 待审 ${stats.pending} · 驳回 ${stats.rejected}`;
+  const templateRows = lowcodeTemplateReportRows();
+  const submitterRows = lowcodeSubmitterReportRows();
+  grid.innerHTML = [
+    renderLowcodeReportGroup("按模板统计", "查看每个资料采集模板的使用和审核状态", templateRows, "当前门户暂无资料采集模板"),
+    renderLowcodeReportGroup("按填报人统计", "查看老师或管理员的资料提交进度", submitterRows, "当前门户暂无填报记录"),
+  ].join("");
+}
+function exportLowcodeReportCsv() {
+  const templateRows = lowcodeTemplateReportRows();
+  const submitterRows = lowcodeSubmitterReportRows();
+  if (!templateRows.length && !submitterRows.length) {
+    alert("暂无可导出的资料填报统计");
+    return;
+  }
+  const headers = ["统计类型", "名称", "说明", "总数", "草稿", "待审", "已通过", "已驳回"];
+  const rowFromReport = (type, row) => [
+    type,
+    row.label,
+    row.subline || "",
+    row.stats.total || 0,
+    row.stats.draft || 0,
+    row.stats.pending || 0,
+    row.stats.approved || 0,
+    row.stats.rejected || 0,
+  ];
+  const rows = [
+    ...templateRows.map((row) => rowFromReport("按模板", row)),
+    ...submitterRows.map((row) => rowFromReport("按填报人", row)),
+  ];
+  const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  const project = currentProject();
+  const projectName = (project && project.name ? project.name : "项目").replace(/[\\/:*?"<>|]/g, "_");
+  downloadTextFile(`资料填报统计-${projectName}.csv`, csv, "text/csv;charset=utf-8");
+}
 function exportPortalCompletionCsv() {
   const rows = state.portalCompletionRows || [];
   if (!rows.length) {
@@ -2386,6 +2504,7 @@ function renderPages() {
   renderModuleLibrary();
   renderContentQuality();
   renderLowcodeForms();
+  renderLowcodeReports();
   renderLowcodeRecords();
   renderContentItems(filter);
   $("pagesTable").innerHTML = list.length ? list.map((p) => {
@@ -2888,6 +3007,7 @@ $("lowcodeRecordStatusFilter").addEventListener("change", (event) => {
 });
 $("exportLowcodeRecords").addEventListener("click", exportLowcodeRecordsCsv);
 $("exportLowcodeRecordDetails").addEventListener("click", exportLowcodeRecordDetailsCsv);
+$("exportLowcodeReport").addEventListener("click", exportLowcodeReportCsv);
 $("deployProject").addEventListener("change", renderDeploy);
 $("filterLogs").addEventListener("click", renderLogs);
 $("exportLogs").addEventListener("click", () => {
