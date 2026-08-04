@@ -615,6 +615,8 @@ function lowcodeFieldInput(field, submitted = {}) {
   const defaultValue = escapeHtml(rawValue == null ? "" : rawValue);
   const required = field.required ? " required" : "";
   const maxLength = Number(field.maxLength || 0) > 0 ? ` maxlength="${Number(field.maxLength)}"` : "";
+  const pattern = field.pattern ? ` pattern="${escapeHtml(field.pattern)}"` : "";
+  const patternTitle = field.patternMessage ? ` title="${escapeHtml(field.patternMessage)}"` : "";
   const options = Array.isArray(field.options) ? field.options : [];
   if (field.type === "textarea" || field.type === "richtext") {
     return `<label class="lowcode-field wide"><span>${label}${field.required ? " *" : ""}</span><textarea data-lowcode-field="${key}" rows="4" placeholder="${placeholder}"${required}${maxLength}>${defaultValue}</textarea></label>`;
@@ -636,8 +638,8 @@ function lowcodeFieldInput(field, submitted = {}) {
     return "";
   }
   const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
-  const lengthAttr = type === "text" ? maxLength : "";
-  return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required}${lengthAttr} /></label>`;
+  const textAttrs = type === "text" ? `${maxLength}${pattern}${patternTitle}` : "";
+  return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required}${textAttrs} /></label>`;
 }
 function lowcodeTemplatePreviewInput(field) {
   const label = escapeHtml(field.label || field.key);
@@ -857,6 +859,8 @@ function normalizeLowcodeFieldDraft(field = {}, index = 0) {
     defaultValue: field.defaultValue == null ? "" : String(field.defaultValue),
     group: String(field.group || defaultLowcodeFieldGroup(field)).trim(),
     maxLength: Math.max(0, Number.parseInt(field.maxLength || 0, 10) || 0),
+    pattern: String(field.pattern || "").trim(),
+    patternMessage: String(field.patternMessage || "").trim(),
     options,
     sortOrder: index,
   };
@@ -962,6 +966,8 @@ function lowcodeFieldEditorRow(field, index) {
       <input data-lowcode-config-field="placeholder" value="${escapeHtml(field.placeholder)}" placeholder="提示语" />
       <input data-lowcode-config-field="defaultValue" value="${escapeHtml(field.defaultValue)}" placeholder="默认值" />
       <input data-lowcode-config-field="maxLength" type="number" min="0" max="20000" step="1" value="${escapeHtml(field.maxLength || "")}" placeholder="字数限制" />
+      <input data-lowcode-config-field="pattern" value="${escapeHtml(field.pattern || "")}" placeholder="格式规则，如 ^\\d{4}$" />
+      <input data-lowcode-config-field="patternMessage" value="${escapeHtml(field.patternMessage || "")}" placeholder="格式错误提示" />
       <input data-lowcode-config-field="optionsText" value="${escapeHtml(lowcodeOptionsText(field.options))}" placeholder="选项：一项一行或逗号分隔" />
     </div>
     <div class="lowcode-field-editor-actions">
@@ -1017,6 +1023,8 @@ function addLowcodeFieldDraft() {
     defaultValue: "",
     group: "详情内容",
     maxLength: 0,
+    pattern: "",
+    patternMessage: "",
     options: [],
   }]);
 }
@@ -1065,6 +1073,8 @@ function lowcodeTemplatePayload() {
     defaultValue: "",
     group: "媒体素材",
     maxLength: 0,
+    pattern: "",
+    patternMessage: "",
     sortOrder: fields.length,
   });
   return {

@@ -3620,8 +3620,15 @@ def normalize_lowcode_schema(schema, form):
             "defaultValue": str(field.get("defaultValue") if "defaultValue" in field else field.get("default_value") or "").strip()[:1024],
             "group": str(field.get("group") or "").strip()[:80],
             "maxLength": max(0, min(int_value(field.get("maxLength")), 20000)),
+            "pattern": str(field.get("pattern") or "").strip()[:512],
+            "patternMessage": str(field.get("patternMessage") or "").strip()[:200],
             "sortOrder": int_value(field.get("sortOrder"), index),
         }
+        if normalized["pattern"]:
+            try:
+                re.compile(normalized["pattern"])
+            except re.error as exc:
+                raise ValueError(f"{label}的格式规则不合法：{exc}")
         if not normalized["group"]:
             normalized["group"] = default_lowcode_field_group(normalized)
         options = field.get("options")
@@ -3813,6 +3820,15 @@ def lowcode_record_payload(form, submitted, validate_required=True):
         if max_length > 0 and text_value and len(text_value) > max_length:
             errors.append(f"{field.get('label') or key}不能超过{max_length}字")
             continue
+        pattern = str(field.get("pattern") or "")
+        if validate_required and pattern and text_value:
+            try:
+                matched = re.fullmatch(pattern, text_value)
+            except re.error as exc:
+                raise ValueError(f"{field.get('label') or key}的格式规则不合法：{exc}")
+            if not matched:
+                errors.append(str(field.get("patternMessage") or f"{field.get('label') or key}格式不正确"))
+                continue
         mapping = str(field.get("mapping") or "")
         if mapping == "content_item.title":
             payload["title"] = text_value
