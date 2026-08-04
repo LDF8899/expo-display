@@ -3618,7 +3618,7 @@ def default_lowcode_field_group(field):
     field_type = str(field.get("type") or "")
     mapping = str(field.get("mapping") or "")
     key = str(field.get("key") or "")
-    if field_type in {"asset_list", "image_upload", "video_upload"} or mapping.startswith("content_item.assets."):
+    if field_type in {"asset_list", "image_upload", "video_upload", "attachment_upload"} or mapping.startswith("content_item.assets."):
         return "媒体素材"
     if key in {"title", "subtitle", "summary"} or mapping in {"content_item.title", "content_item.subtitle", "content_item.summary"}:
         return "基础信息"

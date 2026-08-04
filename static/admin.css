@@ -1226,6 +1226,17 @@ tr:last-child td { border-bottom: 0; }
 .lowcode-field span {
   overflow-wrap: anywhere;
 }
+.lowcode-upload-line {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(150px, 0.7fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.lowcode-upload-line input[type="file"] {
+  min-width: 0;
+  padding: 8px;
+  font-size: 12px;
+}
 .lowcode-length {
   justify-self: end;
   color: #7890a8;
@@ -2158,6 +2169,7 @@ tr:last-child td { border-bottom: 0; }
   .content-quality-card,
   .lowcode-reminder-row,
   .lowcode-import-issue,
+  .lowcode-upload-line,
   .lowcode-record-detail-grid,
   .lowcode-record-detail-assets a,
   .lowcode-field-editor-row,

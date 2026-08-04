@@ -77,6 +77,9 @@ const lowcodeFieldTypes = [
   { key: "radio", label: "单选" },
   { key: "checkbox_group", label: "多选" },
   { key: "checkbox", label: "开关" },
+  { key: "image_upload", label: "图片上传" },
+  { key: "video_upload", label: "视频上传" },
+  { key: "attachment_upload", label: "附件上传" },
   { key: "asset_list", label: "素材组" },
 ];
 const lowcodeMetaFieldTemplates = {
@@ -561,6 +564,39 @@ function assetThumbHtml(asset, alt = "asset") {
     ? `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(alt)}" loading="lazy" />`
     : `<span>${assetKindLabel(asset)}</span>`;
 }
+function lowcodeUploadFieldRole(field = {}) {
+  const mapping = String(field.mapping || "");
+  if (mapping.startsWith("content_item.assets.")) return normalizeContentAssetRole(mapping.rsplit(".", 1).pop(), 0);
+  if (field.type === "video_upload") return "video";
+  if (field.type === "attachment_upload") return "attachment";
+  return "cover";
+}
+function lowcodeUploadAccept(field = {}) {
+  if (field.type === "image_upload") return "image/*";
+  if (field.type === "video_upload") return "video/mp4,video/webm,video/ogg";
+  if (field.type === "attachment_upload") return ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip";
+  return "image/*,video/mp4,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip";
+}
+function lowcodeUploadHint(field = {}) {
+  if (field.type === "image_upload") return "上传图片或粘贴图片地址";
+  if (field.type === "video_upload") return "上传视频或粘贴视频地址";
+  if (field.type === "attachment_upload") return "上传附件或粘贴附件地址";
+  return "上传素材或粘贴素材地址";
+}
+function lowcodeAssetsFromFieldValue(value, role) {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeContentAsset(typeof item === "string" ? { url: item, role } : { ...item, role: item.role || role })).filter(Boolean);
+  }
+  if (typeof value === "object") {
+    const asset = normalizeContentAsset({ ...value, role: value.role || role });
+    return asset ? [asset] : [];
+  }
+  return String(value)
+    .split(/\r?\n/)
+    .map((url) => normalizeContentAsset({ url: url.trim(), role }))
+    .filter(Boolean);
+}
 function renderContentAssetCards() {
   const list = $("contentAssetCards");
   if (!list) return;
@@ -672,7 +708,9 @@ function lowcodePreviewPayload() {
     else if (mapping === "content_item.summary") payload.summary = text;
     else if (mapping === "content_item.body_text") payload.body = [payload.body, text].filter(Boolean).join("\n\n");
     else if (mapping.startsWith("content_item.meta_json.") && text) payload.meta.push([mapping.replace("content_item.meta_json.", ""), text]);
+    else if (mapping.startsWith("content_item.assets.") && text) payload.assets.push(...lowcodeAssetsFromFieldValue(rawValue, lowcodeUploadFieldRole(field)));
   });
+  payload.assets = orderedContentAssets(payload.assets);
   return payload;
 }
 function updateLowcodeRecordPreview() {
@@ -722,7 +760,20 @@ function lowcodeFieldInput(field, submitted = {}) {
     const defaults = new Set((Array.isArray(rawValue) ? rawValue : String(rawValue || "").split(/[，,、]/)).map((item) => String(item).trim()).filter(Boolean));
     return `<fieldset class="lowcode-choice-field wide"><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option) => `<label><input data-lowcode-field="${key}" type="checkbox" value="${escapeHtml(option.value)}" ${defaults.has(String(option.value)) ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
   }
-  if (field.type === "asset_list" || field.type === "image_upload" || field.type === "video_upload") {
+  if (["image_upload", "video_upload", "attachment_upload"].includes(field.type)) {
+    const accept = escapeHtml(lowcodeUploadAccept(field));
+    const role = escapeHtml(lowcodeUploadFieldRole(field));
+    return `<label class="lowcode-field wide lowcode-upload-field">
+      <span>${label}${field.required ? " *" : ""}</span>
+      <div class="lowcode-upload-line">
+        <input data-lowcode-field="${key}" type="text" value="${defaultValue}" placeholder="${placeholder || lowcodeUploadHint(field)}"${required}${maxLength} />
+        <input data-lowcode-file-for="${key}" type="file" accept="${accept}" />
+        <button class="button small" type="button" data-lowcode-field-upload="${key}" data-lowcode-field-role="${role}">上传</button>
+      </div>
+      ${lengthHint}
+    </label>`;
+  }
+  if (field.type === "asset_list") {
     return "";
   }
   const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
@@ -770,6 +821,9 @@ function lowcodeTemplatePreviewInput(field) {
   if (field.type === "checkbox_group" && options.length) {
     return `<fieldset class="lowcode-choice-field wide"><legend>${label}${required}</legend>${options.map((option) => `<label><input type="checkbox" disabled /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
   }
+  if (["image_upload", "video_upload", "attachment_upload"].includes(field.type)) {
+    return `<label class="lowcode-field wide lowcode-upload-field"><span>${label}${required}</span><div class="lowcode-upload-line"><input type="text" value="${defaultValue}" placeholder="${placeholder || lowcodeUploadHint(field)}" disabled /><input type="file" disabled /><button class="button small" type="button" disabled>上传</button></div></label>`;
+  }
   const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
   const inputMode = field.type === "link" ? ` inputmode="url"` : "";
   return `<label class="lowcode-field"><span>${label}${required}</span><input type="${type}" value="${defaultValue}" placeholder="${placeholder}" disabled${inputMode}${type === "text" ? maxLength : ""} /></label>`;
@@ -779,7 +833,7 @@ function renderLowcodeTemplatePreview() {
   if (!node) return;
   const fields = state.lowcodeFieldDrafts
     .map(normalizeLowcodeFieldDraft)
-    .filter((field) => field.type !== "asset_list" && field.type !== "image_upload" && field.type !== "video_upload");
+    .filter((field) => field.type !== "asset_list");
   node.innerHTML = fields.length ? groupedLowcodeFields(fields).map((group) => `<section class="lowcode-field-group">
     <h3>${escapeHtml(group.name)}</h3>
     <div class="lowcode-field-group-grid">${group.fields.map(lowcodeTemplatePreviewInput).join("")}</div>
@@ -789,7 +843,7 @@ function defaultLowcodeFieldGroup(field = {}) {
   const type = String(field.type || "");
   const mapping = String(field.mapping || "");
   const key = String(field.key || "");
-  if (["asset_list", "image_upload", "video_upload"].includes(type) || mapping.startsWith("content_item.assets.")) return "媒体素材";
+  if (["asset_list", "image_upload", "video_upload", "attachment_upload"].includes(type) || mapping.startsWith("content_item.assets.")) return "媒体素材";
   if (["title", "subtitle", "summary"].includes(key) || ["content_item.title", "content_item.subtitle", "content_item.summary"].includes(mapping)) return "基础信息";
   if (["sortOrder", "featured", "enabled"].includes(key) || ["content_item.sort_order", "content_item.featured"].includes(mapping)) return "展示设置";
   return "详情内容";
@@ -1536,7 +1590,7 @@ function fillLowcodeRecordForm(form, record = null) {
   const submitted = record && record.data && record.data.fields ? record.data.fields : {};
   setLowcodeAssetDrafts(Array.isArray(submitted.assets) ? submitted.assets : []);
   const schema = form.schema || {};
-  const fields = (schema.fields || []).filter((field) => field.type !== "asset_list" && field.type !== "image_upload" && field.type !== "video_upload");
+  const fields = (schema.fields || []).filter((field) => field.type !== "asset_list");
   $("lowcodeRecordTitle").textContent = form.name || "资料采集模板";
   $("lowcodeRecordHint").textContent = recordStatus === "rejected"
     ? `审核驳回：${record.reviewNote || "请按管理员意见修改后重新提交。"}`
@@ -4027,6 +4081,27 @@ $("lowcodeRecordDraftButton").addEventListener("click", async () => {
 });
 $("lowcodeDynamicFields").addEventListener("input", updateLowcodeRecordState);
 $("lowcodeDynamicFields").addEventListener("change", updateLowcodeRecordState);
+$("lowcodeDynamicFields").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-lowcode-field-upload]");
+  if (!button) return;
+  const key = button.dataset.lowcodeFieldUpload;
+  const fileInput = $("lowcodeDynamicFields").querySelector(`[data-lowcode-file-for="${key}"]`);
+  const valueInput = $("lowcodeDynamicFields").querySelector(`[data-lowcode-field="${key}"]`);
+  const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+  if (!file || !valueInput) {
+    setStatus($("lowcodeRecordStatus"), "请先选择要上传的文件", "error");
+    return;
+  }
+  try {
+    const data = await uploadAssetFile(file, $("lowcodeRecordStatus"));
+    valueInput.value = data.url || "";
+    if (fileInput) fileInput.value = "";
+    updateLowcodeRecordState();
+    setStatus($("lowcodeRecordStatus"), "文件已上传并写入当前字段", "success");
+  } catch (err) {
+    setStatus($("lowcodeRecordStatus"), err.message, "error");
+  }
+});
 $("uploadLowcodeAsset").addEventListener("click", async () => {
   try {
     const count = await uploadImages($("lowcodeAssetFile").files, $("lowcodeRecordStatus"), (url, file, asset) => {
