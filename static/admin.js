@@ -1844,6 +1844,87 @@ function exportModuleCoverageCsv() {
   const projectName = (project?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
   downloadTextFile(`标准板块覆盖-${projectName}.csv`, csv, "text/csv;charset=utf-8");
 }
+function moduleGapSuggestion(module, recordStats, rejectedCount) {
+  if (!module.covered) return "补齐该标准板块资料";
+  if (module.pendingCount) return "跟进审核待审资料";
+  if (rejectedCount) return "按审核意见修改驳回资料";
+  if (recordStats.pending) return "审核模板提交记录";
+  if (recordStats.draft) return "提醒填报人提交草稿";
+  return "补充一条可发布资料";
+}
+function exportModuleGapsCsv() {
+  const project = currentProject();
+  const coverage = state.moduleCoverage && state.moduleCoverage.modules
+    ? state.moduleCoverage
+    : buildCoverageFromPages(state.pages, project?.portalType || selectedPortalType());
+  const modules = coverage.modules || [];
+  if (!modules.length) {
+    alert("当前门户暂无标准板块定义");
+    return;
+  }
+  const records = state.lowcodeRecords || [];
+  const forms = state.lowcodeForms || [];
+  const rows = [];
+  modules.forEach((module) => {
+    if (module.publishReady) return;
+    const moduleRecords = records.filter((record) => record.contentModuleKey === module.key);
+    const recordStats = lowcodeRecordStats(moduleRecords);
+    const rejectedCount = (module.pages || []).filter((page) => page.reviewStatus === "rejected").length;
+    const enabledTemplates = forms
+      .filter((form) => form.enabled !== false && form.targetModuleKey === module.key)
+      .map((form) => form.name || form.code)
+      .filter(Boolean);
+    rows.push([
+      project?.name || "",
+      portalTypeLabel(project?.portalType || coverage.portalType),
+      module.key,
+      module.label,
+      module.description || "",
+      module.covered ? "已维护但未发布" : "缺失",
+      module.count || 0,
+      module.pendingCount || 0,
+      rejectedCount,
+      recordStats.total,
+      recordStats.draft,
+      recordStats.pending,
+      recordStats.approved,
+      recordStats.rejected,
+      enabledTemplates.join("、") || "暂无启用模板",
+      moduleGapSuggestion(module, recordStats, rejectedCount),
+    ]);
+  });
+  const moduleKeys = new Set(modules.map((module) => module.key));
+  (state.pages || []).forEach((page) => {
+    const key = page.moduleKey || localModuleKeyForCategory(page.category, coverage.portalType);
+    if (key && moduleKeys.has(key)) return;
+    rows.push([
+      project?.name || "",
+      portalTypeLabel(project?.portalType || coverage.portalType),
+      "",
+      "未匹配标准板块",
+      "",
+      "需归类",
+      1,
+      ["pending", "pending_delete"].includes(page.reviewStatus) ? 1 : 0,
+      page.reviewStatus === "rejected" ? 1 : 0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      "",
+      `将“${page.title || page.code || "未命名资料"}”归入标准板块`,
+    ]);
+  });
+  if (!rows.length) {
+    alert("当前门户标准板块均已有可发布资料");
+    return;
+  }
+  const headers = ["门户", "门户类型", "板块key", "标准板块", "板块说明", "状态", "结构化资料数", "待审核", "已驳回", "模板记录数", "模板草稿", "模板待审", "模板已通过", "模板已驳回", "可用模板", "建议动作"];
+  const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  const projectName = (project?.name || "当前门户").replace(/[\\/:*?"<>|]/g, "_");
+  downloadTextFile(`待补资料清单-${projectName}.csv`, csv, "text/csv;charset=utf-8");
+}
 function contentItemQualityIssues(item) {
   const issues = [];
   const rules = projectQualityRules();
@@ -3296,6 +3377,7 @@ $("moduleLibrary").addEventListener("click", (event) => {
   startContentItemDraft(button.dataset.moduleCreate);
 });
 $("exportModuleCoverage").addEventListener("click", exportModuleCoverageCsv);
+$("exportModuleGaps").addEventListener("click", exportModuleGapsCsv);
 $("exportContentQuality").addEventListener("click", exportContentQualityCsv);
 $("exportAssetArchive").addEventListener("click", exportAssetArchiveCsv);
 $("contentQualityList").addEventListener("click", (event) => {
