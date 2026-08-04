@@ -354,6 +354,15 @@ function projectQualityRules(project = currentProject()) {
   const config = project && project.displayConfig ? project.displayConfig : {};
   return normalizeQualityRules(config.qualityRules || {});
 }
+function qualityRulesSummary(rules = projectQualityRules()) {
+  return [
+    `正文不少于${rules.minBodyChars || 0}字`,
+    rules.requireSummary ? "要求摘要" : "不强制摘要",
+    rules.requireMedia ? "要求图片/视频" : "不强制素材",
+    rules.requireModule ? "要求标准板块" : "不强制板块",
+    rules.requireTypeAssets ? "检查类型素材" : "不检查类型素材",
+  ].join("；");
+}
 function contentBodyTemplate(contentType, label) {
   const name = escapeHtml(label || "本资料");
   const templates = {
@@ -1843,9 +1852,8 @@ function renderContentQuality() {
   const highCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level === "high").length, 0);
   const mediumCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level !== "high").length, 0);
   const rules = projectQualityRules();
-  const ruleText = `规则：正文 ${rules.minBodyChars} 字${rules.requireSummary ? "，需摘要" : ""}${rules.requireMedia ? "，需素材" : ""}${rules.requireModule ? "，需板块" : ""}`;
   $("contentQualitySummary").textContent = items.length
-    ? `已检查 ${items.length} 条结构化资料，发现 ${entries.length} 条需要关注。${ruleText}`
+    ? `已检查 ${items.length} 条结构化资料，发现 ${entries.length} 条需要关注。规则：${qualityRulesSummary(rules)}`
     : "当前门户暂无结构化资料。";
   $("contentQualityBadge").textContent = entries.length ? `${highCount} 高 · ${mediumCount} 中` : "良好";
   $("contentQualityBadge").className = `badge ${entries.length ? "warn" : "success"}`;
@@ -1870,7 +1878,8 @@ function exportContentQualityCsv() {
     return;
   }
   const project = currentProject();
-  const headers = ["门户", "资料ID", "编号", "标题", "标准板块", "资料类型", "审核状态", "启用", "素材数", "问题级别", "问题", "预览地址"];
+  const rules = projectQualityRules(project);
+  const headers = ["门户", "资料ID", "编号", "标题", "标准板块", "资料类型", "审核状态", "启用", "素材数", "规则摘要", "最少正文字数", "要求摘要", "要求图片/视频", "要求标准板块", "检查类型素材", "问题级别", "问题", "预览地址"];
   const rows = [];
   items.forEach((item) => {
     const issues = contentItemQualityIssues(item);
@@ -1886,6 +1895,12 @@ function exportContentQualityCsv() {
       statusText(item.reviewStatus),
       item.enabled ? "是" : "否",
       (item.assets || []).length,
+      qualityRulesSummary(rules),
+      rules.minBodyChars,
+      rules.requireSummary ? "是" : "否",
+      rules.requireMedia ? "是" : "否",
+      rules.requireModule ? "是" : "否",
+      rules.requireTypeAssets ? "是" : "否",
     ];
     if (!issues.length) {
       rows.push([...base, "良好", "无", previewUrl]);
