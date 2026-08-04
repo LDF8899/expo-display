@@ -810,6 +810,7 @@ function renderLowcodeRecords() {
       ${record.reviewNote ? `<p class="warn-text">审核意见：${escapeHtml(record.reviewNote)}</p>` : ""}
       <div class="actions">
         ${status === "draft" ? `<button class="button small primary" type="button" data-lowcode-record-resume="${record.id}">继续填写</button>` : ""}
+        ${status === "draft" ? `<button class="button small danger" type="button" data-lowcode-record-delete="${record.id}">删除草稿</button>` : ""}
         ${record.contentItemId ? `<button class="button small primary" type="button" data-lowcode-record-edit="${record.contentItemId}">编辑生成资料</button>` : ""}
         ${record.previewUrl && status === "approved" ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(record.previewUrl)}">预览</a>` : ""}
       </div>
@@ -2505,6 +2506,14 @@ $("lowcodeFormsGrid").addEventListener("click", (event) => {
   }
 });
 $("lowcodeRecordsList").addEventListener("click", (event) => {
+  const remove = event.target.closest("[data-lowcode-record-delete]");
+  if (remove) {
+    if (!confirm("确定删除这个草稿？")) return;
+    jsonApi(`/api/projects/${$("projectSelect").value}/lowcode/records/${remove.dataset.lowcodeRecordDelete}`, { method: "DELETE" })
+      .then(loadPages)
+      .catch((err) => alert(err.message));
+    return;
+  }
   const resume = event.target.closest("[data-lowcode-record-resume]");
   if (resume) {
     const record = state.lowcodeRecords.find((entry) => String(entry.id) === String(resume.dataset.lowcodeRecordResume));

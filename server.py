@@ -4086,6 +4086,36 @@ def save_lowcode_record_draft(project_id, form_id, data, actor):
     return lowcode_record_result(project_id, record_id)
 
 
+def delete_lowcode_record_draft(project_id, record_id, actor):
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("项目不存在")
+    with db_connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM lowcode_records WHERE id = ? AND project_id = ?",
+            (record_id, project_id),
+        ).fetchone()
+        if not row:
+            return None
+        if row["status"] != "draft":
+            raise ValueError("只能删除草稿记录")
+        if actor.get("role") != "admin" and row["submitted_by"] != actor.get("username", ""):
+            raise ValueError("只能删除自己的草稿")
+        conn.execute("DELETE FROM lowcode_record_assets WHERE record_id = ?", (record_id,))
+        conn.execute("DELETE FROM lowcode_records WHERE id = ?", (record_id,))
+    return row_to_lowcode_record({**dict(row), **{
+        "form_name": "",
+        "form_code": "",
+        "form_version_no": 0,
+        "content_code": "",
+        "content_title": "",
+        "content_module_key": "",
+        "content_type": "",
+        "content_review_status": "",
+        "project_portal_type": project.get("portalType", "department"),
+    }})
+
+
 def submit_lowcode_record(project_id, form_id, data, actor):
     _, form, version_id = ensure_lowcode_form_for_project(project_id, form_id)
     data = data if isinstance(data, dict) else {}
@@ -8176,6 +8206,24 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     changes="structured-content",
                 )
                 self.send_json(200, {"ok": True, "item": item})
+                return
+            if len(parts) == 6 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "records":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                record_id = int(parts[5]) if parts[5].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                try:
+                    record = delete_lowcode_record_draft(project_id, record_id, user)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                if not record:
+                    self.send_json(404, {"ok": False, "error": "草稿不存在"})
+                    return
+                self.log_admin("delete_lowcode_draft", "lowcode_record", record_id, record.get("contentTitle") or "低代码草稿", f"project {project_id}")
+                self.send_json(200, {"ok": True, "record": record})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "pages":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
