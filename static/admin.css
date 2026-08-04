@@ -922,6 +922,27 @@ tr:last-child td { border-bottom: 0; }
   font-size: 12px;
   line-height: 1.4;
 }
+.lowcode-form-card .lowcode-form-quality {
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #f8fbfe;
+  color: #53657a;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+.lowcode-form-card .lowcode-form-quality.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+.lowcode-form-card .lowcode-form-quality.warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+.lowcode-form-card .lowcode-form-quality.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
 .lowcode-record-list {
   display: grid;
   gap: 10px;
@@ -1148,6 +1169,70 @@ tr:last-child td { border-bottom: 0; }
   border-radius: 8px;
   padding: 12px;
   background: #fbfdff;
+}
+.lowcode-template-quality {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fbfe;
+}
+.lowcode-quality-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.lowcode-quality-item {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  border: 1px solid #dce5ef;
+  border-left: 4px solid #94a3b8;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+.lowcode-quality-item strong {
+  color: #203246;
+  font-size: 13px;
+}
+.lowcode-quality-item span,
+.lowcode-quality-item small {
+  color: #53657a;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.lowcode-quality-item.ok {
+  border-left-color: #16a34a;
+}
+.lowcode-quality-item.warn {
+  border-left-color: #f59e0b;
+}
+.lowcode-quality-item.danger {
+  border-left-color: #dc2626;
+}
+.lowcode-quality-pill {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: #eef4fb;
+  color: #53657a;
+  font-size: 11px;
+  font-weight: 800;
+}
+.lowcode-quality-item.ok .lowcode-quality-pill {
+  background: #dcfce7;
+  color: #166534;
+}
+.lowcode-quality-item.warn .lowcode-quality-pill {
+  background: #fef3c7;
+  color: #92400e;
+}
+.lowcode-quality-item.danger .lowcode-quality-pill {
+  background: #fee2e2;
+  color: #991b1b;
 }
 .lowcode-template-preview {
   display: grid;
@@ -1915,7 +2000,7 @@ tr:last-child td { border-bottom: 0; }
   .sidebar { position: static; height: auto; }
   .main { padding: 16px; }
   .topbar, .panel-head { flex-direction: column; }
-  .form-grid.two, .form-grid.three, .form-grid.four, .form-grid.portal-config-grid, .form-grid.quality-rules-grid, .metric-grid, .ops-grid, .portal-rules, .portal-completion-grid, .deploy-policy-grid, .content-items-grid, .lowcode-forms-grid, .lowcode-report-grid, .lowcode-dynamic-fields, .lowcode-field-group-grid, .content-preview { grid-template-columns: 1fr; }
+  .form-grid.two, .form-grid.three, .form-grid.four, .form-grid.portal-config-grid, .form-grid.quality-rules-grid, .metric-grid, .ops-grid, .portal-rules, .portal-completion-grid, .deploy-policy-grid, .content-items-grid, .lowcode-forms-grid, .lowcode-report-grid, .lowcode-quality-list, .lowcode-dynamic-fields, .lowcode-field-group-grid, .content-preview { grid-template-columns: 1fr; }
   .content-asset-entry,
   .content-asset-card,
   .content-asset-fields,

@@ -806,6 +806,7 @@ function renderLowcodeForms() {
     const contentType = form.targetContentType || schema.contentType || "article";
     const fieldCount = (schema.fields || []).filter((field) => field.type !== "asset_list").length;
     const enabled = form.enabled !== false;
+    const quality = lowcodeTemplateQualitySummary(schema.fields || [], contentType, form.targetModuleKey || schema.moduleKey, form.targetPortalType || schema.portalType);
     return `<article class="lowcode-form-card">
       <header>
         <div>
@@ -815,6 +816,7 @@ function renderLowcodeForms() {
         <span class="badge ${enabled ? "" : "warn"}">${fieldCount} 项</span>
       </header>
       <p>${escapeHtml(form.description || "按模板规范填写资料。")}</p>
+      <p class="lowcode-form-quality ${escapeHtml(quality.kind)}">模板质量：${escapeHtml(quality.label)}${quality.warn || quality.danger ? ` · 通过 ${quality.ok}/${quality.checks.length}` : ""}</p>
       <p class="lowcode-form-usage">${escapeHtml(lowcodeTemplateUsageText(form.id))}</p>
       <div class="actions">
         <button class="button small primary" type="button" data-lowcode-start="${form.id}" ${enabled ? "" : "disabled"}>按模板填写</button>
@@ -1439,6 +1441,165 @@ function validateLowcodeFieldDrafts(fields = state.lowcodeFieldDrafts) {
     }
   });
 }
+const lowcodeTemplateQualityProfiles = {
+  article: {
+    bodyLabel: "正文内容",
+    assetLabel: "图片素材",
+    assetMappings: ["content_item.assets.cover", "content_item.assets.gallery"],
+    assetHint: "普通图文建议至少准备封面或图集，前台会按原比例轮播展示。",
+  },
+  person: {
+    bodyLabel: "人物事迹",
+    assetLabel: "人物照片",
+    assetMappings: ["content_item.assets.portrait", "content_item.assets.cover", "content_item.assets.gallery"],
+    assetHint: "人物类建议上传人物照；也可以在素材区把图片角色设为人物照。",
+  },
+  activity: {
+    bodyLabel: "活动过程",
+    assetLabel: "活动图片",
+    assetMappings: ["content_item.assets.cover", "content_item.assets.gallery"],
+    assetHint: "活动类适合多图轮播，素材区可继续补现场照片。",
+  },
+  honor: {
+    bodyLabel: "荣誉说明",
+    assetLabel: "证书/奖状图片",
+    assetMappings: ["content_item.assets.certificate", "content_item.assets.cover", "content_item.assets.gallery"],
+    assetHint: "荣誉类建议上传证书或奖状图片；素材区可把图片角色设为证书/荣誉。",
+  },
+  achievement: {
+    bodyLabel: "成果价值",
+    assetLabel: "成果图片",
+    assetMappings: ["content_item.assets.cover", "content_item.assets.gallery"],
+    assetHint: "成果类建议用封面或图集承载案例、项目、获奖现场等图片。",
+  },
+  scene: {
+    bodyLabel: "教学应用",
+    assetLabel: "场景图片",
+    assetMappings: ["content_item.assets.cover", "content_item.assets.gallery"],
+    assetHint: "场景类建议上传实训室、设备或课堂场景图片。",
+  },
+  video: {
+    bodyLabel: "视频简介",
+    assetLabel: "视频资源",
+    assetMappings: ["content_item.assets.video"],
+    assetHint: "视频类建议设置视频地址字段，或在素材区上传视频文件。",
+  },
+  attachment: {
+    bodyLabel: "附件说明",
+    assetLabel: "附件资源",
+    assetMappings: ["content_item.assets.attachment"],
+    assetHint: "附件类建议设置附件地址字段，或在素材区上传 PDF、Word、Excel、PPT 等附件。",
+  },
+};
+function lowcodeTemplateQualityProfile(contentType) {
+  return lowcodeTemplateQualityProfiles[normalizeContentType(contentType)] || lowcodeTemplateQualityProfiles.article;
+}
+function lowcodeTemplateQualityStatus(kind, title, detail, fix = "") {
+  return { kind, title, detail, fix };
+}
+function lowcodeFieldsForQuality(fields = state.lowcodeFieldDrafts) {
+  return (fields || []).map(normalizeLowcodeFieldDraft).filter((field) => field.key && field.label);
+}
+function lowcodeMappedFields(fields, mapping) {
+  return fields.filter((field) => field.mapping === mapping);
+}
+function lowcodeHasAnyMapping(fields, mappings = []) {
+  return mappings.some((mapping) => fields.some((field) => field.mapping === mapping));
+}
+function lowcodeRequiredMappingStatus(fields, mapping, title, missingFix) {
+  const mapped = lowcodeMappedFields(fields, mapping);
+  if (!mapped.length) return lowcodeTemplateQualityStatus("danger", title, "缺少展示映射。", missingFix);
+  if (!mapped.some((field) => field.required)) {
+    return lowcodeTemplateQualityStatus("warn", title, `已绑定到 ${mapped.map((field) => field.label).join("、")}，但不是必填。`, "建议设为必填，避免老师提交后前台卡片信息不完整。");
+  }
+  return lowcodeTemplateQualityStatus("ok", title, `已绑定到 ${mapped.map((field) => field.label).join("、")}，且设为必填。`);
+}
+function lowcodeTemplateQualityChecks(fields, contentType, moduleKey, portalType) {
+  const normalizedFields = lowcodeFieldsForQuality(fields);
+  const profile = lowcodeTemplateQualityProfile(contentType);
+  const checks = [
+    lowcodeRequiredMappingStatus(normalizedFields, "content_item.title", "前台标题", "添加标题字段并绑定到 content_item.title。"),
+    lowcodeRequiredMappingStatus(normalizedFields, "content_item.summary", "卡片摘要", "添加摘要字段并绑定到 content_item.summary。"),
+  ];
+  const bodyFields = lowcodeMappedFields(normalizedFields, "content_item.body_text");
+  if (!bodyFields.length) {
+    checks.push(lowcodeTemplateQualityStatus("danger", profile.bodyLabel, "缺少详情正文映射。", "添加正文/说明字段并绑定到 content_item.body_text。"));
+  } else if (!bodyFields.some((field) => ["textarea", "richtext"].includes(field.type))) {
+    checks.push(lowcodeTemplateQualityStatus("warn", profile.bodyLabel, `已绑定到 ${bodyFields.map((field) => field.label).join("、")}，但字段类型偏短。`, "建议使用多行文本或富文本，方便填写完整介绍。"));
+  } else {
+    checks.push(lowcodeTemplateQualityStatus("ok", profile.bodyLabel, `已绑定到 ${bodyFields.map((field) => field.label).join("、")}。`));
+  }
+  const hasExplicitAsset = lowcodeHasAnyMapping(normalizedFields, profile.assetMappings);
+  if (hasExplicitAsset) {
+    const assetFields = normalizedFields.filter((field) => profile.assetMappings.includes(field.mapping));
+    checks.push(lowcodeTemplateQualityStatus("ok", profile.assetLabel, `已设置 ${assetFields.map((field) => field.label).join("、")}。`));
+  } else if (["video", "attachment"].includes(normalizeContentType(contentType))) {
+    checks.push(lowcodeTemplateQualityStatus("warn", profile.assetLabel, "未设置专门的视频/附件地址字段，但老师仍可在素材区上传。", profile.assetHint));
+  } else {
+    checks.push(lowcodeTemplateQualityStatus("ok", profile.assetLabel, "老师填写时会看到统一素材区，可上传图片、视频或附件。", profile.assetHint));
+  }
+  const displayMappings = [
+    "content_item.title",
+    "content_item.subtitle",
+    "content_item.summary",
+    "content_item.body_text",
+    "content_item.sort_order",
+    "content_item.featured",
+  ];
+  const duplicated = displayMappings
+    .map((mapping) => ({ mapping, fields: lowcodeMappedFields(normalizedFields, mapping) }))
+    .filter((item) => item.fields.length > 1);
+  if (duplicated.length) {
+    checks.push(lowcodeTemplateQualityStatus("warn", "重复展示映射", duplicated.map((item) => `${item.mapping}：${item.fields.map((field) => field.label).join("、")}`).join("；"), "同一个展示槽位建议只绑定一个主字段，其他信息可绑定到扩展字段。"));
+  } else {
+    checks.push(lowcodeTemplateQualityStatus("ok", "展示映射", "核心展示槽位没有重复绑定。"));
+  }
+  const unmapped = normalizedFields.filter((field) => !field.mapping);
+  if (unmapped.length) {
+    checks.push(lowcodeTemplateQualityStatus("warn", "未归档字段", `${unmapped.length} 个字段没有映射：${unmapped.slice(0, 4).map((field) => field.label).join("、")}${unmapped.length > 4 ? "等" : ""}。`, "需要前台展示或导出追溯的字段，建议绑定到扩展字段。"));
+  } else {
+    checks.push(lowcodeTemplateQualityStatus("ok", "字段归档", "所有字段都有展示或扩展字段映射。"));
+  }
+  const module = moduleMeta(moduleKey, portalType);
+  if (module) {
+    checks.push(lowcodeTemplateQualityStatus("ok", "板块归属", `${module.label} · ${contentTypeLabel(contentType)}，审核通过后会同步到对应门户板块。`));
+  } else {
+    checks.push(lowcodeTemplateQualityStatus("warn", "板块归属", "当前模板没有匹配到标准板块。", "建议选择固定专题板块或系部门户板块，方便完整度统计。"));
+  }
+  return checks;
+}
+function lowcodeQualityKindText(kind) {
+  if (kind === "ok") return "通过";
+  if (kind === "danger") return "需处理";
+  return "建议";
+}
+function lowcodeTemplateQualitySummary(fields, contentType, moduleKey, portalType) {
+  const checks = lowcodeTemplateQualityChecks(fields, contentType, moduleKey, portalType);
+  const danger = checks.filter((item) => item.kind === "danger").length;
+  const warn = checks.filter((item) => item.kind === "warn").length;
+  return {
+    checks,
+    danger,
+    warn,
+    ok: checks.length - danger - warn,
+    label: danger ? `需处理 ${danger}` : warn ? `建议 ${warn}` : "完整",
+    kind: danger ? "danger" : warn ? "warn" : "ok",
+  };
+}
+function renderLowcodeTemplateQualityGuide() {
+  const node = $("lowcodeTemplateQualityGuide");
+  if (!node) return;
+  const portalType = normalizePortalType($("lowcodeTemplatePortalType")?.value || selectedPortalType());
+  const moduleKey = $("lowcodeTemplateModule")?.value || "";
+  const contentType = normalizeContentType($("lowcodeTemplateContentType")?.value || defaultContentTypeForModule(moduleKey));
+  const summary = lowcodeTemplateQualitySummary(state.lowcodeFieldDrafts, contentType, moduleKey, portalType);
+  node.innerHTML = summary.checks.map((item) => `<article class="lowcode-quality-item ${item.kind}">
+    <strong>${escapeHtml(item.title)}</strong>
+    <span>${escapeHtml(item.detail)}</span>
+    ${item.fix ? `<small>${escapeHtml(item.fix)}</small>` : ""}
+    <em class="lowcode-quality-pill">${escapeHtml(lowcodeQualityKindText(item.kind))}</em>
+  </article>`).join("");
+}
 function lowcodeOptionsText(options = []) {
   return (options || []).map((option) => option.label && option.label !== option.value ? `${option.label}|${option.value}` : option.value).join("，");
 }
@@ -1456,6 +1617,7 @@ function setLowcodeFieldDrafts(fields = []) {
   state.lowcodeFieldDrafts = fields.map(normalizeLowcodeFieldDraft);
   renderLowcodeFieldEditor();
   renderLowcodeTemplatePreview();
+  renderLowcodeTemplateQualityGuide();
 }
 function renderLowcodeTemplatePortalOptions() {
   const select = $("lowcodeTemplatePortalType");
@@ -1568,6 +1730,7 @@ function updateLowcodeFieldDraft(index, field, value) {
   };
   state.lowcodeFieldDrafts = next.map(normalizeLowcodeFieldDraft);
   renderLowcodeTemplatePreview();
+  renderLowcodeTemplateQualityGuide();
 }
 function moveLowcodeFieldDraft(index, direction) {
   const target = index + direction;
@@ -3486,11 +3649,14 @@ $("lowcodeTemplatePortalType").addEventListener("change", () => {
   renderLowcodeTemplateModuleOptions(portalType);
   const moduleKey = $("lowcodeTemplateModule").value;
   $("lowcodeTemplateContentType").value = defaultContentTypeForModule(moduleKey);
+  renderLowcodeTemplateQualityGuide();
 });
 $("lowcodeTemplateModule").addEventListener("change", () => {
   const moduleKey = $("lowcodeTemplateModule").value;
   $("lowcodeTemplateContentType").value = defaultContentTypeForModule(moduleKey);
+  renderLowcodeTemplateQualityGuide();
 });
+$("lowcodeTemplateContentType").addEventListener("change", renderLowcodeTemplateQualityGuide);
 $("lowcodeTemplateEnabled").addEventListener("change", updateLowcodeTemplateEnabledHint);
 $("addLowcodeField").addEventListener("click", addLowcodeFieldDraft);
 $("applyLowcodeStandardFields").addEventListener("click", () => applyLowcodeStandardFields(false));
