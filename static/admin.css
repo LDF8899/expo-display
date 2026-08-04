@@ -1220,6 +1220,75 @@ tr:last-child td { border-bottom: 0; }
   padding: 12px;
   background: #fbfdff;
 }
+.lowcode-import-check {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fffdf7;
+}
+.lowcode-import-issues {
+  display: grid;
+  gap: 8px;
+}
+.lowcode-import-issue {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  border: 1px solid #e5edf5;
+  border-left: 4px solid #94a3b8;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fff;
+}
+.lowcode-import-issue strong {
+  color: #203246;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.lowcode-import-issue span,
+.lowcode-import-issue small {
+  display: block;
+  margin-top: 3px;
+  color: #53657a;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.lowcode-import-issue em {
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: #eef4fb;
+  color: #53657a;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: center;
+}
+.lowcode-import-issue.success {
+  border-left-color: #16a34a;
+}
+.lowcode-import-issue.success em {
+  background: #dcfce7;
+  color: #166534;
+}
+.lowcode-import-issue.warn {
+  border-left-color: #f59e0b;
+}
+.lowcode-import-issue.warn em {
+  background: #fef3c7;
+  color: #92400e;
+}
+.lowcode-import-issue.error {
+  border-left-color: #dc2626;
+}
+.lowcode-import-issue.error em {
+  background: #fee2e2;
+  color: #991b1b;
+}
 .lowcode-template-quality {
   display: grid;
   gap: 10px;
@@ -2056,6 +2125,7 @@ tr:last-child td { border-bottom: 0; }
   .content-asset-fields,
   .content-quality-card,
   .lowcode-reminder-row,
+  .lowcode-import-issue,
   .lowcode-record-detail-grid,
   .lowcode-record-detail-assets a,
   .lowcode-field-editor-row,

@@ -1295,46 +1295,90 @@ function lowcodeTemplateImportSummary(form) {
   const schema = form && form.schema ? form.schema : {};
   const fields = Array.isArray(schema.fields) ? schema.fields.filter((field) => field && field.type !== "asset_list") : [];
   const issues = [];
+  const addIssue = (severity, title, detail, fix = "") => issues.push({ severity, title, detail, fix });
   const seenKeys = new Set();
   fields.forEach((field, index) => {
     const displayName = String(field.label || field.key || `第 ${index + 1} 个字段`).trim();
     const key = String(field.key || "").trim();
     const type = String(field.type || "text").trim();
-    if (!String(field.label || "").trim()) issues.push(`${displayName}缺少字段名称`);
+    if (!String(field.label || "").trim()) addIssue("error", displayName, "缺少字段名称。", "补充字段名称，老师填写时才容易理解。");
     if (!key) {
-      issues.push(`${displayName}缺少字段编码`);
+      addIssue("error", displayName, "缺少字段编码。", "字段编码需要以英文字母开头，并保持唯一。");
     } else if (!/^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(key)) {
-      issues.push(`${displayName}字段编码格式不正确`);
+      addIssue("error", displayName, `字段编码格式不正确：${key}。`, "只能以英文字母开头，并使用字母、数字、下划线或短横线。");
     } else {
       const identity = key.toLowerCase();
-      if (seenKeys.has(identity)) issues.push(`${displayName}字段编码重复`);
+      if (seenKeys.has(identity)) addIssue("error", displayName, `字段编码重复：${key}。`, "同一个模板内字段编码必须唯一。");
       seenKeys.add(identity);
     }
-    if (!lowcodeFieldTypes.some((item) => item.key === type)) issues.push(`${displayName}控件类型会按单行文本处理`);
+    if (!lowcodeFieldTypes.some((item) => item.key === type)) addIssue("warn", displayName, `控件类型 ${type || "-"} 不在当前支持范围内。`, "系统会按单行文本处理，建议改成固定控件。");
     if (["select", "radio", "checkbox_group"].includes(type) && !(Array.isArray(field.options) && field.options.length)) {
-      issues.push(`${displayName}缺少选项`);
+      addIssue("warn", displayName, "选择类控件缺少选项。", "补充选项后老师才能按固定范围填写。");
     }
-    if (!String(field.mapping || "").trim()) issues.push(`${displayName}未绑定展示目标`);
+    if (!String(field.mapping || "").trim()) addIssue("warn", displayName, "未绑定展示目标。", "需要前台展示或追溯的字段建议绑定到展示槽位或扩展字段。");
     if (field.pattern) {
       try {
         new RegExp(String(field.pattern));
       } catch (err) {
-        issues.push(`${displayName}格式规则不合法`);
+        addIssue("error", displayName, "格式规则不合法。", "请修正正则表达式，否则保存模板时会失败。");
       }
     }
   });
   const mappings = fields.map((field) => String(field.mapping || "").trim()).filter(Boolean);
-  if (!mappings.includes("content_item.title")) issues.push("缺少标题绑定");
-  if (!mappings.includes("content_item.summary")) issues.push("缺少卡片摘要绑定");
+  if (!mappings.includes("content_item.title")) addIssue("error", "前台标题", "缺少标题绑定。", "添加字段并绑定到 content_item.title。");
+  if (!mappings.includes("content_item.summary")) addIssue("warn", "卡片摘要", "缺少卡片摘要绑定。", "建议添加摘要字段并绑定到 content_item.summary。");
   const moduleLabel = (moduleMeta(form.targetModuleKey, form.targetPortalType) || {}).label || form.targetModuleKey || "未绑定板块";
   const requiredCount = fields.filter((field) => field.required).length;
+  const dangerCount = issues.filter((issue) => issue.severity === "error").length;
+  const warnCount = issues.filter((issue) => issue.severity === "warn").length;
   const issueText = issues.length
-    ? `需检查：${issues.slice(0, 5).join("；")}${issues.length > 5 ? `；另有 ${issues.length - 5} 项` : ""}`
+    ? `需检查：严重 ${dangerCount}，建议 ${warnCount}。`
     : "未发现明显问题，保存后会作为未启用副本。";
   return {
-    type: issues.length ? "warn" : "success",
+    type: dangerCount ? "error" : issues.length ? "warn" : "success",
     text: `导入摘要：${form.name || "资料采集模板"}，${moduleLabel} · ${contentTypeLabel(form.targetContentType)}，字段 ${fields.length}，必填 ${requiredCount}，已绑定 ${mappings.length}。${issueText}`,
+    issues,
+    fieldsCount: fields.length,
+    requiredCount,
+    mappedCount: mappings.length,
+    moduleLabel,
   };
+}
+function lowcodeImportSeverityText(severity) {
+  if (severity === "error") return "严重";
+  if (severity === "warn") return "建议";
+  return "通过";
+}
+function renderLowcodeTemplateImportCheck(summary) {
+  const panel = $("lowcodeTemplateImportCheck");
+  const summaryNode = $("lowcodeTemplateImportCheckSummary");
+  const list = $("lowcodeTemplateImportIssues");
+  if (!panel || !summaryNode || !list) return;
+  if (!summary) {
+    panel.hidden = true;
+    summaryNode.textContent = "";
+    list.innerHTML = "";
+    return;
+  }
+  const issues = Array.isArray(summary.issues) ? summary.issues : [];
+  const dangerCount = issues.filter((issue) => issue.severity === "error").length;
+  const warnCount = issues.filter((issue) => issue.severity === "warn").length;
+  panel.hidden = false;
+  summaryNode.textContent = `字段 ${summary.fieldsCount || 0} · 必填 ${summary.requiredCount || 0} · 已绑定 ${summary.mappedCount || 0} · 严重 ${dangerCount} · 建议 ${warnCount}`;
+  list.innerHTML = issues.length ? issues.map((issue) => `<article class="lowcode-import-issue ${escapeHtml(issue.severity || "warn")}">
+    <em>${escapeHtml(lowcodeImportSeverityText(issue.severity))}</em>
+    <div>
+      <strong>${escapeHtml(issue.title || "导入项")}</strong>
+      <span>${escapeHtml(issue.detail || "")}</span>
+      ${issue.fix ? `<small>${escapeHtml(issue.fix)}</small>` : ""}
+    </div>
+  </article>`).join("") : `<article class="lowcode-import-issue success">
+    <em>通过</em>
+    <div>
+      <strong>未发现明显问题</strong>
+      <span>保存后会作为未启用副本，可检查无误后再启用。</span>
+    </div>
+  </article>`;
 }
 function exportLowcodeTemplateJson(form) {
   if (!form) return;
@@ -1351,6 +1395,7 @@ function importLowcodeTemplateJson(file) {
       const form = safeImportedLowcodeTemplate(parsed);
       const summary = lowcodeTemplateImportSummary(form);
       fillLowcodeTemplateForm(form);
+      renderLowcodeTemplateImportCheck(summary);
       setStatus($("lowcodeTemplateStatus"), summary.text, summary.type);
     } catch (err) {
       alert(`导入失败：${err.message}`);
@@ -1922,6 +1967,7 @@ function fillLowcodeTemplateForm(form = {}) {
   $("contentItemForm").hidden = true;
   $("pageForm").hidden = true;
   setStatus($("lowcodeTemplateStatus"), "", "");
+  renderLowcodeTemplateImportCheck(null);
   updateLowcodeTemplateEnabledHint();
   renderLowcodeTemplatePreview();
   $("lowcodeTemplateForm").scrollIntoView({ behavior: "smooth", block: "start" });
