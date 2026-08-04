@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 import uuid
+from html import unescape
 from http.cookies import SimpleCookie
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -2927,6 +2928,196 @@ def module_coverage_from_pages(pages, portal_type="department"):
     }
 
 
+def normalize_quality_rules(value=None, fallback=None):
+    value = value if isinstance(value, dict) else {}
+    fallback = fallback if isinstance(fallback, dict) else DEFAULT_QUALITY_RULES
+    return {
+        "minBodyChars": max(0, min(int_value(value.get("minBodyChars"), fallback["minBodyChars"]), 2000)),
+        "requireSummary": bool_value(value.get("requireSummary"), fallback["requireSummary"]),
+        "requireMedia": bool_value(value.get("requireMedia"), fallback["requireMedia"]),
+        "requireModule": bool_value(value.get("requireModule"), fallback["requireModule"]),
+        "requireTypeAssets": bool_value(value.get("requireTypeAssets"), fallback["requireTypeAssets"]),
+    }
+
+
+def project_quality_rules(project):
+    config = (project or {}).get("displayConfig") or {}
+    return normalize_quality_rules(config.get("qualityRules"))
+
+
+def project_module_quality_rules(project):
+    config = (project or {}).get("displayConfig") or {}
+    base = project_quality_rules(project)
+    source = config.get("moduleQualityRules") if isinstance(config.get("moduleQualityRules"), dict) else {}
+    result = {}
+    portal_type = normalize_portal_type((project or {}).get("portalType"))
+    known_keys = {module["key"] for module in module_set_for_portal_type(portal_type)}
+    for module_key, rules in source.items():
+        key = str(module_key or "").strip()
+        if key in known_keys:
+            result[key] = normalize_quality_rules(rules, base)
+    return result
+
+
+def quality_rules_summary(rules):
+    return "；".join(
+        [
+            f"正文不少于{int_value(rules.get('minBodyChars'))}字",
+            "要求摘要" if rules.get("requireSummary") else "不强制摘要",
+            "要求图片/视频" if rules.get("requireMedia") else "不强制素材",
+            "要求标准板块" if rules.get("requireModule") else "不强制板块",
+            "检查类型素材" if rules.get("requireTypeAssets") else "不检查类型素材",
+        ]
+    )
+
+
+def text_from_body_json(value):
+    blocks = value
+    if isinstance(blocks, dict):
+        if isinstance(blocks.get("blocks"), list):
+            blocks = blocks["blocks"]
+        elif isinstance(blocks.get("paragraphs"), list):
+            blocks = [{"type": "paragraph", "text": item} for item in blocks["paragraphs"]]
+        else:
+            blocks = [blocks]
+    if isinstance(blocks, str):
+        blocks = [{"type": "paragraph", "text": blocks}]
+    if not isinstance(blocks, list):
+        return ""
+    parts = []
+    for block in blocks:
+        if isinstance(block, str):
+            parts.append(block)
+            continue
+        if not isinstance(block, dict):
+            continue
+        block_type = str(block.get("type") or "").lower()
+        if block_type == "html":
+            text = re.sub(r"<[^>]+>", " ", str(block.get("html") or ""))
+            parts.append(unescape(text))
+        elif isinstance(block.get("items"), list):
+            parts.extend(str(item or "") for item in block["items"])
+        else:
+            parts.append(str(block.get("text") or block.get("title") or block.get("content") or ""))
+    return re.sub(r"\s+", " ", " ".join(parts)).strip()
+
+
+def quality_asset_url(asset):
+    return str((asset or {}).get("url") or "").strip()
+
+
+def looks_like_video_asset(asset):
+    mime_type = str((asset or {}).get("mimeType") or "").lower()
+    url = quality_asset_url(asset)
+    return (asset or {}).get("role") == "video" or mime_type.startswith("video/") or bool(re.search(r"\.(mp4|mov|m4v|webm|ogg)(\?.*)?$", url, flags=re.I))
+
+
+def looks_like_image_asset(asset):
+    mime_type = str((asset or {}).get("mimeType") or "").lower()
+    url = quality_asset_url(asset)
+    return mime_type.startswith("image/") or bool(re.search(r"\.(png|jpe?g|webp|gif|svg)(\?.*)?$", url, flags=re.I))
+
+
+def looks_like_attachment_asset(asset):
+    return (asset or {}).get("role") == "attachment" or (not looks_like_image_asset(asset) and not looks_like_video_asset(asset))
+
+
+def content_item_quality_issues(item, project):
+    issues = []
+    module_key = str(item.get("moduleKey") or "").strip()
+    module_rules = project_module_quality_rules(project)
+    rules = module_rules.get(module_key) or project_quality_rules(project)
+    assets = content_assets_from_data(item.get("assets") or [])
+    body_text = text_from_body_json(item.get("bodyJson") or "")
+    summary_text = str(item.get("summary") or item.get("subtitle") or "").strip()
+    content_type = normalize_content_type(item.get("contentType"))
+    has_visual_asset = bool(item.get("coverAssetId")) or any(not looks_like_attachment_asset(asset) for asset in assets)
+    has_video = any(asset.get("role") == "video" or looks_like_video_asset(asset) for asset in assets)
+    has_portrait = bool(item.get("coverAssetId")) or any(asset.get("role") in {"portrait", "cover"} for asset in assets)
+    has_certificate = bool(item.get("coverAssetId")) or any(asset.get("role") in {"certificate", "cover", "gallery"} for asset in assets)
+    has_attachment = any(asset.get("role") == "attachment" or looks_like_attachment_asset(asset) for asset in assets)
+
+    def add(level, label, code):
+        issues.append({"level": level, "label": label, "code": code})
+
+    if rules.get("requireModule") and not module_key:
+        add("high", "未匹配标准板块", "missing_module")
+    if not str(item.get("title") or "").strip():
+        add("high", "缺少标题", "missing_title")
+    if rules.get("requireSummary") and not summary_text:
+        add("medium", "缺少卡片摘要", "missing_summary")
+    min_body_chars = int_value(rules.get("minBodyChars"))
+    if min_body_chars > 0 and len(body_text) < min_body_chars:
+        add("medium", f"正文少于 {min_body_chars} 字", "short_body")
+    if rules.get("requireMedia") and content_type != "attachment" and not has_visual_asset:
+        add("medium", "缺少图片/视频素材", "missing_media")
+    if rules.get("requireTypeAssets") and content_type == "video" and not has_video:
+        add("high", "视频类资料缺少视频素材", "missing_video")
+    if rules.get("requireTypeAssets") and content_type == "person" and not has_portrait:
+        add("medium", "人物类资料建议配置人物照", "missing_portrait")
+    if rules.get("requireTypeAssets") and content_type == "honor" and not has_certificate:
+        add("medium", "荣誉类资料建议配置证书/荣誉图", "missing_certificate")
+    if rules.get("requireTypeAssets") and content_type == "attachment" and not has_attachment:
+        add("high", "附件资料缺少附件", "missing_attachment")
+    if item.get("reviewStatus") == "rejected":
+        add("high", "资料已驳回，需修改后重新提交", "rejected")
+    if item.get("reviewStatus") in {"pending", "pending_delete"}:
+        add("medium", "资料仍在审核中", "pending_review")
+    return issues, rules
+
+
+def content_quality_report(project_id):
+    project = get_project(project_id)
+    if not project:
+        return None
+    items = list_content_items(project_id)
+    module_rules = project_module_quality_rules(project)
+    entries = []
+    high_count = 0
+    medium_count = 0
+    for item in items:
+        issues, rules = content_item_quality_issues(item, project)
+        module_key = str(item.get("moduleKey") or "").strip()
+        module_meta = module_meta_for_key(module_key, project.get("portalType")) if module_key else None
+        high_count += sum(1 for issue in issues if issue["level"] == "high")
+        medium_count += sum(1 for issue in issues if issue["level"] != "high")
+        entries.append(
+            {
+                "itemId": item.get("id"),
+                "projectId": item.get("projectId"),
+                "code": item.get("code", ""),
+                "title": item.get("title", ""),
+                "moduleKey": module_key,
+                "moduleLabel": item.get("moduleLabel") or (module_meta["label"] if module_meta else module_key),
+                "contentType": normalize_content_type(item.get("contentType")),
+                "contentTypeLabel": content_type_label(item.get("contentType")),
+                "reviewStatus": item.get("reviewStatus", ""),
+                "enabled": bool(item.get("enabled", True)),
+                "assetCount": len(item.get("assets") or []),
+                "rules": rules,
+                "ruleSource": "板块特例" if module_key in module_rules else "门户默认",
+                "ruleSummary": quality_rules_summary(rules),
+                "issues": issues,
+                "previewUrl": f"/display?project={project_id}&code={item.get('code', '')}" if item.get("reviewStatus") == "approved" and item.get("enabled", True) else "",
+            }
+        )
+    issue_entries = [entry for entry in entries if entry["issues"]]
+    return {
+        "projectId": project_id,
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "checked": len(items),
+        "issueItemCount": len(issue_entries),
+        "highCount": high_count,
+        "mediumCount": medium_count,
+        "defaultRules": project_quality_rules(project),
+        "defaultRuleSummary": quality_rules_summary(project_quality_rules(project)),
+        "moduleRuleCount": len(module_rules),
+        "entries": entries,
+    }
+
+
 def create_admin_log(action, target_type="", target_id="", target_label="", detail="", username="", role="", ip="", changes=""):
     try:
         with db_connect() as conn:
@@ -3417,6 +3608,7 @@ def content_assets_from_data(value):
                 "title": str(item.get("title") or "").strip()[:255],
                 "caption": str(item.get("caption") or "").strip()[:512],
                 "url": str(item.get("url") or "").strip()[:2048],
+                "mimeType": str(item.get("mimeType") or item.get("mime_type") or "").strip()[:120],
                 "sortOrder": int_value(item.get("sortOrder") if "sortOrder" in item else item.get("sort_order"), index),
             }
         )
@@ -3435,10 +3627,11 @@ def validate_content_asset_access(cover_asset_id, assets, user):
 def content_item_asset_rows(conn, content_item_id):
     rows = conn.execute(
         """
-        SELECT
-            content_item_assets.*,
-            assets.url AS asset_url,
-            assets.original_filename AS asset_filename
+            SELECT
+                content_item_assets.*,
+                assets.url AS asset_url,
+                assets.original_filename AS asset_filename,
+                assets.mime_type AS asset_mime_type
         FROM content_item_assets
         LEFT JOIN assets ON assets.id = content_item_assets.asset_id
         WHERE content_item_assets.content_item_id = ?
@@ -3456,6 +3649,7 @@ def content_item_asset_rows(conn, content_item_id):
                 "title": row["title"],
                 "caption": row["caption"],
                 "url": row["url"] or row["asset_url"] or "",
+                "mimeType": row["asset_mime_type"] or "",
                 "assetFilename": row["asset_filename"] or "",
                 "sortOrder": int(row["sort_order"] or 0),
                 "createdAt": row["created_at"],
@@ -7952,6 +8146,14 @@ class ExpoHandler(BaseHTTPRequestHandler):
                         "templates": content_templates_payload(),
                     },
                 )
+                return
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-quality":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "report": content_quality_report(project_id)})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "forms":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0

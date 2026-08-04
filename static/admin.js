@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -2497,69 +2497,107 @@ function contentItemQualityIssues(item) {
   if (item.reviewStatus === "pending" || item.reviewStatus === "pending_delete") issues.push(["medium", "资料仍在审核中"]);
   return issues;
 }
+function contentQualityFallbackReport() {
+  const project = currentProject();
+  const entries = (state.contentItems || []).map((item) => {
+    const rules = itemQualityRules(item, project);
+    const moduleLabel = item.moduleLabel || (moduleMeta(item.moduleKey) || {}).label || item.moduleKey || "-";
+    const issues = contentItemQualityIssues(item).map(([level, label]) => ({ level, label }));
+    const moduleKey = qualityModuleKeyForItem(item, project?.portalType || selectedPortalType());
+    const moduleRules = projectModuleQualityRules(project);
+    return {
+      itemId: item.id,
+      projectId: item.projectId,
+      code: item.code || "",
+      title: item.title || "",
+      moduleKey,
+      moduleLabel,
+      contentType: item.contentType,
+      contentTypeLabel: item.contentTypeLabel || contentTypeLabel(item.contentType),
+      reviewStatus: item.reviewStatus,
+      enabled: item.enabled !== false,
+      assetCount: (item.assets || []).length,
+      rules,
+      ruleSource: moduleRules[moduleKey] ? "板块特例" : "门户默认",
+      ruleSummary: qualityRulesSummary(rules),
+      issues,
+      previewUrl: item.reviewStatus === "approved" && item.enabled ? buildQrUrl(item.projectId, item.code) : "",
+    };
+  });
+  return {
+    checked: entries.length,
+    issueItemCount: entries.filter((entry) => entry.issues.length).length,
+    highCount: entries.reduce((count, entry) => count + entry.issues.filter((issue) => issue.level === "high").length, 0),
+    mediumCount: entries.reduce((count, entry) => count + entry.issues.filter((issue) => issue.level !== "high").length, 0),
+    defaultRules: projectQualityRules(project),
+    moduleRuleCount: Object.keys(projectModuleQualityRules(project)).length,
+    entries,
+  };
+}
+function currentContentQualityReport() {
+  return state.contentQualityReport && Array.isArray(state.contentQualityReport.entries)
+    ? state.contentQualityReport
+    : contentQualityFallbackReport();
+}
 function renderContentQuality() {
   const listNode = $("contentQualityList");
   if (!listNode) return;
-  const items = state.contentItems || [];
-  const entries = items
-    .map((item) => ({ item, issues: contentItemQualityIssues(item) }))
-    .filter((entry) => entry.issues.length)
+  const report = currentContentQualityReport();
+  const entries = (report.entries || [])
+    .filter((entry) => (entry.issues || []).length)
     .sort((a, b) => {
-      const aHigh = a.issues.some(([level]) => level === "high") ? 0 : 1;
-      const bHigh = b.issues.some(([level]) => level === "high") ? 0 : 1;
-      return aHigh - bHigh || b.issues.length - a.issues.length;
+      const aHigh = (a.issues || []).some((issue) => issue.level === "high") ? 0 : 1;
+      const bHigh = (b.issues || []).some((issue) => issue.level === "high") ? 0 : 1;
+      return aHigh - bHigh || (b.issues || []).length - (a.issues || []).length;
     });
-  const highCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level === "high").length, 0);
-  const mediumCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level !== "high").length, 0);
-  const rules = projectQualityRules();
-  const moduleRuleCount = Object.keys(projectModuleQualityRules()).length;
-  $("contentQualitySummary").textContent = items.length
-    ? `已检查 ${items.length} 条结构化资料，发现 ${entries.length} 条需要关注。默认规则：${qualityRulesSummary(rules)}${moduleRuleCount ? `；板块特例 ${moduleRuleCount} 个` : ""}`
+  const highCount = Number(report.highCount || 0);
+  const mediumCount = Number(report.mediumCount || 0);
+  const rules = report.defaultRules || projectQualityRules();
+  const moduleRuleCount = Number(report.moduleRuleCount || 0);
+  $("contentQualitySummary").textContent = report.checked
+    ? `已检查 ${report.checked} 条结构化资料，发现 ${entries.length} 条需要关注。默认规则：${qualityRulesSummary(rules)}${moduleRuleCount ? `；板块特例 ${moduleRuleCount} 个` : ""}`
     : "当前门户暂无结构化资料。";
   $("contentQualityBadge").textContent = entries.length ? `${highCount} 高 · ${mediumCount} 中` : "良好";
   $("contentQualityBadge").className = `badge ${entries.length ? "warn" : "success"}`;
-  listNode.innerHTML = entries.length ? entries.slice(0, 8).map(({ item, issues }) => {
-    const moduleLabel = item.moduleLabel || (moduleMeta(item.moduleKey) || {}).label || item.moduleKey || "-";
-    return `<article class="content-quality-card ${issues.some(([level]) => level === "high") ? "danger" : "warn"}">
+  listNode.innerHTML = entries.length ? entries.slice(0, 8).map((entry) => {
+    const issues = entry.issues || [];
+    return `<article class="content-quality-card ${issues.some((issue) => issue.level === "high") ? "danger" : "warn"}">
       <div>
-        <strong>${escapeHtml(item.title || "未命名资料")}</strong>
-        <span>${escapeHtml(moduleLabel)} · ${escapeHtml(item.contentTypeLabel || contentTypeLabel(item.contentType))}</span>
+        <strong>${escapeHtml(entry.title || "未命名资料")}</strong>
+        <span>${escapeHtml(entry.moduleLabel || "-")} · ${escapeHtml(entry.contentTypeLabel || contentTypeLabel(entry.contentType))}</span>
       </div>
       <div class="content-quality-tags">
-        ${issues.slice(0, 4).map(([level, text]) => `<span class="${level === "high" ? "danger" : ""}">${escapeHtml(text)}</span>`).join("")}
+        ${issues.slice(0, 4).map((issue) => `<span class="${issue.level === "high" ? "danger" : ""}">${escapeHtml(issue.label || issue.text || "")}</span>`).join("")}
       </div>
-      <button class="button small primary" type="button" data-quality-edit="${item.id}">编辑资料</button>
+      <button class="button small primary" type="button" data-quality-edit="${entry.itemId}">编辑资料</button>
     </article>`;
   }).join("") : `<div class="empty">当前结构化资料质量良好</div>`;
 }
 function exportContentQualityCsv() {
-  const items = state.contentItems || [];
-  if (!items.length) {
+  const report = currentContentQualityReport();
+  const entries = report.entries || [];
+  if (!entries.length) {
     alert("当前门户暂无结构化资料");
     return;
   }
   const project = currentProject();
   const headers = ["门户", "资料ID", "编号", "标题", "标准板块", "资料类型", "审核状态", "启用", "素材数", "规则来源", "规则摘要", "最少正文字数", "要求摘要", "要求图片/视频", "要求标准板块", "检查类型素材", "问题级别", "问题", "预览地址"];
   const rows = [];
-  const moduleRules = projectModuleQualityRules(project);
-  items.forEach((item) => {
-    const issues = contentItemQualityIssues(item);
-    const moduleLabel = item.moduleLabel || (moduleMeta(item.moduleKey) || {}).label || item.moduleKey || "-";
-    const moduleKey = qualityModuleKeyForItem(item, project?.portalType || selectedPortalType());
-    const rules = itemQualityRules(item, project);
-    const previewUrl = item.reviewStatus === "approved" && item.enabled ? buildQrUrl(item.projectId, item.code) : "";
+  entries.forEach((entry) => {
+    const issues = entry.issues || [];
+    const rules = entry.rules || projectQualityRules(project);
     const base = [
       project?.name || "",
-      item.id || "",
-      item.code || "",
-      item.title || "",
-      moduleLabel,
-      item.contentTypeLabel || contentTypeLabel(item.contentType),
-      statusText(item.reviewStatus),
-      item.enabled ? "是" : "否",
-      (item.assets || []).length,
-      moduleRules[moduleKey] ? "板块特例" : "门户默认",
-      qualityRulesSummary(rules),
+      entry.itemId || "",
+      entry.code || "",
+      entry.title || "",
+      entry.moduleLabel || "",
+      entry.contentTypeLabel || contentTypeLabel(entry.contentType),
+      statusText(entry.reviewStatus),
+      entry.enabled ? "是" : "否",
+      entry.assetCount || 0,
+      entry.ruleSource || "门户默认",
+      entry.ruleSummary || qualityRulesSummary(rules),
       rules.minBodyChars,
       rules.requireSummary ? "是" : "否",
       rules.requireMedia ? "是" : "否",
@@ -2567,10 +2605,10 @@ function exportContentQualityCsv() {
       rules.requireTypeAssets ? "是" : "否",
     ];
     if (!issues.length) {
-      rows.push([...base, "良好", "无", previewUrl]);
+      rows.push([...base, "良好", "无", entry.previewUrl || ""]);
     } else {
-      issues.forEach(([level, text]) => {
-        rows.push([...base, level === "high" ? "高" : "中", text, previewUrl]);
+      issues.forEach((issue) => {
+        rows.push([...base, issue.level === "high" ? "高" : "中", issue.label || issue.text || "", entry.previewUrl || ""]);
       });
     }
   });
@@ -3229,23 +3267,26 @@ async function loadPages(projectId = $("projectSelect").value) {
     state.lowcodeForms = [];
     state.lowcodeRecords = [];
     state.moduleCoverage = buildCoverageFromPages([]);
+    state.contentQualityReport = null;
     renderCurrentPortalStrip();
     renderTemplateActions();
     renderContentModuleOptions();
     renderPages();
     return;
   }
-  const [data, contentData, lowcodeData, lowcodeRecordsData] = await Promise.all([
+  const [data, contentData, lowcodeData, lowcodeRecordsData, qualityData] = await Promise.all([
     jsonApi(`/api/projects/${projectId}/pages`),
     jsonApi(`/api/projects/${projectId}/content-items`),
     jsonApi(`/api/projects/${projectId}/lowcode/forms`),
     jsonApi(`/api/projects/${projectId}/lowcode/records`),
+    jsonApi(`/api/projects/${projectId}/content-quality`),
   ]);
   state.pages = data.pages || [];
   state.contentItems = contentData.items || [];
   state.lowcodeForms = lowcodeData.forms || [];
   state.lowcodeRecords = lowcodeRecordsData.records || [];
   state.moduleCoverage = data.coverage || buildCoverageFromPages(state.pages);
+  state.contentQualityReport = qualityData.report || null;
   renderTemplateActions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentModuleOptions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentTypeOptions();

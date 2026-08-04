@@ -37,6 +37,7 @@ CHECKS = [
             "scripts/portal_logic_smoke_test.py",
             "scripts/frontend_csp_static_test.py",
             "scripts/lowcode_choice_render_static_test.py",
+            "scripts/content_quality_report_test.py",
             "scripts/package_integrity_test.py",
         ],
     ),
@@ -45,6 +46,7 @@ CHECKS = [
     ("blueprint_data", [sys.executable, "sucai/validate_blueprint.py"]),
     ("frontend_csp_static", [sys.executable, "scripts/frontend_csp_static_test.py"]),
     ("lowcode_choice_render_static", [sys.executable, "scripts/lowcode_choice_render_static_test.py"]),
+    ("content_quality_report", [sys.executable, "scripts/content_quality_report_test.py"]),
     ("portal_logic_smoke", [sys.executable, "scripts/portal_logic_smoke_test.py"]),
     ("package_integrity", [sys.executable, "scripts/package_integrity_test.py"]),
 ]
