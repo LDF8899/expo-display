@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>数字门户后台</title>
-    <link rel="stylesheet" href="/static/admin.css?v=portal-logic-20260805b" />
+    <link rel="stylesheet" href="/static/admin.css?v=portal-logic-20260805c" />
   </head>
   <body>
     <aside class="sidebar">
@@ -599,7 +599,14 @@
         <section class="panel">
           <div class="panel-head">
             <div><h2>审核发布</h2><p>审核板块资料草稿、删除申请和门户配置草稿。</p></div>
-            <button id="batchApprove" class="button primary" type="button">批量通过</button>
+            <div class="toolbar">
+              <select id="reviewStatusFilter" aria-label="筛选审核状态">
+                <option value="pending">待审核</option>
+                <option value="approved">已通过/已发布</option>
+                <option value="rejected">已退回</option>
+              </select>
+              <button id="batchApprove" class="button primary" type="button">批量通过</button>
+            </div>
           </div>
           <div id="reviewsList" class="review-list"></div>
         </section>
@@ -654,6 +661,6 @@
     </main>
 
     <template id="emptyTpl"><div class="empty">暂无数据</div></template>
-    <script src="/static/admin.js?v=portal-logic-20260805b"></script>
+    <script src="/static/admin.js?v=portal-logic-20260805c"></script>
   </body>
 </html>

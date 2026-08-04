@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", reviewStatusFilter: "pending", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -3743,7 +3743,10 @@ async function showReviewLowcodeRecord(recordId) {
   if (data.record) renderLowcodeRecordDetail(data.record);
 }
 async function renderReviews() {
-  const data = await jsonApi("/api/reviews?status=pending");
+  const status = state.reviewStatusFilter || "pending";
+  if ($("reviewStatusFilter")) $("reviewStatusFilter").value = status;
+  if ($("batchApprove")) $("batchApprove").hidden = status !== "pending";
+  const data = await jsonApi(`/api/reviews?status=${encodeURIComponent(status)}`);
   const pages = data.reviews.pages || [];
   const projects = data.reviews.projects || [];
   const contentItems = data.reviews.contentItems || [];
@@ -3755,13 +3758,14 @@ async function renderReviews() {
   $("reviewsList").innerHTML = items.length ? items.map((r) => `
     <article class="review-item">
       <header>
-        <label><input type="checkbox" data-review-check="${r.type}:${r.id}" /> <strong>${r.label}</strong> ${escapeHtml(r.projectName || "")}</label>
-        <span>${formatTime(r.submittedAt)} / ${escapeHtml(r.submittedBy)}</span>
+        <label>${status === "pending" ? `<input type="checkbox" data-review-check="${r.type}:${r.id}" />` : ""} <strong>${r.label}</strong> ${escapeHtml(r.projectName || "")}</label>
+        <span>${badge(r.status)} ${formatTime(r.submittedAt)} / ${escapeHtml(r.submittedBy)}</span>
       </header>
       <div class="review-preview">
         <strong>${escapeHtml((r.snapshot && (r.snapshot.title || r.snapshot.name)) || r.code || "")}</strong>
         <p>${escapeHtml(r.changes || "无变更摘要")}</p>
         ${r.snapshot && r.snapshot.subtitle ? `<p>${escapeHtml(r.snapshot.subtitle)}</p>` : ""}
+        ${r.reviewNote ? `<p class="warn-text">审核意见：${escapeHtml(r.reviewNote)}</p>` : ""}
         ${reviewLowcodeSourceHtml(r.lowcodeRecord)}
         ${renderReviewDiffs(r)}
       </div>
@@ -3770,10 +3774,10 @@ async function renderReviews() {
         ${r.type === "pages" && r.previewUrl ? `<a class="button small" target="_blank" href="${escapeHtml(r.previewUrl)}">草稿预览</a>` : ""}
         ${r.type === "content-items" && r.snapshot && r.snapshot.code ? `<a class="button small" target="_blank" href="/display?project=${r.projectId}&code=${encodeURIComponent(r.snapshot.code)}">同步页预览</a>` : ""}
         ${r.lowcodeRecord && r.lowcodeRecord.recordId ? `<button class="button small" type="button" data-review-lowcode-record="${r.lowcodeRecord.recordId}">查看填报</button>` : ""}
-        <button class="button small primary" data-review-approve="${r.type}:${r.id}">通过</button>
-        <button class="button small danger" data-review-reject="${r.type}:${r.id}">驳回</button>
+        ${status === "pending" ? `<button class="button small primary" data-review-approve="${r.type}:${r.id}">通过</button>
+        <button class="button small danger" data-review-reject="${r.type}:${r.id}">驳回</button>` : ""}
       </div>
-    </article>`).join("") : `<div class="empty">暂无待审核资料</div>`;
+    </article>`).join("") : `<div class="empty">暂无${escapeHtml(statusText(status))}资料</div>`;
 }
 async function renderDeploy() {
   const projectId = $("deployProject").value || (state.projects[0] && state.projects[0].id);
@@ -4850,7 +4854,12 @@ $("reviewsList").addEventListener("click", async (event) => {
   const [type, id] = (approve ? approve.dataset.reviewApprove : reject.dataset.reviewReject).split(":");
   try { await reviewAction(type, id, approve ? "approve" : "reject"); await renderReviews(); } catch (err) { alert(err.message); }
 });
+$("reviewStatusFilter").addEventListener("change", async (event) => {
+  state.reviewStatusFilter = event.target.value || "pending";
+  await renderReviews();
+});
 $("batchApprove").addEventListener("click", async () => {
+  if (state.reviewStatusFilter !== "pending") return;
   const checks = Array.from(document.querySelectorAll("[data-review-check]:checked"));
   if (!checks.length || !confirm(`确定通过 ${checks.length} 项审核？`)) return;
   for (const check of checks) {
