@@ -578,6 +578,28 @@ function lowcodeFieldInput(field) {
   const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
   return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required} /></label>`;
 }
+function defaultLowcodeFieldGroup(field = {}) {
+  const type = String(field.type || "");
+  const mapping = String(field.mapping || "");
+  const key = String(field.key || "");
+  if (["asset_list", "image_upload", "video_upload"].includes(type) || mapping.startsWith("content_item.assets.")) return "媒体素材";
+  if (["title", "subtitle", "summary"].includes(key) || ["content_item.title", "content_item.subtitle", "content_item.summary"].includes(mapping)) return "基础信息";
+  if (["sortOrder", "featured", "enabled"].includes(key) || ["content_item.sort_order", "content_item.featured"].includes(mapping)) return "展示设置";
+  return "详情内容";
+}
+function groupedLowcodeFields(fields = []) {
+  const groups = [];
+  fields.forEach((field) => {
+    const groupName = String(field.group || defaultLowcodeFieldGroup(field)).trim() || "详情内容";
+    let group = groups.find((item) => item.name === groupName);
+    if (!group) {
+      group = { name: groupName, fields: [] };
+      groups.push(group);
+    }
+    group.fields.push(field);
+  });
+  return groups;
+}
 function renderLowcodeForms() {
   const grid = $("lowcodeFormsGrid");
   if (!grid) return;
@@ -682,7 +704,10 @@ function fillLowcodeRecordForm(form) {
   const fields = (schema.fields || []).filter((field) => field.type !== "asset_list" && field.type !== "image_upload" && field.type !== "video_upload");
   $("lowcodeRecordTitle").textContent = form.name || "资料采集模板";
   $("lowcodeRecordHint").textContent = form.description || "按模板填写后自动生成结构化资料。";
-  $("lowcodeDynamicFields").innerHTML = fields.map(lowcodeFieldInput).join("");
+  $("lowcodeDynamicFields").innerHTML = groupedLowcodeFields(fields).map((group) => `<section class="lowcode-field-group">
+    <h3>${escapeHtml(group.name)}</h3>
+    <div class="lowcode-field-group-grid">${group.fields.map(lowcodeFieldInput).join("")}</div>
+  </section>`).join("");
   $("lowcodeAssetUrl").value = "";
   $("lowcodeAssetCaption").value = "";
   $("lowcodeAssetRole").value = "gallery";
@@ -729,6 +754,7 @@ function normalizeLowcodeFieldDraft(field = {}, index = 0) {
     mapping: String(field.mapping || "").trim(),
     placeholder: String(field.placeholder || "").trim(),
     defaultValue: field.defaultValue == null ? "" : String(field.defaultValue),
+    group: String(field.group || defaultLowcodeFieldGroup(field)).trim(),
     options,
     sortOrder: index,
   };
@@ -776,6 +802,7 @@ function lowcodeFieldEditorRow(field, index) {
       <select data-lowcode-config-field="type">
         ${lowcodeFieldTypes.map((type) => `<option value="${type.key}"${field.type === type.key ? " selected" : ""}>${escapeHtml(type.label)}</option>`).join("")}
       </select>
+      <input data-lowcode-config-field="group" value="${escapeHtml(field.group)}" placeholder="字段分组" />
       <input data-lowcode-config-field="mapping" list="lowcodeMappingOptions" value="${escapeHtml(field.mapping)}" placeholder="映射目标" />
       <input data-lowcode-config-field="placeholder" value="${escapeHtml(field.placeholder)}" placeholder="提示语" />
       <input data-lowcode-config-field="defaultValue" value="${escapeHtml(field.defaultValue)}" placeholder="默认值" />
@@ -824,6 +851,7 @@ function addLowcodeFieldDraft() {
     mapping: "content_item.meta_json.新字段",
     placeholder: "",
     defaultValue: "",
+    group: "详情内容",
     options: [],
   }]);
 }
@@ -868,6 +896,7 @@ function lowcodeTemplatePayload() {
     mapping: "content_item.assets.gallery",
     placeholder: "可上传、从素材库选择，或一行一个素材地址",
     defaultValue: "",
+    group: "媒体素材",
     sortOrder: fields.length,
   });
   return {

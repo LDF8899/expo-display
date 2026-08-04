@@ -775,6 +775,24 @@ tr:last-child td { border-bottom: 0; }
 }
 .lowcode-dynamic-fields {
   display: grid;
+  gap: 14px;
+}
+.lowcode-field-group {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dce5ef;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfdff;
+}
+.lowcode-field-group h3 {
+  margin: 0;
+  color: #203246;
+  font-size: 15px;
+}
+.lowcode-field-group-grid {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
@@ -825,7 +843,7 @@ tr:last-child td { border-bottom: 0; }
 }
 .lowcode-field-editor-main {
   display: grid;
-  grid-template-columns: minmax(90px, 1fr) minmax(90px, 1fr) 110px minmax(150px, 1.2fr) minmax(110px, 1fr) minmax(100px, 1fr) minmax(130px, 1fr);
+  grid-template-columns: minmax(90px, 1fr) minmax(90px, 1fr) 110px minmax(90px, 0.8fr) minmax(150px, 1.2fr) minmax(110px, 1fr) minmax(100px, 1fr) minmax(130px, 1fr);
   gap: 8px;
 }
 .lowcode-choice-field {
@@ -1530,7 +1548,7 @@ tr:last-child td { border-bottom: 0; }
   .sidebar { position: static; height: auto; }
   .main { padding: 16px; }
   .topbar, .panel-head { flex-direction: column; }
-  .form-grid.two, .form-grid.three, .form-grid.four, .form-grid.portal-config-grid, .metric-grid, .ops-grid, .portal-rules, .portal-completion-grid, .deploy-policy-grid, .content-items-grid, .lowcode-forms-grid, .lowcode-dynamic-fields, .content-preview { grid-template-columns: 1fr; }
+  .form-grid.two, .form-grid.three, .form-grid.four, .form-grid.portal-config-grid, .metric-grid, .ops-grid, .portal-rules, .portal-completion-grid, .deploy-policy-grid, .content-items-grid, .lowcode-forms-grid, .lowcode-dynamic-fields, .lowcode-field-group-grid, .content-preview { grid-template-columns: 1fr; }
   .content-asset-entry,
   .content-asset-card,
   .content-asset-fields,

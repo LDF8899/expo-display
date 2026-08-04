@@ -505,7 +505,7 @@ def content_templates_payload():
     }
 
 
-def lowcode_field(key, label, field_type="text", required=False, mapping="", placeholder="", options=None, default_value=""):
+def lowcode_field(key, label, field_type="text", required=False, mapping="", placeholder="", options=None, default_value="", group=""):
     field = {
         "key": key,
         "label": label,
@@ -514,6 +514,7 @@ def lowcode_field(key, label, field_type="text", required=False, mapping="", pla
         "mapping": mapping,
         "placeholder": placeholder,
         "defaultValue": default_value,
+        "group": group,
     }
     if options:
         field["options"] = options
@@ -568,16 +569,19 @@ LOWCODE_META_FIELDS = {
 def lowcode_schema_for_module(portal_type, module):
     content_type = default_content_type_for_module(module["key"])
     fields = [
-        lowcode_field("title", "资料标题", "text", True, "content_item.title", f"{module['label']}标题"),
-        lowcode_field("subtitle", "副标题/身份信息", "text", False, "content_item.subtitle", module.get("description", "")),
-        lowcode_field("summary", "卡片摘要", "textarea", True, "content_item.summary", "用于门户卡片和抽屉开头，建议 40 到 100 字"),
+        lowcode_field("title", "资料标题", "text", True, "content_item.title", f"{module['label']}标题", group="基础信息"),
+        lowcode_field("subtitle", "副标题/身份信息", "text", False, "content_item.subtitle", module.get("description", ""), group="基础信息"),
+        lowcode_field("summary", "卡片摘要", "textarea", True, "content_item.summary", "用于门户卡片和抽屉开头，建议 40 到 100 字", group="基础信息"),
     ]
-    fields.extend(LOWCODE_META_FIELDS.get(content_type, LOWCODE_META_FIELDS["article"]))
+    fields.extend([
+        {**field, "group": field.get("group") or "详情内容"}
+        for field in LOWCODE_META_FIELDS.get(content_type, LOWCODE_META_FIELDS["article"])
+    ])
     fields.extend(
         [
-            lowcode_field("sortOrder", "排序", "number", False, "content_item.sort_order", "数字越小越靠前"),
-            lowcode_field("featured", "重点展示", "checkbox", False, "content_item.featured", ""),
-            lowcode_field("assets", "图片/视频素材", "asset_list", False, "content_item.assets.gallery", "可上传、从素材库选择，或一行一个素材地址"),
+            lowcode_field("sortOrder", "排序", "number", False, "content_item.sort_order", "数字越小越靠前", group="展示设置"),
+            lowcode_field("featured", "重点展示", "checkbox", False, "content_item.featured", "", group="展示设置"),
+            lowcode_field("assets", "图片/视频素材", "asset_list", False, "content_item.assets.gallery", "可上传、从素材库选择，或一行一个素材地址", group="媒体素材"),
         ]
     )
     return {
@@ -3515,6 +3519,19 @@ def copy_lowcode_form(form_id, data, actor):
     return save_lowcode_form(None, payload, actor)
 
 
+def default_lowcode_field_group(field):
+    field_type = str(field.get("type") or "")
+    mapping = str(field.get("mapping") or "")
+    key = str(field.get("key") or "")
+    if field_type in {"asset_list", "image_upload", "video_upload"} or mapping.startswith("content_item.assets."):
+        return "媒体素材"
+    if key in {"title", "subtitle", "summary"} or mapping in {"content_item.title", "content_item.subtitle", "content_item.summary"}:
+        return "基础信息"
+    if mapping in {"content_item.sort_order", "content_item.featured"} or key in {"sortOrder", "featured", "enabled"}:
+        return "展示设置"
+    return "详情内容"
+
+
 def normalize_lowcode_schema(schema, form):
     schema = json_value(schema, {})
     if not isinstance(schema, dict):
@@ -3536,8 +3553,11 @@ def normalize_lowcode_schema(schema, form):
             "mapping": str(field.get("mapping") or "").strip()[:160],
             "placeholder": str(field.get("placeholder") or "").strip()[:512],
             "defaultValue": str(field.get("defaultValue") if "defaultValue" in field else field.get("default_value") or "").strip()[:1024],
+            "group": str(field.get("group") or "").strip()[:80],
             "sortOrder": int_value(field.get("sortOrder"), index),
         }
+        if not normalized["group"]:
+            normalized["group"] = default_lowcode_field_group(normalized)
         options = field.get("options")
         if isinstance(options, list):
             normalized["options"] = [
