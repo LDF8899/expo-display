@@ -3829,6 +3829,16 @@ def lowcode_scalar_text(value):
     return str(value or "").strip()
 
 
+def valid_lowcode_link(value):
+    text = str(value or "").strip()
+    if not text or re.search(r"[\x00-\x1f\s<>]", text):
+        return False
+    if text.startswith("/"):
+        return not text.startswith("//")
+    parsed = urlparse(text)
+    return parsed.scheme in {"http", "https", "mailto", "tel"} and bool(parsed.path or parsed.netloc)
+
+
 def lowcode_record_payload(form, submitted, validate_required=True):
     schema = form.get("schema") or {}
     submitted = submitted if isinstance(submitted, dict) else {}
@@ -3859,6 +3869,9 @@ def lowcode_record_payload(form, submitted, validate_required=True):
         text_value = lowcode_scalar_text(value)
         if validate_required and field.get("required") and (value is None or text_value == ""):
             errors.append(f"{field.get('label') or key}不能为空")
+            continue
+        if str(field.get("type") or "") == "link" and text_value and not valid_lowcode_link(text_value):
+            errors.append(f"{field.get('label') or key}不是有效链接")
             continue
         max_length = int_value(field.get("maxLength"))
         if max_length > 0 and text_value and len(text_value) > max_length:

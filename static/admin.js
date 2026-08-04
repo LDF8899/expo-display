@@ -68,6 +68,8 @@ const lowcodeMappingPresets = [
 const lowcodeFieldTypes = [
   { key: "text", label: "单行文本" },
   { key: "textarea", label: "多行文本" },
+  { key: "richtext", label: "富文本" },
+  { key: "link", label: "链接" },
   { key: "number", label: "数字" },
   { key: "date", label: "日期" },
   { key: "select", label: "下拉选择" },
@@ -694,7 +696,8 @@ function lowcodeFieldInput(field, submitted = {}) {
     return "";
   }
   const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
-  const textAttrs = type === "text" ? `${maxLength}${pattern}${patternTitle}` : "";
+  const linkAttrs = field.type === "link" ? ` inputmode="url" autocomplete="url"` : "";
+  const textAttrs = type === "text" ? `${maxLength}${pattern}${patternTitle}${linkAttrs}` : "";
   return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required}${textAttrs} />${type === "text" ? lengthHint : ""}</label>`;
 }
 function updateLowcodeCounters() {
@@ -738,7 +741,8 @@ function lowcodeTemplatePreviewInput(field) {
     return `<fieldset class="lowcode-choice-field wide"><legend>${label}${required}</legend>${options.map((option) => `<label><input type="checkbox" disabled /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
   }
   const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
-  return `<label class="lowcode-field"><span>${label}${required}</span><input type="${type}" value="${defaultValue}" placeholder="${placeholder}" disabled${type === "text" ? maxLength : ""} /></label>`;
+  const inputMode = field.type === "link" ? ` inputmode="url"` : "";
+  return `<label class="lowcode-field"><span>${label}${required}</span><input type="${type}" value="${defaultValue}" placeholder="${placeholder}" disabled${inputMode}${type === "text" ? maxLength : ""} /></label>`;
 }
 function renderLowcodeTemplatePreview() {
   const node = $("lowcodeTemplatePreview");
