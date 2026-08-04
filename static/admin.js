@@ -841,7 +841,7 @@ function exportLowcodeRecordsCsv() {
     alert("当前筛选条件下暂无可导出的模板提交记录");
     return;
   }
-  const headers = ["记录ID", "模板", "版本", "状态", "标题", "板块", "资料类型", "提交人", "提交时间", "生成资料ID", "预览地址"];
+  const headers = ["记录ID", "模板", "版本", "状态", "标题", "板块", "资料类型", "提交人", "提交时间", "审核意见", "生成资料ID", "预览地址"];
   const rows = records.map((record) => {
     const data = record.data && record.data.fields ? record.data.fields : {};
     const status = lowcodeRecordStatus(record);
@@ -856,6 +856,7 @@ function exportLowcodeRecordsCsv() {
       record.contentTypeLabel || contentTypeLabel(record.contentType),
       record.submittedBy || "",
       formatTime(record.submittedAt),
+      record.reviewNote || "",
       record.contentItemId || "",
       previewUrl,
     ];
@@ -894,7 +895,7 @@ function exportLowcodeRecordDetailsCsv() {
     return;
   }
   const columns = lowcodeRecordFieldColumns(records);
-  const headers = ["记录ID", "模板", "版本", "状态", "生成资料标题", "板块", "资料类型", "提交人", "提交时间", ...columns.map((column) => column.label), "素材数", "素材地址"];
+  const headers = ["记录ID", "模板", "版本", "状态", "生成资料标题", "板块", "资料类型", "提交人", "提交时间", "审核意见", ...columns.map((column) => column.label), "素材数", "素材地址"];
   const rows = records.map((record) => {
     const data = record.data && record.data.fields ? record.data.fields : {};
     const assets = orderedContentAssets(data.assets || []);
@@ -908,6 +909,7 @@ function exportLowcodeRecordDetailsCsv() {
       record.contentTypeLabel || contentTypeLabel(record.contentType),
       record.submittedBy || "",
       formatTime(record.submittedAt),
+      record.reviewNote || "",
       ...columns.map((column) => lowcodeDisplayValue(data[column.key])),
       assets.length,
       assets.map((asset) => `${contentAssetRoleLabels[asset.role] || asset.role || "素材"}:${asset.url}`).join("\n"),
@@ -1188,7 +1190,12 @@ function renderLowcodeRecordDetail(record) {
   const assets = orderedContentAssets(fields.assets || []);
   $("lowcodeRecordDetailTitle").textContent = record.contentTitle || fields.title || "模板填报详情";
   $("lowcodeRecordDetailMeta").textContent = `${record.formName || "资料采集模板"} · v${record.formVersionNo || "-"} · ${statusText(lowcodeRecordStatus(record))} · ${record.submittedBy || "-"} · ${formatTime(record.submittedAt)}`;
+  const reviewNoteHtml = record.reviewNote ? `<section class="lowcode-record-note">
+      <strong>审核意见</strong>
+      <p>${escapeHtml(record.reviewNote)}</p>
+    </section>` : "";
   node.innerHTML = `
+    ${reviewNoteHtml}
     <section class="lowcode-record-detail-grid">${rows.join("") || `<div class="empty">暂无字段数据</div>`}</section>
     <section class="lowcode-record-detail-assets">
       <div class="field-head"><span>素材与附件</span><small>${assets.length} 个</small></div>

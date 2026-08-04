@@ -937,6 +937,24 @@ tr:last-child td { border-bottom: 0; }
   display: grid;
   gap: 14px;
 }
+.lowcode-record-note {
+  border: 1px solid #f0c36a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff8e8;
+}
+.lowcode-record-note strong {
+  display: block;
+  color: #835200;
+}
+.lowcode-record-note p {
+  margin: 6px 0 0;
+  color: #6b4a09;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .lowcode-record-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
