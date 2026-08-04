@@ -273,6 +273,17 @@ async (page) => {{
   await page.waitForSelector("#homeDepartmentSwitch", {{ timeout: 10000 }});
   const unityTarget = await page.locator(".unity-test-link").getAttribute("target");
   if (unityTarget === "_blank") throw new Error("Unity test link should stay in the current page");
+  const matrix = await page.evaluate(() => {{
+    const cards = Array.from(document.querySelectorAll(".fusion-card"));
+    const buckets = (values) => Array.from(new Set(values.map((value) => Math.round(value / 8) * 8))).sort((a, b) => a - b);
+    return {{
+      count: cards.length,
+      columns: buckets(cards.map((card) => card.getBoundingClientRect().left)).length,
+      rows: buckets(cards.map((card) => card.getBoundingClientRect().top)).length,
+    }};
+  }});
+  if (matrix.count !== 8) throw new Error(`topic matrix should render 8 cards, got ${{matrix.count}}`);
+  if (matrix.columns !== 4 || matrix.rows !== 2) throw new Error(`topic matrix should be 4x2, got ${{matrix.columns}}x${{matrix.rows}}`);
   const homeSwitchOptions = await page.locator("#homeDepartmentSwitch option").count();
   if (homeSwitchOptions < 6) throw new Error(`home department switch options too few: ${{homeSwitchOptions}}`);
   const beforePages = page.context().pages().length;
