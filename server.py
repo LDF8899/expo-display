@@ -4553,6 +4553,218 @@ def list_lowcode_records(project_id, actor=None):
     return [row_to_lowcode_record(row) for row in rows]
 
 
+def lowcode_record_status(record):
+    return record.get("effectiveStatus") or record.get("contentReviewStatus") or record.get("status") or ""
+
+
+def lowcode_record_stats(records):
+    stats = {"total": 0, "draft": 0, "pending": 0, "approved": 0, "rejected": 0}
+    for record in records or []:
+        status = lowcode_record_status(record)
+        stats["total"] += 1
+        if status in stats:
+            stats[status] += 1
+    return stats
+
+
+def lowcode_record_age_days(record):
+    value = record.get("updatedAt") or record.get("submittedAt") or ""
+    if not value:
+        return 0
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return max(0, int((datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() // 86400))
+
+
+def lowcode_overdue_stats(records):
+    stats = {"draft": 0, "pending": 0, "maxDays": 0, "labels": []}
+    for record in records or []:
+        status = lowcode_record_status(record)
+        age = lowcode_record_age_days(record)
+        stats["maxDays"] = max(stats["maxDays"], age)
+        if status == "draft" and age >= 7:
+            stats["draft"] += 1
+        if status == "pending" and age >= 3:
+            stats["pending"] += 1
+    if stats["draft"]:
+        stats["labels"].append(f"草稿超 7 天 {stats['draft']}")
+    if stats["pending"]:
+        stats["labels"].append(f"待审超 3 天 {stats['pending']}")
+    return stats
+
+
+def lowcode_report_sort_key(row):
+    return (-int_value((row.get("stats") or {}).get("total")), str(row.get("label") or ""))
+
+
+def lowcode_template_report_rows(forms, records):
+    rows = {}
+    for form in forms or []:
+        module_meta = module_meta_for_key(form.get("targetModuleKey"), form.get("targetPortalType"))
+        module_label = module_meta["label"] if module_meta else form.get("targetModuleKey") or "未绑定板块"
+        key = str(form.get("id") or "")
+        rows[key] = {
+            "key": key,
+            "label": form.get("name") or f"模板 {key}",
+            "subline": f"{module_label} · {content_type_label(form.get('targetContentType'))}{' · 已停用' if form.get('enabled') is False else ''}",
+            "stats": lowcode_record_stats([]),
+            "records": [],
+        }
+    for record in records or []:
+        key = str(record.get("formId") or "unknown")
+        if key not in rows:
+            rows[key] = {
+                "key": key,
+                "label": record.get("formName") or "未匹配模板",
+                "subline": f"{record.get('contentModuleLabel') or '未绑定板块'} · {record.get('contentTypeLabel') or content_type_label(record.get('contentType'))}",
+                "stats": lowcode_record_stats([]),
+                "records": [],
+            }
+        rows[key]["records"].append(record)
+        rows[key]["stats"] = lowcode_record_stats(rows[key]["records"])
+    return sorted(rows.values(), key=lowcode_report_sort_key)
+
+
+def lowcode_department_report_rows(records):
+    rows = {}
+    for record in records or []:
+        key = record.get("submittedDepartment") or "未记录部门"
+        rows.setdefault(key, {
+            "key": key,
+            "label": key,
+            "subline": "按系部/部门统计资料填报进度",
+            "stats": lowcode_record_stats([]),
+            "records": [],
+        })
+        rows[key]["records"].append(record)
+        rows[key]["stats"] = lowcode_record_stats(rows[key]["records"])
+    return sorted(rows.values(), key=lowcode_report_sort_key)
+
+
+def lowcode_submitter_report_rows(records):
+    rows = {}
+    for record in records or []:
+        key = record.get("submittedBy") or "未记录提交人"
+        rows.setdefault(key, {
+            "key": key,
+            "label": record.get("submittedDisplayName") or key,
+            "subline": f"{record.get('submittedDepartment') or '未记录部门'} · {key}",
+            "stats": lowcode_record_stats([]),
+            "records": [],
+        })
+        rows[key]["records"].append(record)
+        rows[key]["stats"] = lowcode_record_stats(rows[key]["records"])
+    return sorted(rows.values(), key=lowcode_report_sort_key)
+
+
+def lowcode_reminder_action(module, record_stats, rejected_count, enabled_templates, overdue_stats):
+    if module.get("publishReady"):
+        return "ok", "已完成", "保持资料更新"
+    if overdue_stats.get("draft"):
+        return "danger", "草稿超期", "优先提醒填报人提交草稿，避免资料长期停留。"
+    if overdue_stats.get("pending"):
+        return "danger", "审核超期", "优先处理超期待审资料，审核通过后前台自动展示。"
+    if record_stats.get("pending"):
+        return "warn", "待审核", "尽快审核模板提交，审核通过后前台自动展示。"
+    if module.get("pendingCount"):
+        return "warn", "待审核", "处理结构化资料审核，让该板块进入可发布状态。"
+    if record_stats.get("rejected") or rejected_count:
+        return "danger", "需修改", "按退回意见修改后重新提交。"
+    if record_stats.get("draft"):
+        return "warn", "催交草稿", "提醒填报人提交草稿，避免资料停留在后台。"
+    if not module.get("covered"):
+        if enabled_templates:
+            return "danger", "未开始", "通知负责人按启用模板补齐该标准板块。"
+        return "danger", "缺模板", "先为该板块启用资料采集模板，再组织填报。"
+    return "warn", "待完善", "补充一条审核通过的可展示资料。"
+
+
+def lowcode_reminder_target(records, project, actor):
+    names = []
+    seen = set()
+    for record in records or []:
+        name = record.get("submittedDisplayName") or record.get("submittedBy") or ""
+        if name and name not in seen:
+            names.append(name)
+            seen.add(name)
+    if names:
+        return "、".join(names)
+    return project.get("ownerDisplayName") or project.get("ownerUsername") or actor.get("displayName") or actor.get("username") or "待分配"
+
+
+def lowcode_reminder_rows(project, coverage, forms, records, actor):
+    rows = []
+    for module in coverage.get("modules", []) or []:
+        module_records = [record for record in records or [] if record.get("contentModuleKey") == module.get("key")]
+        record_stats = lowcode_record_stats(module_records)
+        overdue_stats = lowcode_overdue_stats(module_records)
+        rejected_count = len([page for page in module.get("pages", []) or [] if page.get("reviewStatus") == "rejected"])
+        enabled_templates = [
+            form.get("name") or form.get("code")
+            for form in forms or []
+            if form.get("enabled") is not False and form.get("targetModuleKey") == module.get("key")
+        ]
+        enabled_templates = [item for item in enabled_templates if item]
+        kind, status, action = lowcode_reminder_action(module, record_stats, rejected_count, enabled_templates, overdue_stats)
+        rows.append(
+            {
+                "key": module.get("key"),
+                "label": module.get("label"),
+                "description": module.get("description", ""),
+                "kind": kind,
+                "status": status,
+                "action": action,
+                "owner": lowcode_reminder_target(module_records, project, actor or {}),
+                "templates": enabled_templates,
+                "pageCount": module.get("count", 0),
+                "approvedCount": module.get("approvedCount", 0),
+                "pendingCount": module.get("pendingCount", 0),
+                "rejectedCount": rejected_count,
+                "stats": record_stats,
+                "overdue": overdue_stats,
+                "publishReady": bool(module.get("publishReady")),
+            }
+        )
+    order = {"danger": 0, "warn": 1, "ok": 2}
+    return sorted(rows, key=lambda row: (order.get(row["kind"], 9), -int_value(row.get("overdue", {}).get("maxDays")), str(row.get("label") or "")))
+
+
+def lowcode_progress_report(project_id, actor=None):
+    project = get_project(project_id)
+    if not project:
+        return None
+    pages = list_pages(project_id)
+    coverage = module_coverage_from_pages(pages, project.get("portalType"))
+    form_filters = {"portalType": project.get("portalType")}
+    if actor and not is_admin_user(actor):
+        form_filters["enabled"] = "1"
+    forms = list_lowcode_forms(form_filters)
+    records = list_lowcode_records(project_id, actor)
+    stats = lowcode_record_stats(records)
+    template_rows = lowcode_template_report_rows(forms, records)
+    department_rows = lowcode_department_report_rows(records)
+    submitter_rows = lowcode_submitter_report_rows(records)
+    reminder_rows = lowcode_reminder_rows(project, coverage, forms, records, actor or {})
+    return {
+        "projectId": project_id,
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "generatedAt": now_iso(),
+        "stats": stats,
+        "groups": {
+            "templates": template_rows,
+            "departments": department_rows,
+            "submitters": submitter_rows,
+            "reminders": reminder_rows,
+        },
+    }
+
+
 def lowcode_review_source_for_content_item(content_item_id):
     if not content_item_id:
         return None
@@ -8304,6 +8516,14 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
                 self.send_json(200, {"ok": True, "project": project, "records": list_lowcode_records(project_id, user)})
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "report":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "report": lowcode_progress_report(project_id, user)})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0

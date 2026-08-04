@@ -39,6 +39,7 @@ CHECKS = [
             "scripts/lowcode_choice_render_static_test.py",
             "scripts/content_quality_report_test.py",
             "scripts/asset_archive_report_test.py",
+            "scripts/lowcode_progress_report_test.py",
             "scripts/package_integrity_test.py",
         ],
     ),
@@ -49,6 +50,7 @@ CHECKS = [
     ("lowcode_choice_render_static", [sys.executable, "scripts/lowcode_choice_render_static_test.py"]),
     ("content_quality_report", [sys.executable, "scripts/content_quality_report_test.py"]),
     ("asset_archive_report", [sys.executable, "scripts/asset_archive_report_test.py"]),
+    ("lowcode_progress_report", [sys.executable, "scripts/lowcode_progress_report_test.py"]),
     ("portal_logic_smoke", [sys.executable, "scripts/portal_logic_smoke_test.py"]),
     ("package_integrity", [sys.executable, "scripts/package_integrity_test.py"]),
 ]

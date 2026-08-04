@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -1123,6 +1123,20 @@ function lowcodeRecordStats(records) {
   });
   return stats;
 }
+function lowcodeFallbackReport() {
+  return {
+    stats: lowcodeRecordStats(state.lowcodeRecords || []),
+    groups: {
+      templates: lowcodeTemplateReportRows(false),
+      departments: lowcodeDepartmentReportRows(false),
+      submitters: lowcodeSubmitterReportRows(false),
+      reminders: lowcodeReminderRows(false),
+    },
+  };
+}
+function currentLowcodeReport() {
+  return state.lowcodeReport && state.lowcodeReport.groups ? state.lowcodeReport : lowcodeFallbackReport();
+}
 function daysSince(value) {
   const date = value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return 0;
@@ -1153,7 +1167,8 @@ function lowcodeReportStatsHtml(stats) {
     <span><b>${stats.rejected || 0}</b>驳回</span>
   </div>`;
 }
-function lowcodeTemplateReportRows() {
+function lowcodeTemplateReportRows(useReport = true) {
+  if (useReport && state.lowcodeReport?.groups?.templates) return state.lowcodeReport.groups.templates;
   const rows = new Map();
   (state.lowcodeForms || []).forEach((form) => {
     const moduleLabel = (moduleMeta(form.targetModuleKey, form.targetPortalType) || {}).label || form.targetModuleKey || "未绑定板块";
@@ -1181,7 +1196,8 @@ function lowcodeTemplateReportRows() {
   });
   return [...rows.values()].sort((a, b) => (b.stats.total - a.stats.total) || a.label.localeCompare(b.label, "zh-Hans-CN"));
 }
-function lowcodeDepartmentReportRows() {
+function lowcodeDepartmentReportRows(useReport = true) {
+  if (useReport && state.lowcodeReport?.groups?.departments) return state.lowcodeReport.groups.departments;
   const rows = new Map();
   (state.lowcodeRecords || []).forEach((record) => {
     const key = record.submittedDepartment || "未记录部门";
@@ -1200,7 +1216,8 @@ function lowcodeDepartmentReportRows() {
   });
   return [...rows.values()].sort((a, b) => (b.stats.total - a.stats.total) || a.label.localeCompare(b.label, "zh-Hans-CN"));
 }
-function lowcodeSubmitterReportRows() {
+function lowcodeSubmitterReportRows(useReport = true) {
+  if (useReport && state.lowcodeReport?.groups?.submitters) return state.lowcodeReport.groups.submitters;
   const rows = new Map();
   (state.lowcodeRecords || []).forEach((record) => {
     const key = record.submittedBy || "未记录提交人";
@@ -1239,7 +1256,8 @@ function lowcodeReminderTarget(moduleRecords, project) {
   if (submitters.length) return submitters.join("、");
   return project?.ownerDisplayName || project?.ownerUsername || state.user?.displayName || state.user?.username || "待分配";
 }
-function lowcodeReminderRows() {
+function lowcodeReminderRows(useReport = true) {
+  if (useReport && state.lowcodeReport?.groups?.reminders) return state.lowcodeReport.groups.reminders;
   const project = currentProject();
   const coverage = state.moduleCoverage && state.moduleCoverage.modules
     ? state.moduleCoverage
@@ -1327,8 +1345,8 @@ function renderLowcodeReminderReport(rows) {
 function renderLowcodeReports() {
   const grid = $("lowcodeReportGrid");
   if (!grid) return;
-  const records = state.lowcodeRecords || [];
-  const stats = lowcodeRecordStats(records);
+  const report = currentLowcodeReport();
+  const stats = report.stats || lowcodeRecordStats(state.lowcodeRecords || []);
   $("lowcodeReportSummary").textContent = `${stats.approved}/${stats.total || 0} 已通过 · 待审 ${stats.pending} · 驳回 ${stats.rejected}`;
   const templateRows = lowcodeTemplateReportRows();
   const departmentRows = lowcodeDepartmentReportRows();
@@ -3308,19 +3326,21 @@ async function loadPages(projectId = $("projectSelect").value) {
     state.moduleCoverage = buildCoverageFromPages([]);
     state.contentQualityReport = null;
     state.assetArchiveReport = null;
+    state.lowcodeReport = null;
     renderCurrentPortalStrip();
     renderTemplateActions();
     renderContentModuleOptions();
     renderPages();
     return;
   }
-  const [data, contentData, lowcodeData, lowcodeRecordsData, qualityData, archiveData] = await Promise.all([
+  const [data, contentData, lowcodeData, lowcodeRecordsData, qualityData, archiveData, lowcodeReportData] = await Promise.all([
     jsonApi(`/api/projects/${projectId}/pages`),
     jsonApi(`/api/projects/${projectId}/content-items`),
     jsonApi(`/api/projects/${projectId}/lowcode/forms`),
     jsonApi(`/api/projects/${projectId}/lowcode/records`),
     jsonApi(`/api/projects/${projectId}/content-quality`),
     jsonApi(`/api/projects/${projectId}/asset-archive`),
+    jsonApi(`/api/projects/${projectId}/lowcode/report`),
   ]);
   state.pages = data.pages || [];
   state.contentItems = contentData.items || [];
@@ -3329,6 +3349,7 @@ async function loadPages(projectId = $("projectSelect").value) {
   state.moduleCoverage = data.coverage || buildCoverageFromPages(state.pages);
   state.contentQualityReport = qualityData.report || null;
   state.assetArchiveReport = archiveData.report || null;
+  state.lowcodeReport = lowcodeReportData.report || null;
   renderTemplateActions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentModuleOptions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentTypeOptions();
