@@ -453,10 +453,8 @@
       var link = event.target.closest(".unity-test-link[data-unity-start]");
       if (!link) return;
       event.preventDefault();
-      var target = window.open("about:blank", "_blank");
       var go = function (url) {
-        if (target) target.location.href = url;
-        else window.location.href = url;
+        window.location.href = url;
       };
       fetch(link.dataset.unityStart, { cache: "no-store" })
         .then(function (response) { return response.ok ? response.json() : null; })
@@ -1187,7 +1185,7 @@
   }
 
   function renderTopicAttachmentItem(b, index) {
-    return '<a class="topic-attachment-item" href="' + esc(b.href) + '" target="_blank" rel="noopener">' +
+    return '<a class="topic-attachment-item" href="' + esc(b.href) + '">' +
       '<span>附件 ' + String(index + 1).padStart(2, "0") + '</span>' +
       '<strong>' + esc(b.title || b.href || "查看附件") + '</strong>' +
       '<em>' + esc(b.href || "") + '</em>' +

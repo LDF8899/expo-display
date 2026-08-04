@@ -271,6 +271,8 @@ async (page) => {{
   await page.waitForSelector(".fusion-card", {{ timeout: 10000 }});
   await page.waitForSelector(".dept-chip[data-go-id='finance']", {{ timeout: 10000 }});
   await page.waitForSelector("#homeDepartmentSwitch", {{ timeout: 10000 }});
+  const unityTarget = await page.locator(".unity-test-link").getAttribute("target");
+  if (unityTarget === "_blank") throw new Error("Unity test link should stay in the current page");
   const homeSwitchOptions = await page.locator("#homeDepartmentSwitch option").count();
   if (homeSwitchOptions < 6) throw new Error(`home department switch options too few: ${{homeSwitchOptions}}`);
   const beforePages = page.context().pages().length;
