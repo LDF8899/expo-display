@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -837,6 +837,46 @@ function exportLowcodeRecordsCsv() {
   const projectName = (project && project.name ? project.name : "项目").replace(/[\\/:*?"<>|]/g, "_");
   downloadTextFile(`模板提交记录-${projectName}-${suffix}.csv`, csv, "text/csv;charset=utf-8");
 }
+function lowcodeRecordStats(records) {
+  const stats = { total: 0, draft: 0, pending: 0, approved: 0, rejected: 0 };
+  (records || []).forEach((record) => {
+    const status = lowcodeRecordStatus(record);
+    stats.total += 1;
+    if (Object.prototype.hasOwnProperty.call(stats, status)) stats[status] += 1;
+  });
+  return stats;
+}
+function exportPortalCompletionCsv() {
+  const rows = state.portalCompletionRows || [];
+  if (!rows.length) {
+    alert("暂无可导出的门户完整度数据");
+    return;
+  }
+  const headers = ["门户ID", "门户名称", "门户类型", "负责人", "标准板块数", "已维护板块", "已通过板块", "缺失板块", "资料总数", "模板记录总数", "模板草稿", "模板待审", "模板已通过", "模板已驳回"];
+  const bodyRows = rows.map((row) => {
+    const project = row.project || {};
+    const coverage = row.coverage || {};
+    const stats = row.lowcodeStats || lowcodeRecordStats(row.lowcodeRecords || []);
+    return [
+      project.id || "",
+      project.name || "",
+      portalTypeLabel(project.portalType),
+      project.ownerDisplayName || project.ownerUsername || "",
+      coverage.total || 0,
+      coverage.covered || 0,
+      coverage.publishReady || 0,
+      (coverage.missingLabels || []).join("、"),
+      (row.pages || []).length,
+      stats.total,
+      stats.draft,
+      stats.pending,
+      stats.approved,
+      stats.rejected,
+    ];
+  });
+  const csv = `\uFEFF${[headers, ...bodyRows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  downloadTextFile("门户资料完整度.csv", csv, "text/csv;charset=utf-8");
+}
 function renderLowcodeRecords() {
   const listNode = $("lowcodeRecordsList");
   if (!listNode) return;
@@ -1593,15 +1633,21 @@ async function loadPortalCompletionRows() {
   });
   return Promise.all(projects.map(async (project) => {
     try {
-      const data = await jsonApi(`/api/projects/${project.id}/pages`);
+      const [data, lowcodeData] = await Promise.all([
+        jsonApi(`/api/projects/${project.id}/pages`),
+        jsonApi(`/api/projects/${project.id}/lowcode/records`),
+      ]);
       const pages = data.pages || [];
       const coverage = data.coverage || buildCoverageFromPages(pages, project.portalType);
-      return { project, pages, coverage };
+      const lowcodeRecords = lowcodeData.records || [];
+      return { project, pages, coverage, lowcodeRecords, lowcodeStats: lowcodeRecordStats(lowcodeRecords) };
     } catch (err) {
       return {
         project,
         pages: [],
         coverage: buildCoverageFromPages([], project.portalType),
+        lowcodeRecords: [],
+        lowcodeStats: lowcodeRecordStats([]),
         error: err.message || "读取失败",
       };
     }
@@ -1609,14 +1655,24 @@ async function loadPortalCompletionRows() {
 }
 
 function renderPortalCompletionOverview(rows) {
+  rows = rows || [];
+  state.portalCompletionRows = rows;
   const readyCount = rows.filter((row) => row.coverage.total && row.coverage.publishReady === row.coverage.total).length;
   const reviewCount = rows.filter((row) => row.coverage.total && row.coverage.covered === row.coverage.total && row.coverage.publishReady < row.coverage.total).length;
   const incompleteCount = Math.max(0, rows.length - readyCount - reviewCount);
-  const cards = rows.map(({ project, pages, coverage, error }) => {
+  const lowcodeTotals = rows.reduce((acc, row) => {
+    const stats = row.lowcodeStats || {};
+    acc.total += Number(stats.total || 0);
+    acc.pending += Number(stats.pending || 0);
+    acc.rejected += Number(stats.rejected || 0);
+    return acc;
+  }, { total: 0, pending: 0, rejected: 0 });
+  const cards = rows.map(({ project, pages, coverage, lowcodeStats, error }) => {
     const total = Number(coverage.total || 0);
     const ready = Number(coverage.publishReady || 0);
     const covered = Number(coverage.covered || 0);
     const missingLabels = coverage.missingLabels || [];
+    const stats = lowcodeStats || {};
     const statusClass = error ? "danger" : total && ready === total ? "ready" : total && covered === total ? "review" : "missing";
     const statusText = error ? "异常" : total && ready === total ? "已就绪" : total && covered === total ? "待审核" : "待补齐";
     const previewUrl = portalCompletionPreviewUrl(project);
@@ -1641,6 +1697,11 @@ function renderPortalCompletionOverview(rows) {
           <i style="width:${total ? Math.round((ready / total) * 100) : 0}%"></i>
         </div>
         <p>${total ? `已通过 ${ready}/${total}，已维护 ${covered}/${total}` : "暂无标准板块定义"}；资料 ${pages.length} 条</p>
+        <div class="portal-completion-stats">
+          <span>模板 ${stats.total || 0}</span>
+          <span>待审 ${stats.pending || 0}</span>
+          <span>驳回 ${stats.rejected || 0}</span>
+        </div>
         <small>${missingText}</small>
         ${moduleList ? `<div class="portal-completion-modules">${moduleList}</div>` : ""}
         <div class="actions">
@@ -1661,7 +1722,13 @@ function renderPortalCompletionOverview(rows) {
           <span>已就绪 ${readyCount}</span>
           <span>待审核 ${reviewCount}</span>
           <span>待补齐 ${incompleteCount}</span>
+          <span>模板记录 ${lowcodeTotals.total}</span>
+          <span>模板待审 ${lowcodeTotals.pending}</span>
+          <span>模板驳回 ${lowcodeTotals.rejected}</span>
         </div>
+      </div>
+      <div class="toolbar completion-toolbar">
+        <button class="button small" type="button" data-export-portal-completion>导出完整度 CSV</button>
       </div>
       <div class="portal-completion-grid">${cards || `<div class="empty">暂无门户</div>`}</div>
     </section>
@@ -2484,6 +2551,11 @@ $("usersTable").addEventListener("click", async (event) => {
 });
 
 $("dashboardView").addEventListener("click", async (event) => {
+  const exportCompletion = event.target.closest("[data-export-portal-completion]");
+  if (exportCompletion) {
+    exportPortalCompletionCsv();
+    return;
+  }
   const pages = event.target.closest("[data-dashboard-pages]");
   if (!pages) return;
   state.preferredProjectId = pages.dataset.dashboardPages;

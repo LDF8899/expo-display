@@ -385,6 +385,10 @@ tr:last-child td { border-bottom: 0; }
   color: #53657a;
   font-size: 12px;
 }
+.completion-toolbar {
+  justify-content: flex-end;
+  margin: -2px 0 10px;
+}
 .portal-completion-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -466,6 +470,19 @@ tr:last-child td { border-bottom: 0; }
 }
 .portal-completion-card.ready small {
   color: #17643a;
+}
+.portal-completion-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.portal-completion-stats span {
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: #f7fafc;
+  color: #53657a;
+  font-size: 12px;
+  line-height: 1.3;
 }
 .portal-completion-modules {
   display: flex;
