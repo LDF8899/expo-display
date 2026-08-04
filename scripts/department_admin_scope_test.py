@@ -129,6 +129,42 @@ def submit_lowcode_record(base_url, teacher, project_id):
     return result["record"]
 
 
+def assert_lowcode_template_config_forbidden(base_url, session, form_id, version_id):
+    expect_status(
+        401,
+        f"{base_url}/api/lowcode/forms",
+        method="POST",
+        headers=session["headers"],
+        payload={"name": "Forbidden Form", "code": "FORBIDDEN-FORM"},
+    )
+    expect_status(
+        401,
+        f"{base_url}/api/lowcode/forms/{form_id}/copy",
+        method="POST",
+        headers=session["headers"],
+        payload={"name": "Forbidden Copy"},
+    )
+    expect_status(
+        401,
+        f"{base_url}/api/lowcode/forms/{form_id}",
+        method="PUT",
+        headers=session["headers"],
+        payload={"name": "Forbidden Update"},
+    )
+    expect_status(
+        401,
+        f"{base_url}/api/lowcode/forms/{form_id}/versions",
+        headers={"Cookie": session["cookie"]},
+    )
+    expect_status(
+        401,
+        f"{base_url}/api/lowcode/forms/{form_id}/versions/{version_id}/restore",
+        method="POST",
+        headers=session["headers"],
+        payload={},
+    )
+
+
 def visible_review_project_ids(reviews):
     ids = set()
     for key in ("pages", "projects", "contentItems"):
@@ -188,6 +224,10 @@ def main():
 
             biz_project = create_project(base_url, admin, "bizteacher", "财经商贸专题")
             agri_project = create_project(base_url, admin, "agriteacher", "现代农业专题")
+            forms, _ = json_request(f"{base_url}/api/projects/{biz_project['id']}/lowcode/forms", headers={"Cookie": admin["cookie"]})
+            lowcode_form = forms["forms"][0]
+            versions, _ = json_request(f"{base_url}/api/lowcode/forms/{lowcode_form['id']}/versions", headers={"Cookie": admin["cookie"]})
+            lowcode_version = versions["versions"][0]
 
             biz_teacher = login(base_url, "bizteacher", "Biz-Teacher-Password-2026")
             agri_teacher = login(base_url, "agriteacher", "Agri-Teacher-Password-2026")
@@ -201,6 +241,9 @@ def main():
             dept_admin = login(base_url, "deptboss", "Dept-Boss-Password-2026")
             if "department_admin" not in dept_admin["session"].get("permissions", []):
                 raise RuntimeError(f"department admin permission missing: {dept_admin['session']}")
+
+            assert_lowcode_template_config_forbidden(base_url, biz_teacher, lowcode_form["id"], lowcode_version["id"])
+            assert_lowcode_template_config_forbidden(base_url, dept_admin, lowcode_form["id"], lowcode_version["id"])
 
             projects, _ = json_request(f"{base_url}/api/projects", headers={"Cookie": dept_admin["cookie"]})
             visible_projects = {item["id"] for item in projects["projects"]}
