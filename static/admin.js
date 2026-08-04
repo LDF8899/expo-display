@@ -3602,15 +3602,16 @@ async function loadPages(projectId = $("projectSelect").value) {
     renderPages();
     return;
   }
+  const loadManagementReports = canReview();
   const [data, contentData, lowcodeData, lowcodeRecordsData, qualityData, archiveData, lowcodeReportData, templateQualityData] = await Promise.all([
     jsonApi(`/api/projects/${projectId}/pages`),
-    jsonApi(`/api/projects/${projectId}/content-items`),
+    loadManagementReports ? jsonApi(`/api/projects/${projectId}/content-items`) : Promise.resolve({ items: [] }),
     jsonApi(`/api/projects/${projectId}/lowcode/forms`),
     jsonApi(`/api/projects/${projectId}/lowcode/records`),
-    jsonApi(`/api/projects/${projectId}/content-quality`),
-    jsonApi(`/api/projects/${projectId}/asset-archive`),
-    jsonApi(`/api/projects/${projectId}/lowcode/report`),
-    jsonApi(`/api/projects/${projectId}/lowcode/template-quality`),
+    loadManagementReports ? jsonApi(`/api/projects/${projectId}/content-quality`) : Promise.resolve({ report: null }),
+    loadManagementReports ? jsonApi(`/api/projects/${projectId}/asset-archive`) : Promise.resolve({ report: null }),
+    loadManagementReports ? jsonApi(`/api/projects/${projectId}/lowcode/report`) : Promise.resolve({ report: null }),
+    loadManagementReports ? jsonApi(`/api/projects/${projectId}/lowcode/template-quality`) : Promise.resolve({ report: null }),
   ]);
   state.pages = data.pages || [];
   state.contentItems = contentData.items || [];
