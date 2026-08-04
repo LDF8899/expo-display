@@ -723,6 +723,7 @@ function renderLowcodeForms() {
   if (!grid) return;
   const forms = state.lowcodeForms || [];
   if ($("newLowcodeTemplate")) $("newLowcodeTemplate").hidden = !isAdmin();
+  if ($("importLowcodeTemplate")) $("importLowcodeTemplate").hidden = !isAdmin();
   $("lowcodeFormsSummary").textContent = `${forms.length} 个模板`;
   grid.innerHTML = forms.length ? forms.map((form) => {
     const schema = form.schema || {};
@@ -743,6 +744,7 @@ function renderLowcodeForms() {
         <button class="button small primary" type="button" data-lowcode-start="${form.id}" ${enabled ? "" : "disabled"}>按模板填写</button>
         ${isAdmin() ? `<button class="button small" type="button" data-lowcode-edit="${form.id}">编辑模板</button>
         <button class="button small" type="button" data-lowcode-copy="${form.id}">复制</button>
+        <button class="button small" type="button" data-lowcode-export="${form.id}">导出</button>
         <button class="button small" type="button" data-lowcode-versions="${form.id}">版本</button>` : ""}
       </div>
     </article>`;
@@ -876,6 +878,81 @@ function exportPortalCompletionCsv() {
   });
   const csv = `\uFEFF${[headers, ...bodyRows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
   downloadTextFile("门户资料完整度.csv", csv, "text/csv;charset=utf-8");
+}
+function lowcodeTemplateJsonPayload(form) {
+  const schema = form.schema || {};
+  return {
+    kind: "expo-display.lowcode-form",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    form: {
+      name: form.name || "",
+      code: form.code || "",
+      description: form.description || "",
+      targetPortalType: normalizePortalType(form.targetPortalType || schema.portalType || "department"),
+      targetModuleKey: form.targetModuleKey || schema.moduleKey || "",
+      targetContentType: normalizeContentType(form.targetContentType || schema.contentType || "article"),
+      enabled: false,
+      schema: {
+        ...schema,
+        fields: Array.isArray(schema.fields) ? schema.fields : [],
+      },
+    },
+  };
+}
+function safeImportedLowcodeTemplate(raw) {
+  const source = raw && raw.form ? raw.form : raw;
+  if (!source || typeof source !== "object") throw new Error("JSON 中未找到模板数据");
+  const schema = source.schema && typeof source.schema === "object" ? source.schema : {};
+  const portalType = normalizePortalType(source.targetPortalType || schema.portalType || selectedPortalType());
+  const moduleKey = source.targetModuleKey || schema.moduleKey || (modulesForPortalType(portalType)[0] || {}).key || "";
+  const contentType = normalizeContentType(source.targetContentType || schema.contentType || defaultContentTypeForModule(moduleKey));
+  const importedAt = Date.now().toString().slice(-5);
+  return {
+    name: `${source.name || (moduleMeta(moduleKey, portalType) || {}).label || "资料采集表"} 导入副本`,
+    code: `LC-${portalType.toUpperCase()}-${String(moduleKey || "CUSTOM").toUpperCase()}-IMP-${importedAt}`,
+    description: source.description || "",
+    targetPortalType: portalType,
+    targetModuleKey: moduleKey,
+    targetContentType: contentType,
+    enabled: false,
+    schema: {
+      ...schema,
+      portalType,
+      moduleKey,
+      moduleLabel: (moduleMeta(moduleKey, portalType) || {}).label || moduleKey,
+      contentType,
+      contentTypeLabel: contentTypeLabel(contentType),
+      fields: Array.isArray(schema.fields) ? schema.fields : [],
+    },
+  };
+}
+function exportLowcodeTemplateJson(form) {
+  if (!form) return;
+  const json = JSON.stringify(lowcodeTemplateJsonPayload(form), null, 2);
+  const filename = `${String(form.name || "资料采集模板").replace(/[\\/:*?"<>|]/g, "_")}.lowcode-template.json`;
+  downloadTextFile(filename, json, "application/json;charset=utf-8");
+}
+function importLowcodeTemplateJson(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    try {
+      const parsed = JSON.parse(String(reader.result || "{}"));
+      const form = safeImportedLowcodeTemplate(parsed);
+      fillLowcodeTemplateForm(form);
+      setStatus($("lowcodeTemplateStatus"), "模板 JSON 已导入为未启用副本，检查字段后保存。", "success");
+    } catch (err) {
+      alert(`导入失败：${err.message}`);
+    } finally {
+      $("lowcodeTemplateImportFile").value = "";
+    }
+  });
+  reader.addEventListener("error", () => {
+    alert("导入失败：无法读取文件");
+    $("lowcodeTemplateImportFile").value = "";
+  });
+  reader.readAsText(file, "utf-8");
 }
 function renderLowcodeRecords() {
   const listNode = $("lowcodeRecordsList");
@@ -2614,6 +2691,7 @@ $("lowcodeFormsGrid").addEventListener("click", (event) => {
   const start = event.target.closest("[data-lowcode-start]");
   const edit = event.target.closest("[data-lowcode-edit]");
   const copy = event.target.closest("[data-lowcode-copy]");
+  const exportButton = event.target.closest("[data-lowcode-export]");
   const versions = event.target.closest("[data-lowcode-versions]");
   if (start) {
     fillLowcodeRecordForm(state.lowcodeForms.find((form) => String(form.id) === String(start.dataset.lowcodeStart)));
@@ -2635,6 +2713,10 @@ $("lowcodeFormsGrid").addEventListener("click", (event) => {
         setStatus($("lowcodeTemplateStatus"), "模板副本已创建，检查字段后可启用。", "success");
       })
       .catch((err) => alert(err.message));
+    return;
+  }
+  if (exportButton) {
+    exportLowcodeTemplateJson(state.lowcodeForms.find((form) => String(form.id) === String(exportButton.dataset.lowcodeExport)));
     return;
   }
   if (versions) {
@@ -2663,6 +2745,8 @@ $("lowcodeRecordsList").addEventListener("click", (event) => {
   if (item) fillContentItem(item);
 });
 $("newLowcodeTemplate").addEventListener("click", () => fillLowcodeTemplateForm({}));
+$("importLowcodeTemplate").addEventListener("click", () => $("lowcodeTemplateImportFile").click());
+$("lowcodeTemplateImportFile").addEventListener("change", (event) => importLowcodeTemplateJson(event.target.files[0]));
 $("closeLowcodeRecordForm").addEventListener("click", () => { $("lowcodeRecordForm").hidden = true; });
 $("closeLowcodeTemplateForm").addEventListener("click", () => { $("lowcodeTemplateForm").hidden = true; });
 $("closeLowcodeVersionPanel").addEventListener("click", () => { $("lowcodeVersionPanel").hidden = true; });
