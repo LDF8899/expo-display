@@ -1757,6 +1757,7 @@ function renderLowcodeRecordDetail(record) {
 function renderLowcodeRecords() {
   const listNode = $("lowcodeRecordsList");
   if (!listNode) return;
+  if ($("lowcodeRecordStatusFilter")) $("lowcodeRecordStatusFilter").value = state.lowcodeRecordStatusFilter || "all";
   const records = state.lowcodeRecords || [];
   const visibleRecords = filteredLowcodeRecords();
   const approved = records.filter((record) => (record.effectiveStatus || record.status) === "approved").length;
@@ -3090,14 +3091,15 @@ async function loadPortalCompletionRows() {
   });
   return Promise.all(projects.map(async (project) => {
     try {
-      const [data, lowcodeData] = await Promise.all([
+      const [data, lowcodeData, lowcodeReportData] = await Promise.all([
         jsonApi(`/api/projects/${project.id}/pages`),
         jsonApi(`/api/projects/${project.id}/lowcode/records`),
+        jsonApi(`/api/projects/${project.id}/lowcode/report`),
       ]);
       const pages = data.pages || [];
       const coverage = data.coverage || buildCoverageFromPages(pages, project.portalType);
       const lowcodeRecords = lowcodeData.records || [];
-      return { project, pages, coverage, lowcodeRecords, lowcodeStats: lowcodeRecordStats(lowcodeRecords) };
+      return { project, pages, coverage, lowcodeRecords, lowcodeStats: lowcodeRecordStats(lowcodeRecords), lowcodeReport: lowcodeReportData.report || null };
     } catch (err) {
       return {
         project,
@@ -3264,6 +3266,93 @@ function renderPortalPriorityTasks(rows) {
   `;
 }
 
+function dashboardLowcodeFilterForReminder(row) {
+  const stats = row.stats || {};
+  const status = String(row.status || "");
+  if (stats.pending || status.includes("待审核") || status.includes("审核超期")) return "pending";
+  if (stats.rejected || status.includes("驳回") || status.includes("修改")) return "rejected";
+  if (stats.draft || status.includes("草稿") || status.includes("催交")) return "draft";
+  return "all";
+}
+
+function dashboardLowcodeActionForReminder(row) {
+  const filter = dashboardLowcodeFilterForReminder(row);
+  if (filter === "pending") return "处理待审";
+  if (filter === "rejected") return "修改退回";
+  if (filter === "draft") return "查看草稿";
+  if (row.status === "缺模板") return "配置模板";
+  return "打开采集";
+}
+
+function dashboardLowcodeTodoPriority(row) {
+  const order = { danger: 0, warn: 1, ok: 2 };
+  const stats = row.stats || {};
+  const overdue = row.overdue || {};
+  return [
+    order[row.kind] ?? 9,
+    stats.pending ? 0 : stats.rejected ? 1 : stats.draft ? 2 : 3,
+    -(overdue.maxDays || 0),
+    String(row.projectName || ""),
+    String(row.label || ""),
+  ];
+}
+
+function compareTuple(a, b) {
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const av = a[index];
+    const bv = b[index];
+    if (typeof av === "number" && typeof bv === "number" && av !== bv) return av - bv;
+    const textDelta = String(av ?? "").localeCompare(String(bv ?? ""), "zh-Hans-CN");
+    if (textDelta) return textDelta;
+  }
+  return 0;
+}
+
+function renderDashboardLowcodeTodos(rows) {
+  const todos = (rows || []).flatMap((row) => {
+    const reminders = row.lowcodeReport?.groups?.reminders || [];
+    return reminders
+      .filter((reminder) => !reminder.publishReady && reminder.kind !== "ok")
+      .map((reminder) => ({
+        ...reminder,
+        projectId: row.project.id,
+        projectName: row.project.name,
+        portalType: row.project.portalType,
+      }));
+  }).sort((a, b) => compareTuple(dashboardLowcodeTodoPriority(a), dashboardLowcodeTodoPriority(b)));
+  const visible = todos.slice(0, 8);
+  const statusClass = todos.some((row) => row.kind === "danger") ? "danger" : todos.length ? "warn" : "success";
+  const items = visible.map((row) => {
+    const filter = dashboardLowcodeFilterForReminder(row);
+    const actionText = dashboardLowcodeActionForReminder(row);
+    const overdueText = row.overdue?.labels?.length ? row.overdue.labels.join("、") : row.overdue?.maxDays ? `最久停留 ${row.overdue.maxDays} 天` : "";
+    const detail = [row.status, row.owner, overdueText].filter(Boolean).join(" · ");
+    return `
+      <article class="dashboard-lowcode-todo ${row.kind}">
+        <div>
+          <strong>${escapeHtml(row.projectName)} · ${escapeHtml(row.label)}</strong>
+          <span>${escapeHtml(portalTypeLabel(row.portalType))} · ${escapeHtml(detail || "待完善")}</span>
+        </div>
+        <p>${escapeHtml(row.action || "按模板补齐资料。")}</p>
+        <button class="button small primary" type="button" data-dashboard-lowcode-records="${row.projectId}" data-dashboard-lowcode-status="${filter}" data-dashboard-module="${escapeHtml(row.key)}">${escapeHtml(actionText)}</button>
+      </article>
+    `;
+  }).join("");
+  return `
+    <section class="panel dashboard-lowcode-panel">
+      <div class="panel-head">
+        <div>
+          <h2>资料采集待办</h2>
+          <p>汇总各门户低代码填报中的草稿、待审、驳回和超期事项，后台首页先看这里。</p>
+        </div>
+        <span class="badge ${statusClass}">${todos.length ? `${todos.length} 项待办` : "已完成"}</span>
+      </div>
+      <div class="dashboard-lowcode-list">${items || `<div class="empty">当前没有资料采集待办</div>`}</div>
+      ${todos.length > visible.length ? `<p class="muted">仅展示前 ${visible.length} 项，进入对应门户可查看完整提醒和导出 CSV。</p>` : ""}
+    </section>
+  `;
+}
+
 async function renderDashboard() {
   if (!state.projects.length) await loadProjects();
   const [data, portalRows] = await Promise.all([
@@ -3272,6 +3361,7 @@ async function renderDashboard() {
   ]);
   const portalCompletionHtml = renderPortalCompletionOverview(portalRows);
   const portalPriorityHtml = renderPortalPriorityTasks(portalRows);
+  const lowcodeTodoHtml = renderDashboardLowcodeTodos(portalRows);
   const s = data.dashboard.summary || {};
   const ops = data.dashboard.operations || {};
   const ready = ops.ready || {};
@@ -3308,6 +3398,7 @@ async function renderDashboard() {
       <article class="metric"><span>已驳回</span><strong>${s.rejectedPages || 0}</strong></article>
     </div>
     ${portalPriorityHtml}
+    ${lowcodeTodoHtml}
     ${portalCompletionHtml}
     <section class="panel ops-panel">
       <div class="panel-head"><div><h2>运行状态</h2><p>${formatTime(ready.time)}</p></div><span class="badge ${readyOk ? "success" : "danger"}">${readyOk ? "Ready" : "异常"}</span></div>
@@ -4134,6 +4225,14 @@ $("dashboardView").addEventListener("click", async (event) => {
   const exportCompletion = event.target.closest("[data-export-portal-completion]");
   if (exportCompletion) {
     exportPortalCompletionCsv();
+    return;
+  }
+  const lowcodeRecords = event.target.closest("[data-dashboard-lowcode-records]");
+  if (lowcodeRecords) {
+    state.preferredProjectId = lowcodeRecords.dataset.dashboardLowcodeRecords;
+    state.preferredModuleKey = lowcodeRecords.dataset.dashboardModule || "";
+    state.lowcodeRecordStatusFilter = lowcodeRecords.dataset.dashboardLowcodeStatus || "all";
+    await showView("pages");
     return;
   }
   const pages = event.target.closest("[data-dashboard-pages]");
