@@ -1,0 +1,81 @@
+{
+    "id":  "tourism",
+    "type":  "department",
+    "name":  "旅游管理系",
+    "summary":  "数字文旅、酒店运营与烹饪技艺",
+    "cover":  "/uploads/blueprint/departments/tourism/images/img01.webp",
+    "stats":  [
+                  {
+                      "label":  "成立时间",
+                      "value":  "2010 年"
+                  },
+                  {
+                      "label":  "专业",
+                      "value":  "3 高职 + 2 中技"
+                  },
+                  {
+                      "label":  "双师占比",
+                      "value":  "95% 以上"
+                  },
+                  {
+                      "label":  "省级建设项目",
+                      "value":  "18 个"
+                  },
+                  {
+                      "label":  "省级一等奖",
+                      "value":  "22 人次"
+                  }
+              ],
+    "sections":  [
+                     {
+                         "id":  "overview",
+                         "title":  "基本情况",
+                         "blocks":  [
+                                        {
+                                            "type":  "text",
+                                            "content":  "旅游管理系简介："
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "旅游管理系2010年成立，开设旅游管理、酒店管理与数字化运营、烹饪工艺与营养3个高职专业，饭店（酒店）服务、烹饪（中式烹调）2个中技专业，旅游管理专业为省级重点特色专业。"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "共计专兼职教师35人，双师型教师比例达95%以上。其中，文旅部“万名旅游英才”2名，农业农村部“名课名师”1名，贵州省技术能手3名，毕节工匠3名。"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "先后建成贵州乡村旅游虚拟仿真实训基地、毕节数字文旅开放型产教融合实践中心2个省级产教融合基地，烹饪工艺与营养黔匠工坊1个省级工坊，洞天花海产业学院、大方九驿街道乡村旅游学院2个产业学院。"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "依托东西部协作、统一战线帮扶、聚焦地方产业发展，开设广州地铁集团、广州岭南集团越秀集团、广州酒家等优质订单班，与牵头成立“全国乡村生态旅游行业产教融合共同体”“毕节市乡村生态旅游市域产教联合体”。"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "近五年，立项省级“校旅结合”示范校、省级虚拟仿真实训基地、省级黔匠工坊等18个省级建设项目。育人模式获贵州职业教育教学成果二等奖、贵州省第五届教育科学研究优秀成果三等奖；团队获全国职业院校教师教学能力大赛三等奖、贵州省职业院校教师教学能力一等奖。师生先后获省级一等奖22人次、二等奖30人次、三等奖若干。办学特色鲜明、成果显著！"
+                                        },
+                                        {
+                                            "type":  "image",
+                                            "src":  "/uploads/blueprint/departments/tourism/images/img01.webp",
+                                            "caption":  ""
+                                        },
+                                        {
+                                            "type":  "image",
+                                            "src":  "/uploads/blueprint/departments/tourism/images/img02.webp",
+                                            "caption":  ""
+                                        },
+                                        {
+                                            "type":  "image",
+                                            "src":  "/uploads/blueprint/departments/tourism/images/img03.webp",
+                                            "caption":  ""
+                                        },
+                                        {
+                                            "type":  "image",
+                                            "src":  "/uploads/blueprint/departments/tourism/images/img04.webp",
+                                            "caption":  ""
+                                        }
+                                    ]
+                     }
+                 ]
+}

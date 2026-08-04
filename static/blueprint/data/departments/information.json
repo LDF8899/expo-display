@@ -1,0 +1,89 @@
+{
+    "id":  "information",
+    "type":  "department",
+    "name":  "电子信息工程系",
+    "summary":  "人工智能、网络安全与数字技术",
+    "cover":  "/uploads/blueprint/departments/information/images/img01.webp",
+    "stats":  [
+                  {
+                      "label":  "办学积淀",
+                      "value":  "30 年"
+                  },
+                  {
+                      "label":  "教职工",
+                      "value":  "40 余人"
+                  },
+                  {
+                      "label":  "双师占比",
+                      "value":  "83.3%"
+                  },
+                  {
+                      "label":  "在校生",
+                      "value":  "1500 人"
+                  },
+                  {
+                      "label":  "证书获取率",
+                      "value":  "92%"
+                  }
+              ],
+    "sections":  [
+                     {
+                         "id":  "overview",
+                         "title":  "基本情况",
+                         "blocks":  [
+                                        {
+                                            "type":  "text",
+                                            "content":  "电子信息工程系系部介绍"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "毕节职业技术学院电子信息工程系溯源于1996年成立的毕节农业学校计算机教研室，2008年正式建系，至今已有30年办学积淀。现有教职工40余人，其中副高以上职称占比32.3%，“双师型”教师达83.3%。"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "现开设计算机应用技术（省级重点特色专业）、人工智能技术应用（省级现场工程师培训基地）、计算机网络技术三个专业，在校生1500人。学生职业证书获取率达92%，毕业生就业去向落实率长期保持在90%以上。近三年获省级以上比赛奖项46项（国家级三等奖1项、省级一等奖6项、省级二等奖10项、省级三等奖14项）；创新创业类比赛获国家级银奖1项、省级银奖2项、省级铜奖16项；“挑战杯”比赛获省级二等奖1项、省级三等奖5项、省级优秀奖1项。"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "系部建有国家级计算机应用技术高技能人才培养基地1个、国家级小米AIoT工程师能力培训中心1个、省级重点（特色）专业1个、省级人工智能现场工程师培训基地1个。入选全国新一代信息技术、全国大数据、全国人工智能、全国信息安全行业产教融合共同体理事单位。与小米、360、H3C等头部企业深度合作，共建人工智能产业学院、360数智安全产业学院、H3C网络学院，实现课堂与岗位无缝对接。"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "1.师生在2025年省第二届网络安全实战赛获奖"
+                                        },
+                                        {
+                                            "type":  "image",
+                                            "src":  "/uploads/blueprint/departments/information/images/img01.webp",
+                                            "caption":  "1.师生在2025年省第二届网络安全实战赛获奖"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "2.系部学生王恩利利用数字化技术服务乡村被中央电视台报道"
+                                        },
+                                        {
+                                            "type":  "image",
+                                            "src":  "/uploads/blueprint/departments/information/images/img02.webp",
+                                            "caption":  "2.系部学生王恩利利用数字化技术服务乡村被中央电视台报道"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "3.系部学生参加2024全国职业院校技能大赛获奖"
+                                        },
+                                        {
+                                            "type":  "image",
+                                            "src":  "/uploads/blueprint/departments/information/images/img03.webp",
+                                            "caption":  "3.系部学生参加2024全国职业院校技能大赛获奖"
+                                        },
+                                        {
+                                            "type":  "text",
+                                            "content":  "4.荣获小米优秀合作院校表彰"
+                                        },
+                                        {
+                                            "type":  "image",
+                                            "src":  "/uploads/blueprint/departments/information/images/img04.webp",
+                                            "caption":  "4.荣获小米优秀合作院校表彰"
+                                        }
+                                    ]
+                     }
+                 ]
+}

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Expo Display 高级感展示首页</title>
+    <link rel="stylesheet" href="/static/display.css?v=portal-chrome-20260804d" />
+  </head>
+  <body>
+    <main id="app" class="screen idle" data-od-id="display-app">
+      <section id="idleView" class="app-chrome fade-in" data-od-id="idle-home">
+        <header class="topbar" data-od-id="top-navigation">
+          <div class="brand-lockup" data-od-id="brand-lockup">
+            <img id="brandLogo" class="brand-logo" alt="学校标识" hidden />
+            <span id="brandFallback" class="crest" aria-hidden="true">校</span>
+            <div id="brandTitle" class="brand-title">
+              <p id="brandKicker" class="eyebrow">EXPO DISPLAY</p>
+              <h1 id="projectName" class="school-name">毕节职业技术学院</h1>
+              <p id="schoolMeta" class="school-meta">欢迎来到校园 · 同心特色校园文化</p>
+            </div>
+          </div>
+
+          <nav class="nav" aria-label="展示栏目" data-od-id="display-nav">
+            <span class="nav-pill" data-od-id="nav-service">社会服务</span>
+            <span class="nav-pill" data-od-id="nav-international">国际交流</span>
+            <span class="nav-pill" data-od-id="nav-education">育人成果</span>
+            <span class="nav-pill" data-od-id="nav-masters">名师名匠</span>
+          </nav>
+
+          <div class="status-stack" data-od-id="connection-status">
+            <span id="connectionState" class="status-chip is-live">展示通道连接中</span>
+            <span id="projectState" class="status-chip">当前部署项目 · 等待读取</span>
+          </div>
+        </header>
+
+        <section class="hero-grid" data-od-id="hero-layout">
+          <article id="mainStage" class="stage" data-od-id="main-stage">
+            <div class="stage-content">
+              <div class="live-label caption" data-od-id="live-label">Live Exhibition Screen</div>
+              <div class="hero-copy" data-od-id="hero-copy">
+                <p id="heroLabel" class="hero-label section-label" data-od-id="hero-label">WELCOME OVERVIEW</p>
+                <h2 id="heroTitle" class="hero-title" data-od-id="hero-title">欢迎来到校园展示现场</h2>
+                <p id="heroSubtitle" class="hero-subtitle" data-od-id="hero-subtitle">
+                  面向展会观众的大屏首页，先建立学校识别，再用扫码内容把观众带入具体成果、专业与校园故事。
+                </p>
+                <div id="heroTags" class="hero-tags tag-row" data-od-id="hero-tags"></div>
+              </div>
+              <div class="hero-actions" data-od-id="scan-guidance">
+                <div class="scan-card" data-od-id="scan-card">
+                  <img id="scanImage" class="qr-image" alt="" hidden />
+                  <div class="qr-mark" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <div>
+                    <h2 id="scanTitle">扫描展项二维码</h2>
+                    <p id="scanCopy">大屏将自动进入对应编号内容页，保留当前项目与扫码事件的实时联动。</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <aside class="side-panel" data-od-id="side-modules">
+            <section class="glass-panel" data-od-id="intro-panel">
+              <p id="summaryLabel" class="section-label">WELCOME OVERVIEW</p>
+              <h2 id="summaryTitle" class="panel-title">从学校形象到展项内容，形成完整参观动线。</h2>
+              <p id="summaryCopy" class="panel-copy">
+                这版首页减少普通网页式卡片，改为发布会级舞台视觉：大图沉浸、少量状态信息、清晰扫码引导，更适合远距离观看。
+              </p>
+              <div id="summaryTags" class="tag-row" data-od-id="intro-tags"></div>
+            </section>
+
+            <section class="carousel-panel" data-od-id="carousel-panel">
+              <div id="carouselStage" class="carousel-stage" data-od-id="carousel-stage"></div>
+              <section class="carousel-summary" data-od-id="carousel-summary">
+                <p id="carouselSummaryLabel" class="section-label">WELCOME OVERVIEW</p>
+                <h2 id="carouselSummaryTitle" class="carousel-summary-title"></h2>
+                <p id="carouselSummaryCopy" class="carousel-summary-copy"></p>
+                <div id="carouselSummaryTags" class="carousel-summary-tags tag-row"></div>
+              </section>
+              <div id="carouselScanSlot" class="carousel-scan-slot"></div>
+              <div class="progress-track" aria-hidden="true"><div id="progressBar" class="progress-bar"></div></div>
+              <div id="carouselPagination" class="carousel-pagination" aria-label="轮播分页"></div>
+              <div class="control-row">
+                <button id="prevSlide" class="control" type="button" data-od-id="prev-slide">上一张</button>
+                <button id="nextSlide" class="control" type="button" data-od-id="next-slide">下一张</button>
+              </div>
+            </section>
+
+            <section class="metrics" aria-label="系统状态" data-od-id="status-metrics">
+              <div class="metric-card" data-od-id="metric-project">
+                <div id="metricProject" class="metric-value">01</div>
+                <div class="metric-label">当前项目</div>
+              </div>
+              <div class="metric-card" data-od-id="metric-channel">
+                <div class="metric-value">SSE</div>
+                <div class="metric-label">实时通道</div>
+              </div>
+              <div class="metric-card" data-od-id="metric-code">
+                <div class="metric-value">QR</div>
+                <div class="metric-label">扫码触发</div>
+              </div>
+            </section>
+          </aside>
+        </section>
+
+      </section>
+
+      <section id="pageView" class="detail-view" hidden data-od-id="detail-view">
+        <button id="returnHome" class="return-home" type="button" data-od-id="return-home">返回首页</button>
+        <figure class="detail-media" data-od-id="detail-media">
+          <img id="detailImage" src="/static/expo-stage.png" alt="" />
+          <figcaption class="detail-caption">
+            <span id="detailCode" class="code" data-od-id="detail-code">编号 10100043</span>
+            <h2 id="detailMediaTitle" data-od-id="detail-media-title">专业成果展示</h2>
+          </figcaption>
+        </figure>
+        <article class="content-panel" data-od-id="detail-content">
+          <div class="detail-meta">
+            <p id="detailCategory" class="section-label" data-od-id="detail-category">校园成果</p>
+            <div class="detail-source">
+              <span id="detailDate"></span>
+              <span id="detailSource"></span>
+            </div>
+          </div>
+          <h1 id="detailTitle" data-od-id="detail-title">智能制造实训成果与学生项目展</h1>
+          <p id="detailSubtitle" class="subtitle" data-od-id="detail-subtitle">
+            扫码后，大屏直接切换到对应编号内容。图片、标题、副标题和正文均来自当前部署项目的数据接口。
+          </p>
+          <div id="detailBody" class="body-text" data-od-id="detail-body"></div>
+          <footer class="detail-footer" data-od-id="detail-footer">
+            <span>学校大屏展示内容</span>
+            <span>扫码进入子级展示页</span>
+          </footer>
+        </article>
+      </section>
+    </main>
+
+    <script src="/static/display.js?v=portal-chrome-20260804d"></script>
+  </body>
+</html>

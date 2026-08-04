@@ -1,0 +1,39 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.env
+.env.*
+
+.playwright-cli/
+output/
+backups/
+
+server.out.log
+server.err.log
+
+# 现场运行数据：仓库只保留 database/expo-latest.db 这一份最新数据库快照。
+expo.db
+expo.db.backup-*
+*.sqlite
+*.sqlite3
+
+# 原始素材、运行媒体、Unity 包和上传文件体积较大，统一放网盘，不进 GitHub。
+uploads/
+
+hatch-pet-runs/
+
+# 素材提取中间产物（含真实师生姓名与学校数据，不入公开仓库）
+sucai/dumped/
+
+# 素材样例源文档（含真实照片，不入公开仓库）
+sucai/毕节职业技术学院成果样例.docx
+
+# 素材研究存档（官网抓取页等，不入公开仓库）
+sucai/carousel-effect/
+sucai/index.html
+sucai/school-display-research.html
+sucai/view-source_*.htm
+
+# 本地数据备份目录，不随 GitHub 分发。
+static/blueprint/data.backup-*/

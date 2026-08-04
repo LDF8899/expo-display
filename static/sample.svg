@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#10a68f"/>
+      <stop offset="0.55" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="760" fill="url(#g)"/>
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.38" stroke-width="3">
+    <path d="M140 520 C310 270 465 610 650 330 S945 160 1080 410"/>
+    <path d="M120 330 C280 120 430 450 610 230 S900 140 1100 270"/>
+  </g>
+  <g fill="#ffffff" fill-opacity="0.9">
+    <circle cx="220" cy="490" r="12"/>
+    <circle cx="510" cy="390" r="12"/>
+    <circle cx="790" cy="235" r="12"/>
+    <circle cx="970" cy="350" r="12"/>
+  </g>
+  <text x="90" y="130" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#ffffff">EXPO DISPLAY</text>
+  <text x="92" y="190" font-family="Arial, sans-serif" font-size="26" fill="#dbeafe">Replace this image in the admin page</text>
+</svg>

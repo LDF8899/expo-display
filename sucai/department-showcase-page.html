@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>系部展示页面</title>
+  <style>
+    :root {
+      --brand-blue: #28539c;
+      --brand-blue-deep: #20468b;
+      --accent: #f59a13;
+      --accent-2: #47b7ff;
+      --bg: #123d74;
+      --surface: rgba(36, 91, 154, 0.66);
+      --fg: #f4f8ff;
+      --muted: rgba(219, 229, 244, 0.74);
+      --border: rgba(148, 179, 225, 0.22);
+      --font-display: "DIN Alternate", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+      --font-body: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+      --font-mono: "Cascadia Mono", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: var(--fg);
+      background:
+        linear-gradient(90deg, rgba(129, 203, 255, 0.13) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(129, 203, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(135deg, #18518f, #2267ad 52%, var(--bg));
+      background-size: 72px 72px, 72px 72px, auto;
+      font-family: var(--font-body);
+    }
+
+    button { font: inherit; }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .board {
+      width: min(1840px, calc(100vw - 48px));
+      height: min(1000px, calc(100vh - 48px));
+      border: 1px solid rgba(148, 179, 225, 0.28);
+      border-radius: 30px;
+      background:
+        linear-gradient(110deg, transparent 0 12%, rgba(255, 255, 255, 0.11) 13%, transparent 31%),
+        linear-gradient(290deg, transparent 0 58%, rgba(245, 154, 19, 0.14) 60%, transparent 74%),
+        rgba(18, 61, 116, 0.76);
+      box-shadow: 0 28px 70px rgba(3, 23, 50, 0.32);
+      padding: 28px 34px 34px;
+      display: grid;
+      grid-template-rows: 118px minmax(0, 1fr);
+      gap: 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .board::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(138, 211, 255, 0.16) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(138, 211, 255, 0.12) 1px, transparent 1px);
+      background-size: 42px 42px;
+      pointer-events: none;
+      mask-image: linear-gradient(180deg, black 0%, transparent 72%);
+    }
+
+    .topbar,
+    .grid {
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 138px;
+      gap: 42px;
+    }
+
+    .identity {
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), transparent), var(--surface);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 520px);
+      align-items: center;
+      gap: 28px;
+      padding: 14px 28px 14px 18px;
+    }
+
+    .school {
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr);
+      align-items: center;
+      gap: 20px;
+    }
+
+    .logo,
+    .qr-inner {
+      border: 1px dashed rgba(148, 179, 225, 0.48);
+      color: var(--accent-2);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      line-height: 1.4;
+      font-size: 13px;
+    }
+
+    .logo {
+      width: 78px;
+      height: 78px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(32, 70, 139, 0.78));
+    }
+
+    h1 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: clamp(34px, 3vw, 52px);
+      line-height: 1.04;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .school p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .dept-name {
+      min-height: 70px;
+      border: 1px solid rgba(245, 154, 19, 0.72);
+      border-radius: 16px;
+      background: rgba(16, 55, 105, 0.58);
+      color: #f8e4bd;
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+      font-weight: 550;
+      letter-spacing: 0.02em;
+    }
+
+    .qr {
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--surface);
+      padding: 13px;
+      display: grid;
+      place-items: center;
+    }
+
+    .qr-inner {
+      width: 92px;
+      height: 92px;
+      border-radius: 10px;
+    }
+
+    .grid {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 154px;
+      grid-template-rows: minmax(0, 0.92fr) minmax(0, 1fr);
+      gap: 28px;
+    }
+
+    .panel {
+      min-width: 0;
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), transparent), var(--surface);
+      box-shadow: 0 18px 48px rgba(3, 23, 50, 0.28);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-head {
+      margin-bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 25px;
+      line-height: 1.12;
+      font-weight: 600;
+    }
+
+    .panel-head span {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .cards,
+    .results {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      gap: 18px;
+    }
+
+    .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .results { grid-template-columns: 0.86fr 1.14fr; }
+
+    .card {
+      border: 1px solid rgba(148, 179, 225, 0.24);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.055);
+      padding: 20px;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .card:hover,
+    .card.is-active {
+      border-color: rgba(148, 179, 225, 0.5);
+      background: rgba(255, 255, 255, 0.085);
+      box-shadow: 0 0 42px rgba(71, 183, 255, 0.14);
+    }
+
+    .kicker {
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+    }
+
+    .card strong {
+      margin-top: 12px;
+      font-size: 24px;
+      line-height: 1.2;
+      font-weight: 590;
+    }
+
+    .card p {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .media-box {
+      flex: 1;
+      min-height: 0;
+      border: 1px solid rgba(148, 179, 225, 0.26);
+      border-radius: 22px;
+      background:
+        linear-gradient(90deg, rgba(138, 211, 255, 0.2) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(138, 211, 255, 0.15) 1px, transparent 1px),
+        rgba(40, 101, 170, 0.72);
+      background-size: 48px 48px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slot {
+      position: absolute;
+      inset: 18px;
+      border: 2px dashed rgba(148, 179, 225, 0.48);
+      border-radius: 18px;
+      background: rgba(8, 22, 45, 0.48);
+      color: rgba(219, 229, 244, 0.86);
+      display: grid;
+      place-items: center;
+    }
+
+    .caption {
+      position: absolute;
+      left: 34px;
+      bottom: 32px;
+      max-width: 430px;
+      border: 1px solid rgba(219, 229, 244, 0.18);
+      border-radius: 14px;
+      background: rgba(8, 22, 45, 0.62);
+      padding: 14px 16px 15px;
+    }
+
+    .caption h3 { margin: 0; font-size: 24px; }
+    .caption p { margin: 8px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+
+    .video {
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(90deg, rgba(7, 20, 37, 0.2), transparent 48%),
+        linear-gradient(0deg, rgba(7, 20, 37, 0.82), transparent 58%),
+        linear-gradient(180deg, #1f5fa4, #123d74);
+    }
+
+    .play {
+      width: 92px;
+      height: 92px;
+      border: 2px solid rgba(255, 255, 255, 0.72);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.14);
+      color: var(--fg);
+      display: grid;
+      place-items: center;
+    }
+
+    .rail {
+      grid-row: 1 / span 2;
+      grid-column: 3;
+      display: flex;
+      flex-direction: column;
+      justify-content: end;
+      align-items: center;
+      gap: 24px;
+      padding-bottom: 28px;
+    }
+
+    .round {
+      width: 126px;
+      height: 126px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.055);
+      color: var(--fg);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      font-size: 18px;
+      line-height: 1.28;
+      font-weight: 550;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="board" data-od-id="department-display-board" aria-label="学校系部展示页面">
+      <header class="topbar" data-od-id="top-identity-area">
+        <div class="identity">
+          <div class="school" data-od-id="school-logo-area">
+            <div class="logo">校徽<br>待放置</div>
+            <div>
+              <h1 data-od-id="school-name">毕节职业技术学院</h1>
+              <p>Bijie Vocational and Technical College</p>
+            </div>
+          </div>
+          <div class="dept-name" data-od-id="department-name">×××系部</div>
+        </div>
+        <aside class="qr" data-od-id="qr-code-area"><div class="qr-inner">二维码<br>待放置</div></aside>
+      </header>
+
+      <section class="grid" data-od-id="main-content-grid">
+        <article class="panel" data-od-id="basic-info-panel">
+          <div class="panel-head"><h2>基本情况</h2><span>院系概览</span></div>
+          <div class="cards">
+            <button class="card is-active" type="button"><span class="kicker">概览</span><strong>系部介绍</strong><p>用于承载系部定位、发展沿革、师资队伍等内容。</p></button>
+            <button class="card" type="button"><span class="kicker">专业</span><strong>专业设置</strong><p>后续可接入专业列表、培养方向与课程模块。</p></button>
+            <button class="card" type="button"><span class="kicker">实训</span><strong>实训基地</strong><p>用于展示实训室、校内基地与实践教学场景。</p></button>
+          </div>
+        </article>
+
+        <article class="panel" data-od-id="cooperation-panel">
+          <div class="panel-head"><h2>产教融合校企合作成果</h2><span>合作展示</span></div>
+          <div class="results">
+            <button class="card" type="button"><strong>校企合作项目</strong><p>展示合作单位、项目类型、共建课程与实践岗位等资料。</p></button>
+            <button class="card" type="button"><strong>产教融合成果</strong><p>展示共建成果、学生实践成果、竞赛项目与社会服务案例。</p></button>
+          </div>
+        </article>
+
+        <article class="panel" data-od-id="teaching-innovation-panel">
+          <div class="panel-head"><h2>教学与创新成果</h2><span>轮播图</span></div>
+          <div class="media-box" data-od-id="achievement-carousel">
+            <div class="slot">轮播图片待放置</div>
+            <div class="caption"><h3>教学成果展示区</h3><p>这里预留优秀课程、教学改革、师生作品等图片与说明，后续替换真实素材。</p></div>
+          </div>
+        </article>
+
+        <article class="panel" data-od-id="video-resource-panel">
+          <div class="panel-head"><h2>视频资源</h2><span>播放区</span></div>
+          <div class="media-box video" data-od-id="video-stage">
+            <button class="play" type="button" aria-label="播放视频资源">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5z" fill="currentColor"/></svg>
+            </button>
+            <div class="caption"><h3>系部宣传片待接入</h3><p>可接入宣传片、专业介绍视频、实训基地视频或学生作品视频。</p></div>
+          </div>
+        </article>
+
+        <nav class="rail" data-od-id="side-entry-rail" aria-label="特色入口">
+          <div class="round">特色系统<br>入口</div>
+          <div class="round">特色数字<br>资源</div>
+        </nav>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

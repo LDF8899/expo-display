@@ -1,0 +1,664 @@
+{
+  "id": "modern-agriculture",
+  "type": "topic",
+  "name": "现代农业",
+  "summary": "面向山地特色农业、生态食品加工、茶叶与中草药产业、畜牧兽医和农产品质量检测，呈现农业工程系服务乡村振兴、产教融合和数智化农业人才培养成果。",
+  "cover": "/uploads/blueprint/topics/modern-agriculture/images/img01.webp",
+  "stats": [
+    {
+      "label": "专业教师",
+      "value": "50人"
+    },
+    {
+      "label": "在校生",
+      "value": "1750人"
+    },
+    {
+      "label": "实训设备",
+      "value": "3000余万元"
+    },
+    {
+      "label": "竞赛成果",
+      "value": "100余项"
+    }
+  ],
+  "sections": [
+    {
+      "id": "overview",
+      "title": "专题概况",
+      "contentType": "article",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "系部简介：农业工程系"
+        },
+        {
+          "type": "text",
+          "content": "农业工程系办学历史可追溯到1956年贵州省毕节农业学校，近年来先后获批贵州省第一批、第二批高水平专业群，全省先进基层党组织。现有专业教师50人，其中，教授3人，副教授17人，讲师15人；博士研究生1人、硕士研究生27人；“双师型”教师38人，中华优秀茶教师1人，省级职教名师2人，贵州省五一劳动奖章1人，贵州省技术能手5人，毕节市管专家3人。省级技能大师工作室1个、省级劳模和创新工作室1个、省级名匠工作室1个和毕节市数字育训人才团队1个。"
+        },
+        {
+          "type": "text",
+          "content": "目前开设畜牧兽医、中草药栽培与加工技术、农产品加工与质量检测、茶叶生产与加工技术和园林技术等5个高职专业，畜牧兽医1个中技专业，其中畜牧兽医专业为省级特色骨干专业。在校生1750人，学生平均就业率为98.2％，累计培养学生20000余人。近三年师生参加全国、省、市技能大赛获奖100余项。"
+        },
+        {
+          "type": "text",
+          "content": "牵头成立毕节生态食品产业市域产教联合体，加入中国智慧养猪业产教融合共同体、贵州省药学行业产教融合共同体、贵药大健康行业产教融合共同体。现有贵州省山地特色农业数字化人才产教融合实训平台等实训教学设备价值达3000余万元。"
+        }
+      ],
+      "backendUpdatedAt": "2026-08-04",
+      "backendPageCode": "modern-agriculture-overview"
+    },
+    {
+      "id": "majors",
+      "title": "专业群布局",
+      "contentType": "article",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "专业群介绍"
+        },
+        {
+          "type": "text",
+          "content": "农产品加工与质量检测专业群是省级“高水平”专业群，由畜牧兽医、中草药栽培与加工技术、农产品加工与质量检测、茶叶生产与加工技术和电子商务等5个高职专业组成，专业群紧紧围绕毕节要打造农产品加工产业集群和绿色生态食品加工基地等产业布局，贯穿毕节生态食品产业种养、加工、检测、销售全产业链，精准对接生态食品产业规范化、绿色化、数字化对高技能人才培养的要求，做到坚持需求导向、产教融合、质量为本、标准引领，全面落实立德树人根本任务，加快推进产教一体化、教学数智化、办学国际化，系统推进金专业、金课、金师、金教材、金基地等“五金”关键办学能力建设，努力成为毕节生态食品产业的关键技术集成引领者、技术标准输出者，培养适应生态食品产业链从原料生产到终端消费全产业链环节和新质生产力岗位急需的“懂工艺、会管理、善协作、能创新”“知农爱农”人才。"
+        },
+        {
+          "type": "text",
+          "content": "茶叶生产与加工技术专业"
+        },
+        {
+          "type": "text",
+          "content": "培养目标：茶叶生产与加工技术专业是省级重点专业群建设专业之一。坚持培养学生理想信念坚定，德、智、体、美、劳全面发展，具有一定的科学文化水平，良好的人文素养、职业道德和创新意识，精益求精的工匠精神，较强的就业能力和可持续发展的能力；掌握本专业知识和技术技能，针对区域经济发展、为巩固拓展脱贫攻坚和乡村振兴有效衔接，培养懂技术、会管理、善经营的具有“三农”情怀的新茶人，面向茶叶生产管理、茶叶加工、茶产品营销、茶叶生产技术服务等岗位（群）的高素质技术技能人才。"
+        },
+        {
+          "type": "text",
+          "content": "核心课程：茶叶加工技术、茶树栽培技术、茶树病虫害防治技术、茶的综合利用、茶叶市场营销、茶叶审评与检验技术、茶艺。"
+        },
+        {
+          "type": "text",
+          "content": "职业面向：本专业毕业生主要面向茶行业、茶企事业单位，主要从事茶叶生产管理、茶叶加工、茶产品营销、茶叶生产技术服务等岗位（群）工作。"
+        },
+        {
+          "type": "text",
+          "content": "专业特色：茶叶生产与加工技术专业致力于培养懂种植、会加工、能品评、善营销的复合型高素质技术技能人才，服务于茶产业全链条，推动传统茶业向现代茶业转型升级。"
+        },
+        {
+          "type": "text",
+          "content": "我校茶叶生产与加工技术专业拥有校内教学茶园、标准化审评室、多种类加工实训车间，每年春茶茶季还与贵州乌蒙利民农业开发有限公司、贵州乌撒烤茶茶业有限公司开展现代学徒制教学。学生实训贯穿种植、采摘、加工、审评、销售全流程，实现“从茶园到茶杯”的全产业链实践教学。"
+        },
+        {
+          "type": "text",
+          "content": "茶叶生产与加工技术专业课程对接评茶员、茶艺师等职业资格证书；组织学生参与省级茶叶加工、茶艺、评茶技能大赛；课程内容直接对应茶园管理、生产品控、技术服务等岗位需求，实现“岗课赛证”综合育人。"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img01.webp",
+          "caption": "学生到贵州乌撒烤茶茶业有限公司开展“学徒制”实践教学"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img02.webp",
+          "caption": "学生到贵州乌撒烤茶茶业有限公司开展“学徒制”实践教学"
+        },
+        {
+          "type": "text",
+          "content": "学生到贵州乌蒙利民农业开发有限公司茶园开展“学徒制”实践教学"
+        },
+        {
+          "type": "text",
+          "content": "办学成效：经多年发展，茶叶生产与加工技术专业取得的办学成果如下。"
+        },
+        {
+          "type": "text",
+          "content": "1.建成茶叶加工实验室1个和茶叶审评室1个；"
+        },
+        {
+          "type": "text",
+          "content": "2.建成茶叶生产与加工技术教师创新团队1个；培养“甲秀之光”访问学者1名；贵州省“黔茶工匠”1名；2022年12月获得《贵州省技能大师工作室》建设。"
+        },
+        {
+          "type": "text",
+          "content": "3.承担重大科研项目：毕节市联合基金项目《毕节市茶叶加工实验平台建设》，在研；与广东农科院茶叶研究所联合申报2022年毕节市“揭榜挂帅”项目《毕节市夏秋茶提质加工与品控技术及示范》，获批立项，经费100万元。"
+        },
+        {
+          "type": "text",
+          "content": "4.技能大赛取得丰硕成果。近三年，师生学生参加市级、省级制茶大赛获得省级“一等奖”5个，“二等奖”5个，“三等奖”6个；市级“一等奖”3个，“二等奖”2个，“三等奖”4个，省市“优秀奖”若干。"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img03.webp",
+          "caption": "贵州省杨留勇茶叶技能大师工作室"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img04.webp",
+          "caption": "贵州省杨留勇茶叶技能大师工作室"
+        },
+        {
+          "type": "text",
+          "content": "杨留勇荣获贵州省制茶大师称号"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img05.webp",
+          "caption": "杨留勇荣获贵州省制茶大师称号"
+        },
+        {
+          "type": "text",
+          "content": "畜牧兽医专业"
+        },
+        {
+          "type": "text",
+          "content": "培养目标：畜牧兽医专业是省级重点专业群建设专业之一。本专业培养能够践行社会主义核心价值观，传承技能技艺，德智体美劳全面发展，具有一定的科学文化水平，良好的人文素养、科学素养、数字素养、职业道德、创新意识，爱岗敬业的职业精神和精益求精的工匠精神，较强的就业创业能力和可持续发展的能力，掌握本专业知识和技术技能，具备职业综合素质和行动能力，面向牲畜饲养、家禽饲养、畜牧专业及辅助性活动行业的畜禽种苗繁育人员、畜禽饲养人员及其他畜牧业生产人员等职业，能够从事畜禽繁育、畜禽饲养管理、畜禽疾病防控、畜牧场废弃物资源化利用、畜牧场设备使用与维护工作的高技能人才。"
+        },
+        {
+          "type": "text",
+          "content": "核心课程：养猪与猪病防治技术、养禽与禽病防治技术、养牛与牛病防治技术、养羊与羊病防治技术、兽医临床诊疗技术、畜牧场设备使用与维护、畜牧场经营与管理。"
+        },
+        {
+          "type": "text",
+          "content": "就业方向：本专业毕业生主要面向养殖企业、饲料加工与销售企业、兽药生产与营销企业、动物卫生监督与疫病监测机构、动物医院、基层畜牧兽医服务机构等；可在县、乡级兽医行政部门、动物防检站、动物屠宰企业、动物疾控中心、动物/宠物医院、规模养殖企业、饲料企业和兽药企业等企事业部门或单位，从事动物疫病防治、动物检疫检验、兽医化验、执业（助理）兽医、兽药饲料营销、动物饲养管理、牧场经营管理等工作或自主创业。"
+        },
+        {
+          "type": "text",
+          "content": "办学特色：畜牧兽医专业为省级特色骨干专业，紧扣毕节山地畜牧业需求。创新“五阶递进、四创融合”等育人模式，推行现代学徒制与订单班，深化“校政企行”产教融合，建有“国家高技能人才培训基地”，培养适配区域产业的高素质技术技能人才。"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img06.webp"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img07.webp"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img08.webp"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img09.webp"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img10.webp"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img11.webp",
+          "caption": "畜牧兽医专业进行解剖实训"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img12.webp",
+          "caption": "畜牧兽医专业进行解剖实训"
+        },
+        {
+          "type": "text",
+          "content": "畜牧兽医专业进行猪的防疫实训"
+        },
+        {
+          "type": "text",
+          "content": "农产品加工与质量检测专业"
+        },
+        {
+          "type": "text",
+          "content": "培养目标：农产品加工与质量检测是省级重点专业群建设专业之一。本专业培养具有良好的职业素质和职业素养，掌握农产品加工与质量检测专业必要的文化基础知识、专业知识和职业技能，具备从事农产品生产加工、产品开发、品质控制、质量检测、产品营销管理等方面的基本理论知识、专业操作技能和综合应用素质，适应农产品加工与质量检测相关行业生产、建设、管理、服务等一线需要的德智体美劳全面发展的高素质复合型技术技能人才"
+        },
+        {
+          "type": "text",
+          "content": "专业开设的课程：本专业开设的核心课程：生态特色农产品加工技术、果蔬加工技术、畜产品加工、特色生态食品加工、仪器分析、农产品安全与质量安全控制、农产品食品检验技术、食品微生物。专业基础课程：食品生物化学；中西式面点制作、饮料生产技术、农产品贮藏技术、农产品食品标准与法规、食品添加剂、无极与分析化学、食品化学等。"
+        },
+        {
+          "type": "text",
+          "content": "专业特色：作为省级“双高计划”专业群核心专业，农产品加工与质量检测专业人才培养按照“五阶递进、五育贯通”的“双五模式，身份“学生一学徒一准员工一员工一创业者”五阶递进，并进行“岗、课、赛、证”四创融合综合育人培养模式。"
+        },
+        {
+          "type": "text",
+          "content": "学生校内实训教学"
+        },
+        {
+          "type": "text",
+          "content": "学生校外实习实训"
+        },
+        {
+          "type": "text",
+          "content": "学生技能比赛教师社会服务"
+        },
+        {
+          "type": "text",
+          "content": "老师社会服务"
+        },
+        {
+          "type": "text",
+          "content": "学生实训作品"
+        },
+        {
+          "type": "text",
+          "content": "专业教师走访企业"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img13.webp",
+          "caption": "专业教师走访企业"
+        },
+        {
+          "type": "text",
+          "content": "邀请企业技术能手到校上课"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img14.webp",
+          "caption": "邀请企业技术能手到校上课"
+        },
+        {
+          "type": "text",
+          "content": "制作黔西黄粑"
+        },
+        {
+          "type": "text",
+          "content": "中草药栽培技术与加工技术专业"
+        },
+        {
+          "type": "text",
+          "content": "培养目标：中草药栽培与加工技术专业是省级重点专业群建设专业之一。该专业坚持培养能够践行社会主义核心价值观，传承技能文明，德智体美劳全面发展，具有一定的科学文化水平，良好的人文素养、科学素养、数字素养、职业道德、创新意识，爱岗敬业的职业精神和精益求精的工匠精神，较强的就业创业能力和可持续发展的能力，掌握本专业知识和技术技能，具备职业综合素质和行动能力，面向农业的中草药良种繁育、中草药栽培管理、中草药采收与产地初加工、中草药质量检测、中草药销售等岗位（群），能够从事中草药良种繁育、中草药栽培管理、中草药采收与产地初加工、中草药质量检测、中草药销售等工作的高技能人才。"
+        },
+        {
+          "type": "text",
+          "content": "核心课程：结合区域内中药材支柱产业发展需要，针对直接培养学生的中草药栽培、加工、检测分析能力，训练学生完成工作任务，获得岗位能力，设置《中草药栽培技术》《中草药病虫害防治技术》《中草药鉴别技术》《中草药繁育技术》《中草药质量检测技术》《中草药采收与产地初加工》《中草药营销》7门专业（技能）核心课程。"
+        },
+        {
+          "type": "text",
+          "content": "就业方向：毕业生主要面向以满足各县（区）中药材生产种植企业、加工企业、购销企业、制药企业以及医院药房等就业和自主创业，从事中草药栽培、生产管理、加工、鉴别检测及营销等工作。适应的岗位群是：①中草药良种繁育岗位群；②中草药栽培管理岗位群；③中草药采收与产地初加工岗位群；④中草药质量检测岗位群；⑤中药材销售岗位群。"
+        },
+        {
+          "type": "text",
+          "content": "专业特色：在贵州省委、省政府重点打造中药产业发展战略下，中药现代化科技产业（毕节）基地建设不断推进。中药材经营主体逐渐壮大，中草药栽培技术专业立足于服务地方中药材产业发展，培养能进行中草药栽培技术、中药炮制加工、中药材鉴别与质量检测及中药销售产业的高素质技术技能人才。"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img15.webp",
+          "caption": "中药专业实训室-中药前处理实训室"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img16.webp",
+          "caption": "中药专业实训室-中药前处理实训室"
+        },
+        {
+          "type": "text",
+          "content": "中药专业实训室-中药炮制实训室"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img17.webp",
+          "caption": "中药专业实训室-中药炮制实训室"
+        },
+        {
+          "type": "text",
+          "content": "中药专业实训室-中药调剂实训室"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img18.webp",
+          "caption": "中药专业实训室-中药调剂实训室"
+        },
+        {
+          "type": "text",
+          "content": "中药调剂实训室"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img19.webp",
+          "caption": "中药调剂实训室"
+        },
+        {
+          "type": "text",
+          "content": "中药炮制实训室"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img20.webp",
+          "caption": "中药炮制实训室"
+        },
+        {
+          "type": "text",
+          "content": "中草药栽培与加工技术专业学生到贵州两山天麻产业（集团）有限公司参观"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img21.webp",
+          "caption": "中草药栽培与加工技术专业学生到贵州两山天麻产业（集团）有限公司参观"
+        },
+        {
+          "type": "text",
+          "content": "中草药栽培与加工技术专业学生到国药集团贵州同济堂中药饮片有限公司的中药智能煎配中心，开展岗位实习试岗活动"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img22.webp",
+          "caption": "中草药栽培与加工技术专业师生作为志愿者参加2024年中国农民丰收节第三届毕节天麻博览会"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img23.webp"
+        },
+        {
+          "type": "text",
+          "content": "中草药栽培与加工技术专业学生创立黔草菁英社2024年、2025年连续两年为军训新生提供中药茶饮服务"
+        },
+        {
+          "type": "text",
+          "content": "园林技术"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img24.webp",
+          "caption": "园林技术"
+        },
+        {
+          "type": "text",
+          "content": "智慧大棚"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img25.webp",
+          "caption": "智慧大棚"
+        },
+        {
+          "type": "text",
+          "content": "教师带领学生识别植物"
+        }
+      ],
+      "backendUpdatedAt": "2026-08-04",
+      "backendPageCode": "modern-agriculture-majors"
+    },
+    {
+      "id": "training",
+      "title": "实训场景",
+      "contentType": "scene",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "依托贵州省职业教育“兴黔富民”“技能贵州”行动计划，夯实实训硬件根基，累计投入3000余万元建成贵州省职业教育山地特色农业数字化人才产教融合实训平台，配套智慧植物工厂、现代农业实训基地、农产品质量检测中心等实训场地，建成6个校内协同创新中心，实训设备总值雄厚，实现数字化、智能化、实景化实训全覆盖，彻底打破传统农业教学“重理论、轻实操”的壁垒。"
+        },
+        {
+          "type": "text",
+          "content": "畜牧兽医专业高技能人才培养基地"
+        },
+        {
+          "type": "text",
+          "content": "畜牧兽医专业高技能人才培养基地是国家级培训基地，聚焦山地特色畜牧业发展需求。基地配备自动微生物鉴定与药敏分析系统、离心机、VR远程牧场实训系统等先进设备，建有动物健康服务中心、宠物护理实训室等8间功能实训室，涵盖疫病检测、畜禽繁育、宠物养护等120余个实训项目。基地以“岗课赛证”融通为核心，承担“认知-跟岗-岗位实习”阶梯式实践教学，支撑《黔西北牛羊生产》等核心课程理实一体化教学。同时开展动物疫病防治员、养猪工等职业技能培训与鉴定，累计培训超800人次，职业技能大赛登记认定通过率95%以上。作为区域畜牧技术服务枢纽，基地组建科技特派员团队，为养殖户提供技术咨询、疫病防控等服务，助力乡村振兴；与正大集团等企业共建学徒制，推动产学研深度融合，为毕节山地特色畜牧业输送高素质技术技能人才。"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img26.webp",
+          "caption": "中药专业实训室-中药前处理实训室"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img27.webp",
+          "caption": "中药专业实训室-中药前处理实训室"
+        },
+        {
+          "type": "text",
+          "content": "中药专业实训室-中药炮制实训室"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img28.webp",
+          "caption": "中药专业实训室-中药炮制实训室"
+        },
+        {
+          "type": "text",
+          "content": "中药专业实训室-中药调剂实训室"
+        }
+      ],
+      "backendUpdatedAt": "2026-08-04",
+      "backendPageCode": "modern-agriculture-training"
+    },
+    {
+      "id": "cooperation",
+      "title": "产教协同",
+      "contentType": "activity",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "农业工程系深耕乌蒙山区职业农业教育，紧扣毕节乡村振兴战略与山地特色农业产业布局，立足“1+3+5+N”毕节现代农业产业，坚守“以农立系、以技兴农、服务地方、赋能振兴”办学定位，深耕职教育人、产教融合、科技助农、社会服务四大核心领域，形成了专业精准对接产业、实训赋能实战、师资深耕乡土、育人贴合需求、服务扎根地方的办学特色，办学质量、育人成效、社会影响力持续提升。"
+        },
+        {
+          "type": "text",
+          "content": "在产教融合方面，构建“校内实训基地+校外产业基地+科普教育基地”三位一体实训体系，校内建成中草药“百草园”实训基地，校外打造2400余亩枇杷产业科普实训基地、织金生态茶叶实训基地等一批产业实景教学点。深化校企、校地协同育人，与地方农业龙头企业、专业合作社深度合作，推行“课堂搬进田间、实训对接产业”的实景教学模式，实现教学过程与生产过程无缝衔接，让学生在真实产业场景中练技能、长本领，切实提升人才培养实操性与岗位适配度。"
+        },
+        {
+          "type": "text",
+          "content": "对接产业"
+        },
+        {
+          "type": "text",
+          "content": "校企合作订单班/产业学院"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img29.webp",
+          "caption": "校企合作订单班/产业学院"
+        },
+        {
+          "type": "text",
+          "content": "中草药栽培与加工技术专业学生到贵州两山天麻产业（集团）有限公司参观"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img30.webp",
+          "caption": "中草药栽培与加工技术专业学生到贵州两山天麻产业（集团）有限公司参观"
+        },
+        {
+          "type": "text",
+          "content": "中草药栽培与加工技术专业学生到国药集团贵州同济堂中药饮片有限公司的中药智能煎配中心，开展岗位实习试岗活动览会"
+        }
+      ],
+      "backendUpdatedAt": "2026-08-04",
+      "backendPageCode": "modern-agriculture-cooperation"
+    },
+    {
+      "id": "masters",
+      "title": "名师名匠",
+      "contentType": "person",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "杨留勇 中共党员 副教授"
+        },
+        {
+          "type": "text",
+          "content": "茶叶生产与加工技术专业带头人，长期从事茶叶生产加工及教学科研研究工作，国家一级评茶技师、一级制茶师，管理期内市管专家，贵州省技能大师工作室、贵州省名师名匠工作室及贵州省劳模和工匠人才创新工作室等领办人，毕节市高山生态茶加工技术创新中心主任"
+        },
+        {
+          "type": "text",
+          "content": "2021年以来，主持教科研项目11项，其中省级4项，市“揭榜挂帅”重大专项1项，市技术创新中心1项；完成团体标准13项（其中3项排名第一，2项排名第二），完成企业标准8项（其中1项排名第一，4项排名第二）；发表研究论文10余篇（其中2篇被中文核心期刊收录）；参编《中国茶全书·贵州毕节分卷》《贵州太极古茶》等茶专著2部；开展技术培训30余期，培训茶叶技能人才2000余人，完成“师带徒”186人，为企业创收约1.5亿元；指导学徒在省市级技能大赛获奖百余项（其中省级金牌（一等奖）8名，铜牌（二等奖）12名等）；培养省级技术能手4名，黔茶工匠3名。2023年荣获贵州省五一劳动奖章，贵州省技术能手和贵州省茶文化传播优秀工作者等荣誉称号。2024年荣获全国第三届“茶人榜样”中华优秀茶教师荣誉称号，2024年入选贵州省第八批高层次创新型“千”层次人才称号。2025年荣获“贵州十佳红茶制茶能手”荣誉称号。"
+        },
+        {
+          "type": "text",
+          "content": "汪青筑 中共党员、副教授"
+        },
+        {
+          "type": "text",
+          "content": "中草药栽培与加工技术专业带头人"
+        },
+        {
+          "type": "text",
+          "content": "2011年7月毕业于贵州大学农学院中草药栽培与鉴定专业，同年8月进入毕节职业技术学院农业工程系担任专业教师；教学中参编的《药用植物栽培技术》（第3版）获评高等职业教育农业部“十二五”规划教材，在《中医教育》《光明中医》等期刊发表论文10篇，2019年以来荣获各级各类奖项15项，围绕中药产品开发指导学生斩获创新创业大赛奖项4项；科研层面主持毕节市科技局《毕节牡丹生长适应性调查及药材质量评价研究》、贵州省教育厅兴黔富民行动计划精品课程《中草药栽培》等7个项目，全部完成验收，同时作为主要完成人参与《三种石斛在毕节市种植适应性研究》《半夏鲜药材去皮技术及质量控制研究》等12项各级各类科研项目；社会服务方面担任贵州省科技特派员与毕节市科普专家，运用专业技术服务地方中药材产业发展、科技提升与区域经济建设。"
+        },
+        {
+          "type": "text",
+          "content": "李兰芝 农业工程系专任教师"
+        },
+        {
+          "type": "text",
+          "content": "2018年在中文核心期刊《动物医学进展》上以第一作者发表文章1篇，2019年以第一作者在SCI（International Journal of Molecular Sciences）期刊发表论文1篇，具有较强的科研能力。2021年至2022年，在贵州省教育厅主办的贵州省职业院校师生技能大赛中分别荣获教师组“一等奖”和“二等奖”，指导学生荣获“三等奖”。2022年在全省大中专学生志愿者暑期文化科技卫生“三下乡”社会实践活动中，所指导的团队荣获省级“优秀团队”称号。同年入选贵州省第十二届“最美劳动者”。作为主要参与人员，参与了贵州省兴黔富民项目——“畜牧兽医”特色骨干专业的建设，是校级教师教学创新团队-畜牧兽医团队成员，作为农产品加工与质量检测专业群核心专业课的教师，参与了农产品加工与质量检测省级高水平专业群建设。"
+        }
+      ],
+      "backendUpdatedAt": "2026-08-04",
+      "backendPageCode": "modern-agriculture-masters"
+    },
+    {
+      "id": "students",
+      "title": "优秀学生",
+      "contentType": "person",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "苏兴梦"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img32.webp",
+          "caption": "苏兴梦"
+        },
+        {
+          "type": "text",
+          "content": "苏兴梦，女，毕节职业技术学院畜牧兽医专业毕业生，中共党员。2021年通过专升本考试进入安顺学院农学专业学习；2022年考取青海大学畜牧专业硕士研究生；2026年硕士毕业之际，已完成博士研究生入学考试，目前正在等待录取结果。"
+        },
+        {
+          "type": "text",
+          "content": "杨荣"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img33.webp",
+          "caption": "杨荣"
+        },
+        {
+          "type": "text",
+          "content": "毕节职业技术学院农业工程系2020届茶叶专业优秀毕业生，现任贵州春山已知茶文化传播有限责任公司法人，国家二级茶艺技师、高级评茶员、高级制茶师。是学校依托职业教育培育成才、深耕贵州茶产业、助力乡村振兴的优秀校友。在校期间依托学校系统化专业教学与校内外实训资源夯实茶学功底，走出校园后深耕茶产业，凭借扎实专业素养从应届毕业生成长为行业骨干、创业先锋，用实干印证职业教育赋能出彩人生。"
+        },
+        {
+          "type": "text",
+          "content": "从踏入校园的那一刻起，杨荣就与茶结下了不解之缘。通过不断的努力与坚持，杨荣在茶艺领域取得了一些成绩，也找到了属于自己的职业方向。"
+        },
+        {
+          "type": "text",
+          "content": "缪慢"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img34.webp",
+          "caption": "缪慢"
+        },
+        {
+          "type": "text",
+          "content": "缪慢，2017级园林工程技术专业学生，从专科起点，历经专升本、考研读研，再成功申博、即将入读博士，以步步深耕、持之以恒的求学之路，书写了职院学子逆袭成长的励志答卷，生动诠释“人生没有白走的路，每一步付出皆有回响”。"
+        }
+      ],
+      "backendUpdatedAt": "2026-08-04",
+      "backendPageCode": "modern-agriculture-students"
+    },
+    {
+      "id": "achievements",
+      "title": "专题成果",
+      "contentType": "achievement",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "教科研成果、课题项目..."
+        },
+        {
+          "type": "text",
+          "content": "序号 / 项目名称 / 数量 / 备注 1 / 毕节特色中药材产业实训基地 / 1 / 2020年贵州省中药材产业实训基地（培育） 2 / 省精品在线开放课程 / 1 / 2020年兴黔富民行动计划《中草药栽培》 3 / 院级精品课程 / 4 / 分别于2022、2024年 4 / 道地中药材检测服务中心 / 1 / 产教融合技术技能创新平台 5 / 参编《药用用植物栽培技术》第三版 / 1 / 2020年高等职业教育农业部“十二五”规划教材高等职业教育“十四五”规划教材 6 / 院级教材 / 2 / 2024年 7 / 校外实训基地 / 6 / 威宁天露、大方九龙、贵州乌蒙腾等 8 / 中药炮制技能大师工作室 / 1 / 董志颖（上海中医药大学）、黎代余等 9 / “中草药栽培与加工技术教师教学创新团队” / 1 / 张士齐等 10 / 学生参与各类比赛获奖 / 20 / 省级 11 / 团队教师主持参与项目 / 20 / 省级、市级 12 / 贵州省科技特派员 / 2 / 2022年 13 / 毕节市科技特派员 / 3 / 2024年 14 / 毕节市科普专家 / 4 / 2022年"
+        }
+      ],
+      "backendUpdatedAt": "2026-08-04",
+      "backendPageCode": "modern-agriculture-achievements"
+    },
+    {
+      "id": "honors",
+      "title": "荣誉资质",
+      "contentType": "honor",
+      "blocks": [
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img35.webp",
+          "caption": "杨留勇荣获贵州省制茶大师称号"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img36.webp",
+          "caption": "杨留勇荣获贵州省制茶大师称号"
+        },
+        {
+          "type": "text",
+          "content": "技能大赛获奖证书"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img37.webp",
+          "caption": "技能大赛获奖证书"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img38.webp",
+          "caption": "技能大赛获奖证书"
+        },
+        {
+          "type": "text",
+          "content": "学生技能大赛获奖证书"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img39.webp",
+          "caption": "学生技能大赛获奖证书"
+        },
+        {
+          "type": "text",
+          "content": "2025年教师获奖"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img40.webp",
+          "caption": "2025年教师获奖"
+        },
+        {
+          "type": "text",
+          "content": "2024年中药专业教师指导学生智慧农业种植大赛获奖"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img41.webp",
+          "caption": "2024年中药专业教师指导学生智慧农业种植大赛获奖"
+        },
+        {
+          "type": "text",
+          "content": "2025年中药专业教师指导学生中药传统技能大赛获奖"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img42.webp",
+          "caption": "2025年中药专业教师指导学生中药传统技能大赛获奖"
+        },
+        {
+          "type": "text",
+          "content": "2025年中药专业教师指导学生中药传统技能大赛获奖"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img43.webp",
+          "caption": "2025年中药专业教师指导学生中药传统技能大赛获奖"
+        },
+        {
+          "type": "text",
+          "content": "2025年中药专业教师指导学生创新创业大赛获奖"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/topics/modern-agriculture/images/img44.webp",
+          "caption": "2025年中药专业教师指导学生创新创业大赛获奖"
+        },
+        {
+          "type": "text",
+          "content": "视频资料（专业特色，可于所在区域屏幕循环播放）"
+        }
+      ],
+      "backendUpdatedAt": "2026-08-04",
+      "backendPageCode": "modern-agriculture-honors"
+    }
+  ]
+}

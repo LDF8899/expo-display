@@ -1,0 +1,16 @@
+[Unit]
+Description=Expo Display Online Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/expo-display
+EnvironmentFile=/etc/expo-display/expo-display.env
+ExecStart=/opt/expo-display/.venv/bin/python /opt/expo-display/server.py
+Restart=always
+RestartSec=5
+User=expo
+Group=expo
+
+[Install]
+WantedBy=multi-user.target

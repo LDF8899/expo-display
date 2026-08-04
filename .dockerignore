@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+
+.git/
+.playwright-cli/
+hatch-pet-runs/
+output/
+scanner-agent/
+sucai/
+uploads/
+
+expo.db
+server.out.log
+server.err.log

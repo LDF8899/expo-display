@@ -1,0 +1,85 @@
+{
+  "id": "campus-culture",
+  "type": "topic",
+  "name": "同心校园文化",
+  "summary": "以同心育人、校园文化、学生成长和服务地方为主线，汇聚学校与各系部共同的精神气质。",
+  "cover": "/uploads/4fcaa6e34b5f40c7a7e2b58947b9de1c.jpg",
+  "stats": [
+    { "label": "覆盖系部", "value": "5 个" },
+    { "label": "展示主线", "value": "同心育人" },
+    { "label": "内容类型", "value": "文化活动" },
+    { "label": "更新方式", "value": "长期沉淀" }
+  ],
+  "sections": [
+    {
+      "id": "overview",
+      "title": "专题概况",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "同心校园文化专题作为创新育人专题之外的文化入口，汇聚学校形象、校园活动、学生成长、志愿服务、优秀校友、名师名匠和各系部文化品牌，形成统一的校园精神展示空间。"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/4fcaa6e34b5f40c7a7e2b58947b9de1c.jpg",
+          "caption": "校园文化与学校形象"
+        }
+      ]
+    },
+    {
+      "id": "majors",
+      "title": "系部融入",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "覆盖系部：工矿建筑系、财政经济系、电子信息工程系、医学护理系、旅游管理系。各系部可在此汇聚党建思政、技能成长、志愿服务、文化活动和学生风采。"
+        },
+        {
+          "type": "text",
+          "content": "该专题不替代系部门户，而是作为学校层面的文化聚合页，让参观者在进入具体专业内容之前，先看到学校共同的价值表达。"
+        }
+      ]
+    },
+    {
+      "id": "cooperation",
+      "title": "文化协同",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "专题可承接校地合作、社会服务、民族团结进步教育、学生社团、志愿服务和大型活动影像，形成更稳定的校园文化资料库。"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/departments/tourism/images/img03.webp",
+          "caption": "学生服务与校园活动场景"
+        }
+      ]
+    },
+    {
+      "id": "achievements",
+      "title": "文化成果",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "成果展示可包括校园文化品牌、学生成长故事、优秀毕业生、竞赛荣誉、社会服务案例和校园活动图文影像。"
+        }
+      ]
+    },
+    {
+      "id": "gallery",
+      "title": "图文资料",
+      "blocks": [
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/departments/medical-nursing/images/img03.webp",
+          "caption": "学生成长与服务活动"
+        },
+        {
+          "type": "image",
+          "src": "/uploads/blueprint/departments/finance/images/img03.webp",
+          "caption": "系部文化与实践活动"
+        }
+      ]
+    }
+  ]
+}
