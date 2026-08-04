@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>数字门户后台</title>
-    <link rel="stylesheet" href="/static/admin.css?v=portal-logic-20260805d" />
+    <link rel="stylesheet" href="/static/admin.css?v=portal-logic-20260805e" />
   </head>
   <body>
     <aside class="sidebar">
@@ -291,7 +291,7 @@
               <span>结构化资料通过后会自动同步到这里；旧资料仍可编辑。</span>
             </div>
           </div>
-          <div class="table-wrap">
+          <div id="legacyPagesTableWrap" class="table-wrap">
             <table class="pages-table">
               <thead><tr><th>编号</th><th>标题</th><th>板块</th><th>状态</th><th>二维码</th><th>操作</th></tr></thead>
               <tbody id="pagesTable"></tbody>
@@ -661,6 +661,6 @@
     </main>
 
     <template id="emptyTpl"><div class="empty">暂无数据</div></template>
-    <script src="/static/admin.js?v=portal-logic-20260805d"></script>
+    <script src="/static/admin.js?v=portal-logic-20260805e"></script>
   </body>
 </html>

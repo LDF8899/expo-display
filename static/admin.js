@@ -3552,6 +3552,23 @@ function renderProjects() {
       </div></td>
     </tr>`).join("") : `<tr><td colspan="5" class="empty">${escapeHtml(emptyText)}</td></tr>`;
 }
+function syncTeacherPagesLayout() {
+  const teacherOnly = isTeacherPortal();
+  [
+    ".content-quality-panel",
+    ".lowcode-report-panel",
+    ".structured-panel",
+    ".legacy-subhead",
+    "#legacyPagesTableWrap",
+  ].forEach((selector) => {
+    const node = document.querySelector(selector);
+    if (node) node.hidden = teacherOnly;
+  });
+  ["newPage", "newLegacyPage", "pageStatusFilter", "exportModuleCoverage", "exportModuleGaps"].forEach((id) => {
+    const node = $(id);
+    if (node) node.hidden = teacherOnly;
+  });
+}
 function selectedDeployProject() {
   const projectId = String($("deployProject").value || "");
   return state.projects.find((project) => String(project.id) === projectId) || null;
@@ -3606,6 +3623,7 @@ async function loadPages(projectId = $("projectSelect").value) {
   renderPages();
 }
 function renderPages() {
+  syncTeacherPagesLayout();
   const filter = $("pageStatusFilter").value;
   const list = filter ? state.pages.filter((p) => p.reviewStatus === filter) : state.pages;
   const editLabel = canReview() ? "编辑" : "编辑资料";
