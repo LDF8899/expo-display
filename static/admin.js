@@ -865,6 +865,7 @@ function renderLowcodeRecords() {
       ${record.reviewNote ? `<p class="warn-text">审核意见：${escapeHtml(record.reviewNote)}</p>` : ""}
       <div class="actions">
         ${status === "draft" ? `<button class="button small primary" type="button" data-lowcode-record-resume="${record.id}">继续填写</button>` : ""}
+        ${status === "rejected" ? `<button class="button small primary" type="button" data-lowcode-record-resume="${record.id}">按意见修改</button>` : ""}
         ${status === "draft" ? `<button class="button small danger" type="button" data-lowcode-record-delete="${record.id}">删除草稿</button>` : ""}
         ${record.contentItemId ? `<button class="button small primary" type="button" data-lowcode-record-edit="${record.contentItemId}">编辑生成资料</button>` : ""}
         ${record.previewUrl && status === "approved" ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(record.previewUrl)}">预览</a>` : ""}
@@ -875,13 +876,16 @@ function renderLowcodeRecords() {
 function fillLowcodeRecordForm(form, record = null) {
   if (!form) return;
   state.activeLowcodeFormId = form.id;
-  state.activeLowcodeDraftId = record && record.status === "draft" ? record.id : "";
+  const recordStatus = record ? lowcodeRecordStatus(record) : "";
+  state.activeLowcodeDraftId = record && ["draft", "rejected"].includes(recordStatus) ? record.id : "";
   const submitted = record && record.data && record.data.fields ? record.data.fields : {};
   setLowcodeAssetDrafts(Array.isArray(submitted.assets) ? submitted.assets : []);
   const schema = form.schema || {};
   const fields = (schema.fields || []).filter((field) => field.type !== "asset_list" && field.type !== "image_upload" && field.type !== "video_upload");
   $("lowcodeRecordTitle").textContent = form.name || "资料采集模板";
-  $("lowcodeRecordHint").textContent = state.activeLowcodeDraftId ? "正在继续编辑草稿，提交后会进入审核或发布流程。" : form.description || "按模板填写后自动生成结构化资料。";
+  $("lowcodeRecordHint").textContent = recordStatus === "rejected"
+    ? `审核驳回：${record.reviewNote || "请按管理员意见修改后重新提交。"}`
+    : state.activeLowcodeDraftId ? "正在继续编辑草稿，提交后会进入审核或发布流程。" : form.description || "按模板填写后自动生成结构化资料。";
   $("lowcodeDynamicFields").innerHTML = groupedLowcodeFields(fields).map((group) => `<section class="lowcode-field-group">
     <h3>${escapeHtml(group.name)}</h3>
     <div class="lowcode-field-group-grid">${group.fields.map((field) => lowcodeFieldInput(field, submitted)).join("")}</div>

@@ -3984,19 +3984,23 @@ def ensure_lowcode_form_for_project(project_id, form_id):
     return project, form, version_id
 
 
-def assert_lowcode_draft_owner(conn, record_id, project_id, form_id, actor):
+def assert_lowcode_record_editable(conn, record_id, project_id, form_id, actor, allowed_statuses=("draft",)):
     row = conn.execute(
         """
         SELECT * FROM lowcode_records
-        WHERE id = ? AND project_id = ? AND form_id = ? AND status = 'draft'
+        WHERE id = ? AND project_id = ? AND form_id = ?
         """,
         (record_id, project_id, form_id),
     ).fetchone()
-    if not row:
-        raise ValueError("草稿不存在或已提交")
+    if not row or row["status"] not in allowed_statuses:
+        raise ValueError("记录不存在或当前状态不可继续修改")
     if actor.get("role") != "admin" and row["submitted_by"] != actor.get("username", ""):
-        raise ValueError("只能继续提交自己的草稿")
+        raise ValueError("只能继续修改自己的模板记录")
     return row
+
+
+def assert_lowcode_draft_owner(conn, record_id, project_id, form_id, actor):
+    return assert_lowcode_record_editable(conn, record_id, project_id, form_id, actor, ("draft",))
 
 
 def replace_lowcode_record_assets(conn, record_id, assets, now):
@@ -4040,21 +4044,26 @@ def save_lowcode_record_draft(project_id, form_id, data, actor):
     draft_record_id = int_value(data.get("draftRecordId"))
     with db_connect() as conn:
         if draft_record_id:
-            assert_lowcode_draft_owner(conn, draft_record_id, project_id, form_id, actor)
+            existing_record = assert_lowcode_record_editable(conn, draft_record_id, project_id, form_id, actor, ("draft", "rejected"))
+            keep_review = existing_record["status"] == "rejected"
             conn.execute(
                 """
                 UPDATE lowcode_records SET
-                    form_version_id = ?, content_item_id = NULL, status = 'draft',
+                    form_version_id = ?, content_item_id = ?, status = 'draft',
                     data_json = ?, submitted_by = ?, submitted_at = ?,
-                    reviewed_by = '', reviewed_at = '', review_note = '',
+                    reviewed_by = ?, reviewed_at = ?, review_note = ?,
                     updated_at = ?
                 WHERE id = ?
                 """,
                 (
                     version_id,
+                    existing_record["content_item_id"],
                     json_text({"fields": submitted, "contentItemPayload": payload}, {}),
                     actor.get("username", ADMIN_USERNAME),
                     now,
+                    existing_record["reviewed_by"] if keep_review else "",
+                    existing_record["reviewed_at"] if keep_review else "",
+                    existing_record["review_note"] if keep_review else "",
                     now,
                     draft_record_id,
                 ),
@@ -4121,18 +4130,20 @@ def submit_lowcode_record(project_id, form_id, data, actor):
     data = data if isinstance(data, dict) else {}
     submitted = lowcode_submitted_data(data)
     draft_record_id = int_value(data.get("draftRecordId"))
+    content_item_id = None
     if draft_record_id:
         with db_connect() as conn:
-            assert_lowcode_draft_owner(conn, draft_record_id, project_id, form_id, actor)
+            existing_record = assert_lowcode_record_editable(conn, draft_record_id, project_id, form_id, actor, ("draft", "rejected"))
+            content_item_id = existing_record["content_item_id"]
     payload = lowcode_record_payload(form, submitted)
     validate_content_asset_access(payload.get("coverAssetId"), payload.get("assets", []), actor)
     approve_now = actor.get("role") == "admin"
-    item = save_content_item(project_id, None, payload, actor, approve_now=approve_now)
+    item = save_content_item(project_id, content_item_id, payload, actor, approve_now=approve_now)
     now = now_iso()
     status = "approved" if approve_now else "pending"
     with db_connect() as conn:
         if draft_record_id:
-            assert_lowcode_draft_owner(conn, draft_record_id, project_id, form_id, actor)
+            assert_lowcode_record_editable(conn, draft_record_id, project_id, form_id, actor, ("draft", "rejected"))
             conn.execute(
                 """
                 UPDATE lowcode_records SET
