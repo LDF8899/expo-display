@@ -103,11 +103,17 @@ def main():
             if "expo-acceptance-report.json" not in disposition:
                 raise RuntimeError(f"missing attachment filename: {disposition}")
             report = report_data["report"]
-            for key in ("generatedAt", "generatedBy", "summary", "ready", "config", "deployed", "deployCheck", "pending", "assets"):
+            for key in ("generatedAt", "generatedBy", "summary", "ready", "config", "deployed", "deployCheck", "pending", "assets", "portalReports"):
                 if key not in report:
                     raise RuntimeError(f"report missing {key}: {report}")
             if not report["ready"]["ok"] or not report["deployCheck"]["ok"]:
                 raise RuntimeError(f"report health should be ok in temp app: {report}")
+            portal_reports = report["portalReports"]
+            for key in ("contentQuality", "assetArchive", "lowcode", "reminders"):
+                if key not in portal_reports:
+                    raise RuntimeError(f"portal report missing {key}: {portal_reports}")
+            if "stats" not in portal_reports["lowcode"] or "byKind" not in portal_reports["assetArchive"]:
+                raise RuntimeError(f"portal report summary malformed: {portal_reports}")
             raw = json.dumps(report_data, ensure_ascii=False)
             if admin_password in raw or "CSRF_SECRET" in raw:
                 raise RuntimeError("acceptance report leaked a secret")

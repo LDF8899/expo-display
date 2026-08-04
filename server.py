@@ -3448,6 +3448,60 @@ def online_config_audit():
     }
 
 
+def acceptance_portal_reports(project_id, user):
+    if not project_id:
+        return {
+            "projectId": 0,
+            "projectName": "",
+            "contentQuality": {"checked": 0, "issueItemCount": 0, "highCount": 0, "mediumCount": 0},
+            "assetArchive": {"total": 0, "byKind": {"IMAGE": 0, "VIDEO": 0, "FILE": 0}},
+            "lowcode": {"stats": lowcode_record_stats([]), "pendingReminderCount": 0},
+            "reminders": [],
+        }
+    quality = content_quality_report(project_id) or {}
+    archive = asset_archive_report(project_id, user) or {}
+    lowcode = lowcode_progress_report(project_id, user) or {}
+    reminders = [
+        row for row in (lowcode.get("groups", {}).get("reminders") or [])
+        if not row.get("publishReady")
+    ]
+    return {
+        "projectId": project_id,
+        "projectName": quality.get("projectName") or archive.get("projectName") or lowcode.get("projectName") or "",
+        "portalType": quality.get("portalType") or archive.get("portalType") or lowcode.get("portalType") or "",
+        "portalTypeLabel": quality.get("portalTypeLabel") or archive.get("portalTypeLabel") or lowcode.get("portalTypeLabel") or "",
+        "contentQuality": {
+            "checked": int_value(quality.get("checked")),
+            "issueItemCount": int_value(quality.get("issueItemCount")),
+            "highCount": int_value(quality.get("highCount")),
+            "mediumCount": int_value(quality.get("mediumCount")),
+            "moduleRuleCount": int_value(quality.get("moduleRuleCount")),
+        },
+        "assetArchive": {
+            "total": int_value(archive.get("total")),
+            "byKind": archive.get("byKind") or {"IMAGE": 0, "VIDEO": 0, "FILE": 0},
+        },
+        "lowcode": {
+            "stats": lowcode.get("stats") or lowcode_record_stats([]),
+            "templateCount": len(lowcode.get("groups", {}).get("templates") or []),
+            "departmentCount": len(lowcode.get("groups", {}).get("departments") or []),
+            "submitterCount": len(lowcode.get("groups", {}).get("submitters") or []),
+            "pendingReminderCount": len(reminders),
+        },
+        "reminders": [
+            {
+                "key": row.get("key", ""),
+                "label": row.get("label", ""),
+                "status": row.get("status", ""),
+                "owner": row.get("owner", ""),
+                "action": row.get("action", ""),
+                "kind": row.get("kind", ""),
+            }
+            for row in reminders[:8]
+        ],
+    }
+
+
 def acceptance_report(user):
     dashboard = admin_dashboard(user)
     operations = dashboard.get("operations", {})
@@ -3462,8 +3516,9 @@ def acceptance_report(user):
         "eligiblePageIds": [],
     }
     reviews = list_reviews("pending", user)
+    portal_reports = acceptance_portal_reports(content_project_id, user)
     return {
-        "ok": bool(operations.get("ready", {}).get("ok")) and bool(operations.get("config", {}).get("ok")) and bool(content_check.get("ok")),
+        "ok": bool(operations.get("ready", {}).get("ok")) and bool(operations.get("config", {}).get("ok")) and bool(content_check.get("ok")) and portal_reports.get("contentQuality", {}).get("highCount", 0) == 0,
         "generatedAt": now_iso(),
         "generatedBy": user.get("username", ""),
         "summary": dashboard.get("summary", {}),
@@ -3477,6 +3532,7 @@ def acceptance_report(user):
             "contentItems": len(reviews.get("contentItems", [])),
         },
         "assets": operations.get("assets", {}),
+        "portalReports": portal_reports,
         "recentErrors": operations.get("recentErrors", []),
     }
 

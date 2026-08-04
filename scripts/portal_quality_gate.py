@@ -40,6 +40,7 @@ CHECKS = [
             "scripts/content_quality_report_test.py",
             "scripts/asset_archive_report_test.py",
             "scripts/lowcode_progress_report_test.py",
+            "scripts/acceptance_report_test.py",
             "scripts/package_integrity_test.py",
         ],
     ),
@@ -51,6 +52,7 @@ CHECKS = [
     ("content_quality_report", [sys.executable, "scripts/content_quality_report_test.py"]),
     ("asset_archive_report", [sys.executable, "scripts/asset_archive_report_test.py"]),
     ("lowcode_progress_report", [sys.executable, "scripts/lowcode_progress_report_test.py"]),
+    ("acceptance_report", [sys.executable, "scripts/acceptance_report_test.py"]),
     ("portal_logic_smoke", [sys.executable, "scripts/portal_logic_smoke_test.py"]),
     ("package_integrity", [sys.executable, "scripts/package_integrity_test.py"]),
 ]
