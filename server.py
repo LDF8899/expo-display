@@ -3495,6 +3495,41 @@ def list_lowcode_form_versions(form_id):
     return [row_to_lowcode_form_version(row) for row in rows]
 
 
+def restore_lowcode_form_version(form_id, version_id, actor):
+    with db_connect() as conn:
+        form_row = conn.execute("SELECT * FROM lowcode_forms WHERE id = ?", (form_id,)).fetchone()
+        if not form_row:
+            raise ValueError("资料采集模板不存在")
+        version_row = conn.execute(
+            "SELECT * FROM lowcode_form_versions WHERE id = ? AND form_id = ?",
+            (version_id, form_id),
+        ).fetchone()
+        if not version_row:
+            raise ValueError("模板版本不存在")
+        form_base = {
+            "name": form_row["name"],
+            "description": form_row["description"],
+            "targetPortalType": normalize_portal_type(form_row["target_portal_type"]),
+            "targetContentType": normalize_content_type(form_row["target_content_type"]),
+            "targetModuleKey": form_row["target_module_key"],
+        }
+        schema = normalize_lowcode_schema(json_value(version_row["schema_json"], {}), form_base)
+        now = now_iso()
+        conn.execute("UPDATE lowcode_form_versions SET status = 'archived' WHERE form_id = ? AND status = 'active'", (form_id,))
+        version_no = latest_lowcode_version_no(conn, form_id) + 1
+        conn.execute(
+            """
+            INSERT INTO lowcode_form_versions (
+                form_id, version_no, schema_json, status, created_by, created_at
+            )
+            VALUES (?, ?, ?, 'active', ?, ?)
+            """,
+            (form_id, version_no, json_text(schema, {}), actor.get("username", ADMIN_USERNAME), now),
+        )
+        conn.execute("UPDATE lowcode_forms SET updated_at = ? WHERE id = ?", (now, form_id))
+    return get_lowcode_form(form_id)
+
+
 def unique_lowcode_form_code(conn, base_code):
     base = re.sub(r"[^A-Za-z0-9_-]+", "-", str(base_code or "LC-COPY").strip()).strip("-").upper()[:100] or "LC-COPY"
     code = base
@@ -7716,6 +7751,23 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     self.send_json(400, {"ok": False, "error": str(exc)})
                     return
                 self.log_admin("copy_lowcode_form", "lowcode_form", form["id"], form["name"], f"copy from {form_id}")
+                self.send_json(200, {"ok": True, "form": form})
+                return
+
+        if path.startswith("/api/lowcode/forms/") and path.endswith("/restore"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 7 and parts[0] == "api" and parts[1] == "lowcode" and parts[2] == "forms" and parts[4] == "versions" and parts[6] == "restore":
+                form_id = int(parts[3]) if parts[3].isdigit() else 0
+                version_id = int(parts[5]) if parts[5].isdigit() else 0
+                try:
+                    form = restore_lowcode_form_version(form_id, version_id, actor)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self.log_admin("restore_lowcode_form_version", "lowcode_form", form["id"], form["name"], f"restore version {version_id}")
                 self.send_json(200, {"ok": True, "form": form})
                 return
 

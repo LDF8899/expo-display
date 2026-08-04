@@ -746,6 +746,7 @@ function renderLowcodeVersions(form, versions) {
       <div class="lowcode-version-fields">
         ${fields.slice(0, 12).map((field) => `<span>${escapeHtml(field.label || field.key)}${field.required ? " *" : ""}</span>`).join("")}
       </div>
+      ${version.status === "active" ? "" : `<div class="actions"><button class="button small" type="button" data-lowcode-version-restore="${version.id}" data-lowcode-version-form="${version.formId}">恢复为当前版本</button></div>`}
     </article>`;
   }).join("") : `<div class="empty">暂无版本记录</div>`;
 }
@@ -2470,6 +2471,17 @@ $("newLowcodeTemplate").addEventListener("click", () => fillLowcodeTemplateForm(
 $("closeLowcodeRecordForm").addEventListener("click", () => { $("lowcodeRecordForm").hidden = true; });
 $("closeLowcodeTemplateForm").addEventListener("click", () => { $("lowcodeTemplateForm").hidden = true; });
 $("closeLowcodeVersionPanel").addEventListener("click", () => { $("lowcodeVersionPanel").hidden = true; });
+$("lowcodeVersionList").addEventListener("click", async (event) => {
+  const restore = event.target.closest("[data-lowcode-version-restore]");
+  if (!restore) return;
+  if (!confirm("确定把这个历史版本恢复为当前模板？")) return;
+  try {
+    await jsonApi(`/api/lowcode/forms/${restore.dataset.lowcodeVersionForm}/versions/${restore.dataset.lowcodeVersionRestore}/restore`, body({}));
+    setStatus($("lowcodeTemplateStatus"), "模板已从历史版本恢复", "success");
+    await loadPages();
+    await showLowcodeVersions(restore.dataset.lowcodeVersionForm);
+  } catch (err) { alert(err.message); }
+});
 $("lowcodeTemplatePortalType").addEventListener("change", () => {
   const portalType = normalizePortalType($("lowcodeTemplatePortalType").value);
   renderLowcodeTemplateModuleOptions(portalType);
