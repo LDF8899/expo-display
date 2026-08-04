@@ -112,7 +112,11 @@ def main():
             for key in ("contentQuality", "assetArchive", "lowcode", "reminders"):
                 if key not in portal_reports:
                     raise RuntimeError(f"portal report missing {key}: {portal_reports}")
-            if "stats" not in portal_reports["lowcode"] or "byKind" not in portal_reports["assetArchive"]:
+            if (
+                "stats" not in portal_reports["lowcode"]
+                or "templateQuality" not in portal_reports["lowcode"]
+                or "byKind" not in portal_reports["assetArchive"]
+            ):
                 raise RuntimeError(f"portal report summary malformed: {portal_reports}")
             raw = json.dumps(report_data, ensure_ascii=False)
             if admin_password in raw or "CSRF_SECRET" in raw:

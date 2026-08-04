@@ -943,7 +943,7 @@ function renderLowcodeForms() {
     const contentType = form.targetContentType || schema.contentType || "article";
     const fieldCount = (schema.fields || []).filter((field) => field.type !== "asset_list").length;
     const enabled = form.enabled !== false;
-    const quality = lowcodeTemplateQualitySummary(schema.fields || [], contentType, form.targetModuleKey || schema.moduleKey, form.targetPortalType || schema.portalType);
+    const quality = form.quality || lowcodeTemplateQualitySummary(schema.fields || [], contentType, form.targetModuleKey || schema.moduleKey, form.targetPortalType || schema.portalType);
     return `<article class="lowcode-form-card">
       <header>
         <div>

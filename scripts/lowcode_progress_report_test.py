@@ -84,6 +84,8 @@ def create_project(base_url, admin, owner, name):
 def submit_lowcode_record(base_url, teacher, project_id):
     forms, _ = json_request(f"{base_url}/api/projects/{project_id}/lowcode/forms", headers={"Cookie": teacher["cookie"]})
     form = forms["forms"][0]
+    if not form.get("quality") or "checks" not in form["quality"]:
+        raise RuntimeError(f"lowcode form quality missing: {form}")
     result, _ = json_request(
         f"{base_url}/api/projects/{project_id}/lowcode/forms/{form['id']}/records",
         method="POST",
@@ -139,6 +141,8 @@ def main():
             report = report_data["report"]
             if report["stats"]["total"] != 1 or report["stats"]["pending"] != 1:
                 raise RuntimeError(f"unexpected lowcode totals: {report}")
+            if report.get("templateQuality", {}).get("total", 0) < 1:
+                raise RuntimeError(f"template quality summary missing: {report}")
             template_rows = report["groups"]["templates"]
             template_row = next((row for row in template_rows if str(row["key"]) == str(form["id"])), None)
             if not template_row or template_row["stats"]["pending"] != 1:

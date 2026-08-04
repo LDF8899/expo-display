@@ -3483,6 +3483,7 @@ def acceptance_portal_reports(project_id, user):
         },
         "lowcode": {
             "stats": lowcode.get("stats") or lowcode_record_stats([]),
+            "templateQuality": lowcode.get("templateQuality") or {"total": 0, "danger": 0, "warn": 0, "ok": 0},
             "templateCount": len(lowcode.get("groups", {}).get("templates") or []),
             "departmentCount": len(lowcode.get("groups", {}).get("departments") or []),
             "submitterCount": len(lowcode.get("groups", {}).get("submitters") or []),
@@ -3936,18 +3937,200 @@ def list_content_items(project_id, filters=None):
     return [row_to_content_item(row, asset_map.get(row["id"], [])) for row in rows]
 
 
+LOWCODE_TEMPLATE_QUALITY_PROFILES = {
+    "article": {
+        "bodyLabel": "正文内容",
+        "assetLabel": "图片素材",
+        "assetMappings": ["content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "普通图文建议至少准备封面或图集，前台会按原比例轮播展示。",
+    },
+    "person": {
+        "bodyLabel": "人物事迹",
+        "assetLabel": "人物照片",
+        "assetMappings": ["content_item.assets.portrait", "content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "人物类建议上传人物照；也可以在素材区把图片角色设为人物照。",
+    },
+    "activity": {
+        "bodyLabel": "活动过程",
+        "assetLabel": "活动图片",
+        "assetMappings": ["content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "活动类适合多图轮播，素材区可继续补现场照片。",
+    },
+    "honor": {
+        "bodyLabel": "荣誉说明",
+        "assetLabel": "证书/奖状图片",
+        "assetMappings": ["content_item.assets.certificate", "content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "荣誉类建议上传证书或奖状图片；素材区可把图片角色设为证书/荣誉。",
+    },
+    "achievement": {
+        "bodyLabel": "成果价值",
+        "assetLabel": "成果图片",
+        "assetMappings": ["content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "成果类建议用封面或图集承载案例、项目、获奖现场等图片。",
+    },
+    "scene": {
+        "bodyLabel": "教学应用",
+        "assetLabel": "场景图片",
+        "assetMappings": ["content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "场景类建议上传实训室、设备或课堂场景图片。",
+    },
+    "video": {
+        "bodyLabel": "视频简介",
+        "assetLabel": "视频资源",
+        "assetMappings": ["content_item.assets.video"],
+        "assetHint": "视频类建议设置视频地址字段，或在素材区上传视频文件。",
+    },
+    "attachment": {
+        "bodyLabel": "附件说明",
+        "assetLabel": "附件资源",
+        "assetMappings": ["content_item.assets.attachment"],
+        "assetHint": "附件类建议设置附件地址字段，或在素材区上传 PDF、Word、Excel、PPT 等附件。",
+    },
+}
+
+
+def lowcode_template_quality_profile(content_type):
+    return LOWCODE_TEMPLATE_QUALITY_PROFILES.get(normalize_content_type(content_type), LOWCODE_TEMPLATE_QUALITY_PROFILES["article"])
+
+
+def lowcode_template_quality_status(kind, title, detail, fix=""):
+    return {"kind": kind, "title": title, "detail": detail, "fix": fix}
+
+
+def lowcode_template_fields_for_quality(fields):
+    result = []
+    for index, field in enumerate(fields or []):
+        if not isinstance(field, dict):
+            continue
+        key = str(field.get("key") or "").strip()
+        label = str(field.get("label") or key).strip()
+        if not key or not label:
+            continue
+        field_type = str(field.get("type") or "text").strip() or "text"
+        result.append(
+            {
+                "key": key,
+                "label": label,
+                "type": field_type,
+                "required": bool_value(field.get("required")),
+                "mapping": str(field.get("mapping") or "").strip(),
+                "sortOrder": int_value(field.get("sortOrder"), index),
+            }
+        )
+    return result
+
+
+def lowcode_quality_mapped_fields(fields, mapping):
+    return [field for field in fields if field.get("mapping") == mapping]
+
+
+def lowcode_quality_has_any_mapping(fields, mappings):
+    return any(field.get("mapping") in set(mappings or []) for field in fields or [])
+
+
+def lowcode_required_mapping_status(fields, mapping, title, missing_fix):
+    mapped = lowcode_quality_mapped_fields(fields, mapping)
+    if not mapped:
+        return lowcode_template_quality_status("danger", title, "缺少展示映射。", missing_fix)
+    labels = "、".join(field["label"] for field in mapped)
+    if not any(field.get("required") for field in mapped):
+        return lowcode_template_quality_status("warn", title, f"已绑定到 {labels}，但不是必填。", "建议设为必填，避免老师提交后前台卡片信息不完整。")
+    return lowcode_template_quality_status("ok", title, f"已绑定到 {labels}，且设为必填。")
+
+
+def lowcode_template_quality_checks(fields, content_type, module_key, portal_type):
+    normalized_fields = lowcode_template_fields_for_quality(fields)
+    profile = lowcode_template_quality_profile(content_type)
+    checks = [
+        lowcode_required_mapping_status(normalized_fields, "content_item.title", "前台标题", "添加标题字段并绑定到 content_item.title。"),
+        lowcode_required_mapping_status(normalized_fields, "content_item.summary", "卡片摘要", "添加摘要字段并绑定到 content_item.summary。"),
+    ]
+    body_fields = lowcode_quality_mapped_fields(normalized_fields, "content_item.body_text")
+    if not body_fields:
+        checks.append(lowcode_template_quality_status("danger", profile["bodyLabel"], "缺少详情正文映射。", "添加正文/说明字段并绑定到 content_item.body_text。"))
+    elif not any(field.get("type") in {"textarea", "richtext"} for field in body_fields):
+        labels = "、".join(field["label"] for field in body_fields)
+        checks.append(lowcode_template_quality_status("warn", profile["bodyLabel"], f"已绑定到 {labels}，但字段类型偏短。", "建议使用多行文本或富文本，方便填写完整介绍。"))
+    else:
+        labels = "、".join(field["label"] for field in body_fields)
+        checks.append(lowcode_template_quality_status("ok", profile["bodyLabel"], f"已绑定到 {labels}。"))
+
+    if lowcode_quality_has_any_mapping(normalized_fields, profile["assetMappings"]):
+        asset_fields = [field for field in normalized_fields if field.get("mapping") in profile["assetMappings"]]
+        checks.append(lowcode_template_quality_status("ok", profile["assetLabel"], f"已设置 {'、'.join(field['label'] for field in asset_fields)}。"))
+    elif normalize_content_type(content_type) in {"video", "attachment"}:
+        checks.append(lowcode_template_quality_status("warn", profile["assetLabel"], "未设置专门的视频/附件地址字段，但老师仍可在素材区上传。", profile["assetHint"]))
+    else:
+        checks.append(lowcode_template_quality_status("ok", profile["assetLabel"], "老师填写时会看到统一素材区，可上传图片、视频或附件。", profile["assetHint"]))
+
+    display_mappings = [
+        "content_item.title",
+        "content_item.subtitle",
+        "content_item.summary",
+        "content_item.body_text",
+        "content_item.sort_order",
+        "content_item.featured",
+    ]
+    duplicated = []
+    for mapping in display_mappings:
+        mapped = lowcode_quality_mapped_fields(normalized_fields, mapping)
+        if len(mapped) > 1:
+            duplicated.append({"mapping": mapping, "fields": mapped})
+    if duplicated:
+        detail = "；".join(f"{item['mapping']}：{'、'.join(field['label'] for field in item['fields'])}" for item in duplicated)
+        checks.append(lowcode_template_quality_status("warn", "重复展示映射", detail, "同一个展示槽位建议只绑定一个主字段，其他信息可绑定到扩展字段。"))
+    else:
+        checks.append(lowcode_template_quality_status("ok", "展示映射", "核心展示槽位没有重复绑定。"))
+
+    unmapped = [field for field in normalized_fields if not field.get("mapping")]
+    if unmapped:
+        labels = "、".join(field["label"] for field in unmapped[:4])
+        checks.append(lowcode_template_quality_status("warn", "未归档字段", f"{len(unmapped)} 个字段没有映射：{labels}{'等' if len(unmapped) > 4 else ''}。", "需要前台展示或导出追溯的字段，建议绑定到扩展字段。"))
+    else:
+        checks.append(lowcode_template_quality_status("ok", "字段归档", "所有字段都有展示或扩展字段映射。"))
+
+    module = module_meta_for_key(module_key, portal_type)
+    if module:
+        checks.append(lowcode_template_quality_status("ok", "板块归属", f"{module['label']} · {content_type_label(content_type)}，审核通过后会同步到对应门户板块。"))
+    else:
+        checks.append(lowcode_template_quality_status("warn", "板块归属", "当前模板没有匹配到标准板块。", "建议选择固定专题板块或系部门户板块，方便完整度统计。"))
+    return checks
+
+
+def lowcode_template_quality_summary(fields, content_type, module_key, portal_type):
+    checks = lowcode_template_quality_checks(fields, content_type, module_key, portal_type)
+    danger = sum(1 for item in checks if item["kind"] == "danger")
+    warn = sum(1 for item in checks if item["kind"] == "warn")
+    return {
+        "checks": checks,
+        "danger": danger,
+        "warn": warn,
+        "ok": len(checks) - danger - warn,
+        "label": f"需处理 {danger}" if danger else f"建议 {warn}" if warn else "完整",
+        "kind": "danger" if danger else "warn" if warn else "ok",
+    }
+
+
 def row_to_lowcode_form(row, version_row=None):
     if not row:
         return None
     schema = json_value(version_row["schema_json"], {}) if version_row else {}
+    portal_type = normalize_portal_type(row["target_portal_type"])
+    content_type = normalize_content_type(row["target_content_type"])
+    quality = lowcode_template_quality_summary(
+        schema.get("fields") if isinstance(schema, dict) else [],
+        content_type,
+        row["target_module_key"],
+        portal_type,
+    )
     return {
         "id": row["id"],
         "name": row["name"],
         "code": row["code"],
         "description": row["description"],
         "targetType": row["target_type"],
-        "targetPortalType": normalize_portal_type(row["target_portal_type"]),
-        "targetContentType": normalize_content_type(row["target_content_type"]),
+        "targetPortalType": portal_type,
+        "targetContentType": content_type,
         "targetModuleKey": row["target_module_key"],
         "enabled": bool(row["enabled"]),
         "createdBy": row["created_by"],
@@ -3961,6 +4144,7 @@ def row_to_lowcode_form(row, version_row=None):
             "createdAt": version_row["created_at"],
         } if version_row else None,
         "schema": schema,
+        "quality": quality,
     }
 
 
@@ -4805,6 +4989,12 @@ def lowcode_progress_report(project_id, actor=None):
     department_rows = lowcode_department_report_rows(records)
     submitter_rows = lowcode_submitter_report_rows(records)
     reminder_rows = lowcode_reminder_rows(project, coverage, forms, records, actor or {})
+    template_quality = {
+        "total": len(forms),
+        "danger": sum(1 for form in forms if (form.get("quality") or {}).get("kind") == "danger"),
+        "warn": sum(1 for form in forms if (form.get("quality") or {}).get("kind") == "warn"),
+        "ok": sum(1 for form in forms if (form.get("quality") or {}).get("kind") == "ok"),
+    }
     return {
         "projectId": project_id,
         "projectName": project.get("name", ""),
@@ -4812,6 +5002,7 @@ def lowcode_progress_report(project_id, actor=None):
         "portalTypeLabel": portal_type_label(project.get("portalType")),
         "generatedAt": now_iso(),
         "stats": stats,
+        "templateQuality": template_quality,
         "groups": {
             "templates": template_rows,
             "departments": department_rows,
