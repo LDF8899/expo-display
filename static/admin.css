@@ -810,6 +810,15 @@ tr:last-child td { border-bottom: 0; }
 .lowcode-field span {
   overflow-wrap: anywhere;
 }
+.lowcode-length {
+  justify-self: end;
+  color: #7890a8;
+  font-size: 12px;
+  font-weight: 700;
+}
+.lowcode-length.warn {
+  color: #a16207;
+}
 .lowcode-check {
   align-content: end;
   grid-template-columns: auto 1fr;

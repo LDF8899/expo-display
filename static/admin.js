@@ -615,11 +615,12 @@ function lowcodeFieldInput(field, submitted = {}) {
   const defaultValue = escapeHtml(rawValue == null ? "" : rawValue);
   const required = field.required ? " required" : "";
   const maxLength = Number(field.maxLength || 0) > 0 ? ` maxlength="${Number(field.maxLength)}"` : "";
+  const lengthHint = Number(field.maxLength || 0) > 0 ? `<small class="lowcode-length" data-lowcode-counter-for="${key}" data-lowcode-counter-max="${Number(field.maxLength)}">0/${Number(field.maxLength)}</small>` : "";
   const pattern = field.pattern ? ` pattern="${escapeHtml(field.pattern)}"` : "";
   const patternTitle = field.patternMessage ? ` title="${escapeHtml(field.patternMessage)}"` : "";
   const options = Array.isArray(field.options) ? field.options : [];
   if (field.type === "textarea" || field.type === "richtext") {
-    return `<label class="lowcode-field wide"><span>${label}${field.required ? " *" : ""}</span><textarea data-lowcode-field="${key}" rows="4" placeholder="${placeholder}"${required}${maxLength}>${defaultValue}</textarea></label>`;
+    return `<label class="lowcode-field wide"><span>${label}${field.required ? " *" : ""}</span><textarea data-lowcode-field="${key}" rows="4" placeholder="${placeholder}"${required}${maxLength}>${defaultValue}</textarea>${lengthHint}</label>`;
   }
   if (field.type === "checkbox" || field.type === "switch") {
     return `<label class="lowcode-field lowcode-check"><input data-lowcode-field="${key}" type="checkbox" ${rawValue === true || rawValue === "true" || rawValue === "1" ? "checked" : ""} /> <span>${label}</span></label>`;
@@ -639,7 +640,25 @@ function lowcodeFieldInput(field, submitted = {}) {
   }
   const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
   const textAttrs = type === "text" ? `${maxLength}${pattern}${patternTitle}` : "";
-  return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required}${textAttrs} /></label>`;
+  return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required}${textAttrs} />${type === "text" ? lengthHint : ""}</label>`;
+}
+function updateLowcodeCounters() {
+  const values = {};
+  document.querySelectorAll("[data-lowcode-field]").forEach((field) => {
+    if (field.type === "radio" || (field.type === "checkbox" && field.closest(".lowcode-choice-field"))) return;
+    values[field.dataset.lowcodeField] = String(field.type === "checkbox" ? "" : field.value || "").length;
+  });
+  document.querySelectorAll("[data-lowcode-counter-for]").forEach((counter) => {
+    const key = counter.dataset.lowcodeCounterFor;
+    const max = Number(counter.dataset.lowcodeCounterMax || 0);
+    const current = values[key] || 0;
+    counter.textContent = `${current}/${max}`;
+    counter.classList.toggle("warn", max > 0 && current >= Math.floor(max * 0.9));
+  });
+}
+function updateLowcodeRecordState() {
+  updateLowcodeCounters();
+  updateLowcodeRecordPreview();
 }
 function lowcodeTemplatePreviewInput(field) {
   const label = escapeHtml(field.label || field.key);
@@ -821,7 +840,7 @@ function fillLowcodeRecordForm(form, record = null) {
   $("contentItemForm").hidden = true;
   $("pageForm").hidden = true;
   setStatus($("lowcodeRecordStatus"), "", "");
-  updateLowcodeRecordPreview();
+  updateLowcodeRecordState();
   $("lowcodeRecordForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function lowcodeRecordPayload() {
@@ -2634,8 +2653,8 @@ $("lowcodeRecordDraftButton").addEventListener("click", async () => {
     await loadPages();
   } catch (err) { setStatus($("lowcodeRecordStatus"), err.message, "error"); }
 });
-$("lowcodeDynamicFields").addEventListener("input", updateLowcodeRecordPreview);
-$("lowcodeDynamicFields").addEventListener("change", updateLowcodeRecordPreview);
+$("lowcodeDynamicFields").addEventListener("input", updateLowcodeRecordState);
+$("lowcodeDynamicFields").addEventListener("change", updateLowcodeRecordState);
 $("uploadLowcodeAsset").addEventListener("click", async () => {
   try {
     const count = await uploadImages($("lowcodeAssetFile").files, $("lowcodeRecordStatus"), (url, file) => {
