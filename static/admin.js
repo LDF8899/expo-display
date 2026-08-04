@@ -33,6 +33,13 @@ const contentTypes = [
   { key: "video", label: "视频类", description: "播放器或封面为主，适合宣传片、访谈和纪实片" },
 ];
 const contentTypeLabels = Object.fromEntries(contentTypes.map((item) => [item.key, item.label]));
+const defaultQualityRules = {
+  minBodyChars: 80,
+  requireSummary: true,
+  requireMedia: true,
+  requireModule: true,
+  requireTypeAssets: true,
+};
 const contentAssetRoles = [
   { key: "cover", label: "封面" },
   { key: "portrait", label: "人物照" },
@@ -333,6 +340,19 @@ function contentTypeLabel(value) {
 }
 function defaultContentTypeForModule(moduleKey) {
   return moduleDefaultContentTypes[moduleKey] || "article";
+}
+function normalizeQualityRules(value = {}) {
+  return {
+    minBodyChars: Math.max(0, Math.min(Number.parseInt(value.minBodyChars ?? defaultQualityRules.minBodyChars, 10) || 0, 2000)),
+    requireSummary: value.requireSummary !== false,
+    requireMedia: value.requireMedia !== false,
+    requireModule: value.requireModule !== false,
+    requireTypeAssets: value.requireTypeAssets !== false,
+  };
+}
+function projectQualityRules(project = currentProject()) {
+  const config = project && project.displayConfig ? project.displayConfig : {};
+  return normalizeQualityRules(config.qualityRules || {});
 }
 function contentBodyTemplate(contentType, label) {
   const name = escapeHtml(label || "本资料");
@@ -1787,6 +1807,7 @@ function exportModuleCoverageCsv() {
 }
 function contentItemQualityIssues(item) {
   const issues = [];
+  const rules = projectQualityRules();
   const assets = orderedContentAssets(item.assets || []);
   const bodyText = textFromBodyJson(item.bodyJson || []).trim();
   const summaryText = String(item.summary || item.subtitle || "").trim();
@@ -1795,14 +1816,14 @@ function contentItemQualityIssues(item) {
   const hasVideo = assets.some((asset) => asset.role === "video" || looksLikeVideoAsset(asset));
   const hasPortrait = assets.some((asset) => ["portrait", "cover"].includes(asset.role)) || Boolean(item.coverAssetId);
   const hasCertificate = assets.some((asset) => ["certificate", "cover", "gallery"].includes(asset.role)) || Boolean(item.coverAssetId);
-  if (!item.moduleKey && !localModuleKeyForCategory(item.category)) issues.push(["high", "未匹配标准板块"]);
+  if (rules.requireModule && !item.moduleKey && !localModuleKeyForCategory(item.category)) issues.push(["high", "未匹配标准板块"]);
   if (!String(item.title || "").trim()) issues.push(["high", "缺少标题"]);
-  if (!summaryText) issues.push(["medium", "缺少卡片摘要"]);
-  if (!bodyText || bodyText.length < 80) issues.push(["medium", "正文偏少"]);
-  if (!hasVisualAsset) issues.push(["medium", "缺少图片/视频素材"]);
-  if (type === "video" && !hasVideo) issues.push(["high", "视频类资料缺少视频素材"]);
-  if (type === "person" && !hasPortrait) issues.push(["medium", "人物类资料建议配置人物照"]);
-  if (type === "honor" && !hasCertificate) issues.push(["medium", "荣誉类资料建议配置证书/荣誉图"]);
+  if (rules.requireSummary && !summaryText) issues.push(["medium", "缺少卡片摘要"]);
+  if (rules.minBodyChars > 0 && (!bodyText || bodyText.length < rules.minBodyChars)) issues.push(["medium", `正文少于 ${rules.minBodyChars} 字`]);
+  if (rules.requireMedia && !hasVisualAsset) issues.push(["medium", "缺少图片/视频素材"]);
+  if (rules.requireTypeAssets && type === "video" && !hasVideo) issues.push(["high", "视频类资料缺少视频素材"]);
+  if (rules.requireTypeAssets && type === "person" && !hasPortrait) issues.push(["medium", "人物类资料建议配置人物照"]);
+  if (rules.requireTypeAssets && type === "honor" && !hasCertificate) issues.push(["medium", "荣誉类资料建议配置证书/荣誉图"]);
   if (item.reviewStatus === "rejected") issues.push(["high", "资料已驳回，需修改后重新提交"]);
   if (item.reviewStatus === "pending" || item.reviewStatus === "pending_delete") issues.push(["medium", "资料仍在审核中"]);
   return issues;
@@ -1821,8 +1842,10 @@ function renderContentQuality() {
     });
   const highCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level === "high").length, 0);
   const mediumCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level !== "high").length, 0);
+  const rules = projectQualityRules();
+  const ruleText = `规则：正文 ${rules.minBodyChars} 字${rules.requireSummary ? "，需摘要" : ""}${rules.requireMedia ? "，需素材" : ""}${rules.requireModule ? "，需板块" : ""}`;
   $("contentQualitySummary").textContent = items.length
-    ? `已检查 ${items.length} 条结构化资料，发现 ${entries.length} 条需要关注。`
+    ? `已检查 ${items.length} 条结构化资料，发现 ${entries.length} 条需要关注。${ruleText}`
     : "当前门户暂无结构化资料。";
   $("contentQualityBadge").textContent = entries.length ? `${highCount} 高 · ${mediumCount} 中` : "良好";
   $("contentQualityBadge").className = `badge ${entries.length ? "warn" : "success"}`;
@@ -2923,10 +2946,25 @@ function fillProject(project) {
   $("idleKicker").value = project.idleKicker || "";
   $("idleCopy").value = project.idleCopy || "";
   $("defaultImageUrl").value = project.defaultImageUrl || "";
+  const qualityRules = projectQualityRules(project);
+  $("qualityMinBodyChars").value = qualityRules.minBodyChars;
+  $("qualityRequireSummary").checked = qualityRules.requireSummary;
+  $("qualityRequireMedia").checked = qualityRules.requireMedia;
+  $("qualityRequireModule").checked = qualityRules.requireModule;
+  $("qualityRequireTypeAssets").checked = qualityRules.requireTypeAssets;
   $("projectFormHint").textContent = isAdmin() ? "管理员保存后立即生效。" : "修改展览基础信息后提交管理员审核。";
   $("projectForm").hidden = false;
 }
 function projectPayload() {
+  const current = state.projects.find((project) => String(project.id) === String(state.editingProjectId)) || {};
+  const displayConfig = { ...(current.displayConfig || {}) };
+  displayConfig.qualityRules = normalizeQualityRules({
+    minBodyChars: $("qualityMinBodyChars").value,
+    requireSummary: $("qualityRequireSummary").checked,
+    requireMedia: $("qualityRequireMedia").checked,
+    requireModule: $("qualityRequireModule").checked,
+    requireTypeAssets: $("qualityRequireTypeAssets").checked,
+  });
   return {
     name: $("projectName").value.trim(),
     portalType: normalizePortalType($("projectPortalType").value),
@@ -2937,6 +2975,7 @@ function projectPayload() {
     idleKicker: $("idleKicker").value.trim(),
     idleCopy: $("idleCopy").value.trim(),
     defaultImageUrl: $("defaultImageUrl").value.trim(),
+    displayConfig,
   };
 }
 function fillContentItem(item = {}) {

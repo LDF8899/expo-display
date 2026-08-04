@@ -671,6 +671,13 @@ DEFAULT_DISPLAY_CONFIG = {
         },
     ],
 }
+DEFAULT_QUALITY_RULES = {
+    "minBodyChars": 80,
+    "requireSummary": True,
+    "requireMedia": True,
+    "requireModule": True,
+    "requireTypeAssets": True,
+}
 
 SSE_CLIENTS = set()
 UNITY_MODEL_PROCESS = None
@@ -2534,6 +2541,15 @@ def normalize_display_config(value):
             value.get("summaryTags"),
             DEFAULT_DISPLAY_CONFIG["summaryTags"],
         )
+
+    source_quality = value.get("qualityRules") if isinstance(value.get("qualityRules"), dict) else {}
+    config["qualityRules"] = {
+        "minBodyChars": max(0, min(int_value(source_quality.get("minBodyChars"), DEFAULT_QUALITY_RULES["minBodyChars"]), 2000)),
+        "requireSummary": bool_value(source_quality.get("requireSummary"), DEFAULT_QUALITY_RULES["requireSummary"]),
+        "requireMedia": bool_value(source_quality.get("requireMedia"), DEFAULT_QUALITY_RULES["requireMedia"]),
+        "requireModule": bool_value(source_quality.get("requireModule"), DEFAULT_QUALITY_RULES["requireModule"]),
+        "requireTypeAssets": bool_value(source_quality.get("requireTypeAssets"), DEFAULT_QUALITY_RULES["requireTypeAssets"]),
+    }
 
     source_slides = value.get("slides")
     if not isinstance(source_slides, list):

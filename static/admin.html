@@ -123,6 +123,19 @@
             <input id="projectImageFile" type="file" accept="image/*" />
             <button id="selectProjectAsset" class="button ghost" type="button">选择资源</button>
           </div>
+          <fieldset class="quality-rules-editor">
+            <legend>资料质量规则</legend>
+            <div class="form-grid quality-rules-grid">
+              <label class="stack">
+                <span>最少正文字数</span>
+                <input id="qualityMinBodyChars" type="number" min="0" max="2000" step="10" />
+              </label>
+              <label class="check-inline"><input id="qualityRequireSummary" type="checkbox" /> 要求卡片摘要</label>
+              <label class="check-inline"><input id="qualityRequireMedia" type="checkbox" /> 要求图片/视频</label>
+              <label class="check-inline"><input id="qualityRequireModule" type="checkbox" /> 要求标准板块</label>
+              <label class="check-inline"><input id="qualityRequireTypeAssets" type="checkbox" /> 检查类型素材</label>
+            </div>
+          </fieldset>
           <button id="projectSubmitButton" class="button primary" type="submit">保存/提交审核</button>
           <p id="projectStatus" class="status-text"></p>
         </form>
