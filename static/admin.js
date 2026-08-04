@@ -1004,8 +1004,10 @@ function renderLowcodeForms() {
   const grid = $("lowcodeFormsGrid");
   if (!grid) return;
   const forms = state.lowcodeForms || [];
+  const showTemplateQuality = canReview();
   if ($("newLowcodeTemplate")) $("newLowcodeTemplate").hidden = !isAdmin();
   if ($("importLowcodeTemplate")) $("importLowcodeTemplate").hidden = !isAdmin();
+  if ($("exportLowcodeTemplateQuality")) $("exportLowcodeTemplateQuality").hidden = !showTemplateQuality;
   $("lowcodeFormsSummary").textContent = `${forms.length} 个模板`;
   grid.innerHTML = forms.length ? forms.map((form) => {
     const schema = form.schema || {};
@@ -1023,7 +1025,7 @@ function renderLowcodeForms() {
         <span class="badge ${enabled ? "" : "warn"}">${fieldCount} 项</span>
       </header>
       <p>${escapeHtml(form.description || "按模板规范填写资料。")}</p>
-      <p class="lowcode-form-quality ${escapeHtml(quality.kind)}">模板质量：${escapeHtml(quality.label)}${quality.warn || quality.danger ? ` · 通过 ${quality.ok}/${quality.checks.length}` : ""}</p>
+      ${showTemplateQuality ? `<p class="lowcode-form-quality ${escapeHtml(quality.kind)}">模板质量：${escapeHtml(quality.label)}${quality.warn || quality.danger ? ` · 通过 ${quality.ok}/${quality.checks.length}` : ""}</p>` : ""}
       <p class="lowcode-form-usage">${escapeHtml(lowcodeTemplateUsageText(form.id))}</p>
       <div class="actions">
         <button class="button small primary" type="button" data-lowcode-start="${form.id}" ${enabled ? "" : "disabled"}>按模板填写</button>
