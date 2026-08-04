@@ -866,6 +866,59 @@ function exportLowcodeRecordsCsv() {
   const projectName = (project && project.name ? project.name : "项目").replace(/[\\/:*?"<>|]/g, "_");
   downloadTextFile(`模板提交记录-${projectName}-${suffix}.csv`, csv, "text/csv;charset=utf-8");
 }
+function lowcodeRecordFieldColumns(records) {
+  const columns = [];
+  const seen = new Set();
+  records.forEach((record) => {
+    const form = state.lowcodeForms.find((entry) => String(entry.id) === String(record.formId));
+    const schemaFields = ((form && form.schema && form.schema.fields) || [])
+      .filter((field) => field.type !== "asset_list" && field.key !== "assets");
+    schemaFields.forEach((field) => {
+      if (seen.has(field.key)) return;
+      seen.add(field.key);
+      columns.push({ key: field.key, label: field.label || field.key });
+    });
+    const data = record.data && record.data.fields ? record.data.fields : {};
+    Object.keys(data).forEach((key) => {
+      if (key === "assets" || seen.has(key)) return;
+      seen.add(key);
+      columns.push({ key, label: key });
+    });
+  });
+  return columns;
+}
+function exportLowcodeRecordDetailsCsv() {
+  const records = filteredLowcodeRecords();
+  if (!records.length) {
+    alert("当前筛选条件下暂无可导出的模板填报明细");
+    return;
+  }
+  const columns = lowcodeRecordFieldColumns(records);
+  const headers = ["记录ID", "模板", "版本", "状态", "生成资料标题", "板块", "资料类型", "提交人", "提交时间", ...columns.map((column) => column.label), "素材数", "素材地址"];
+  const rows = records.map((record) => {
+    const data = record.data && record.data.fields ? record.data.fields : {};
+    const assets = orderedContentAssets(data.assets || []);
+    return [
+      record.id,
+      record.formName || "",
+      record.formVersionNo ? `v${record.formVersionNo}` : "",
+      statusText(lowcodeRecordStatus(record)),
+      record.contentTitle || data.title || "",
+      record.contentModuleLabel || "",
+      record.contentTypeLabel || contentTypeLabel(record.contentType),
+      record.submittedBy || "",
+      formatTime(record.submittedAt),
+      ...columns.map((column) => lowcodeDisplayValue(data[column.key])),
+      assets.length,
+      assets.map((asset) => `${contentAssetRoleLabels[asset.role] || asset.role || "素材"}:${asset.url}`).join("\n"),
+    ];
+  });
+  const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  const project = currentProject();
+  const suffix = state.lowcodeRecordStatusFilter === "all" ? "全部" : statusText(state.lowcodeRecordStatusFilter);
+  const projectName = (project && project.name ? project.name : "项目").replace(/[\\/:*?"<>|]/g, "_");
+  downloadTextFile(`模板填报明细-${projectName}-${suffix}.csv`, csv, "text/csv;charset=utf-8");
+}
 function lowcodeRecordStats(records) {
   const stats = { total: 0, draft: 0, pending: 0, approved: 0, rejected: 0 };
   (records || []).forEach((record) => {
@@ -2834,6 +2887,7 @@ $("lowcodeRecordStatusFilter").addEventListener("change", (event) => {
   renderLowcodeRecords();
 });
 $("exportLowcodeRecords").addEventListener("click", exportLowcodeRecordsCsv);
+$("exportLowcodeRecordDetails").addEventListener("click", exportLowcodeRecordDetailsCsv);
 $("deployProject").addEventListener("change", renderDeploy);
 $("filterLogs").addEventListener("click", renderLogs);
 $("exportLogs").addEventListener("click", () => {
