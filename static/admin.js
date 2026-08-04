@@ -1414,6 +1414,61 @@ function renderModuleLibrary(coverage = state.moduleCoverage) {
     </article>`;
   }).join("");
 }
+function contentItemQualityIssues(item) {
+  const issues = [];
+  const assets = orderedContentAssets(item.assets || []);
+  const bodyText = textFromBodyJson(item.bodyJson || []).trim();
+  const summaryText = String(item.summary || item.subtitle || "").trim();
+  const type = normalizeContentType(item.contentType || "article");
+  const hasAnyAsset = Boolean(item.coverAssetId) || assets.length > 0;
+  const hasVideo = assets.some((asset) => asset.role === "video" || looksLikeVideoAsset(asset));
+  const hasPortrait = assets.some((asset) => ["portrait", "cover"].includes(asset.role)) || Boolean(item.coverAssetId);
+  const hasCertificate = assets.some((asset) => ["certificate", "cover", "gallery"].includes(asset.role)) || Boolean(item.coverAssetId);
+  if (!item.moduleKey && !localModuleKeyForCategory(item.category)) issues.push(["high", "未匹配标准板块"]);
+  if (!String(item.title || "").trim()) issues.push(["high", "缺少标题"]);
+  if (!summaryText) issues.push(["medium", "缺少卡片摘要"]);
+  if (!bodyText || bodyText.length < 80) issues.push(["medium", "正文偏少"]);
+  if (!hasAnyAsset) issues.push(["medium", "缺少图片/视频素材"]);
+  if (type === "video" && !hasVideo) issues.push(["high", "视频类资料缺少视频素材"]);
+  if (type === "person" && !hasPortrait) issues.push(["medium", "人物类资料建议配置人物照"]);
+  if (type === "honor" && !hasCertificate) issues.push(["medium", "荣誉类资料建议配置证书/荣誉图"]);
+  if (item.reviewStatus === "rejected") issues.push(["high", "资料已驳回，需修改后重新提交"]);
+  if (item.reviewStatus === "pending" || item.reviewStatus === "pending_delete") issues.push(["medium", "资料仍在审核中"]);
+  return issues;
+}
+function renderContentQuality() {
+  const listNode = $("contentQualityList");
+  if (!listNode) return;
+  const items = state.contentItems || [];
+  const entries = items
+    .map((item) => ({ item, issues: contentItemQualityIssues(item) }))
+    .filter((entry) => entry.issues.length)
+    .sort((a, b) => {
+      const aHigh = a.issues.some(([level]) => level === "high") ? 0 : 1;
+      const bHigh = b.issues.some(([level]) => level === "high") ? 0 : 1;
+      return aHigh - bHigh || b.issues.length - a.issues.length;
+    });
+  const highCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level === "high").length, 0);
+  const mediumCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level !== "high").length, 0);
+  $("contentQualitySummary").textContent = items.length
+    ? `已检查 ${items.length} 条结构化资料，发现 ${entries.length} 条需要关注。`
+    : "当前门户暂无结构化资料。";
+  $("contentQualityBadge").textContent = entries.length ? `${highCount} 高 · ${mediumCount} 中` : "良好";
+  $("contentQualityBadge").className = `badge ${entries.length ? "warn" : "success"}`;
+  listNode.innerHTML = entries.length ? entries.slice(0, 8).map(({ item, issues }) => {
+    const moduleLabel = item.moduleLabel || (moduleMeta(item.moduleKey) || {}).label || item.moduleKey || "-";
+    return `<article class="content-quality-card ${issues.some(([level]) => level === "high") ? "danger" : "warn"}">
+      <div>
+        <strong>${escapeHtml(item.title || "未命名资料")}</strong>
+        <span>${escapeHtml(moduleLabel)} · ${escapeHtml(item.contentTypeLabel || contentTypeLabel(item.contentType))}</span>
+      </div>
+      <div class="content-quality-tags">
+        ${issues.slice(0, 4).map(([level, text]) => `<span class="${level === "high" ? "danger" : ""}">${escapeHtml(text)}</span>`).join("")}
+      </div>
+      <button class="button small primary" type="button" data-quality-edit="${item.id}">编辑资料</button>
+    </article>`;
+  }).join("") : `<div class="empty">当前结构化资料质量良好</div>`;
+}
 function generatedModuleCode(moduleKey) {
   const meta = moduleMeta(moduleKey) || modulesForPortalType()[0];
   const projectId = $("projectSelect") ? $("projectSelect").value || "P" : "P";
@@ -2044,6 +2099,7 @@ function renderPages() {
   const deleteLabel = isAdmin() ? "删除" : "申请删除";
   const emptyText = isAdmin() ? "暂无板块资料" : "暂无板块资料";
   renderModuleLibrary();
+  renderContentQuality();
   renderLowcodeForms();
   renderLowcodeRecords();
   renderContentItems(filter);
@@ -2686,6 +2742,12 @@ $("moduleLibrary").addEventListener("click", (event) => {
   const button = event.target.closest("[data-module-create]");
   if (!button) return;
   startContentItemDraft(button.dataset.moduleCreate);
+});
+$("contentQualityList").addEventListener("click", (event) => {
+  const edit = event.target.closest("[data-quality-edit]");
+  if (!edit) return;
+  const item = state.contentItems.find((entry) => String(entry.id) === String(edit.dataset.qualityEdit));
+  if (item) fillContentItem(item);
 });
 $("lowcodeFormsGrid").addEventListener("click", (event) => {
   const start = event.target.closest("[data-lowcode-start]");
