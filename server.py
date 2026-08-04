@@ -2561,6 +2561,20 @@ def normalize_display_config(value):
         "requireModule": bool_value(source_quality.get("requireModule"), DEFAULT_QUALITY_RULES["requireModule"]),
         "requireTypeAssets": bool_value(source_quality.get("requireTypeAssets"), DEFAULT_QUALITY_RULES["requireTypeAssets"]),
     }
+    config["moduleQualityRules"] = {}
+    source_module_quality = value.get("moduleQualityRules") if isinstance(value.get("moduleQualityRules"), dict) else {}
+    known_module_keys = {module["key"] for modules in MODULE_SETS.values() for module in modules}
+    for module_key, rules in source_module_quality.items():
+        key = str(module_key or "").strip()
+        if key not in known_module_keys or not isinstance(rules, dict):
+            continue
+        config["moduleQualityRules"][key] = {
+            "minBodyChars": max(0, min(int_value(rules.get("minBodyChars"), config["qualityRules"]["minBodyChars"]), 2000)),
+            "requireSummary": bool_value(rules.get("requireSummary"), config["qualityRules"]["requireSummary"]),
+            "requireMedia": bool_value(rules.get("requireMedia"), config["qualityRules"]["requireMedia"]),
+            "requireModule": bool_value(rules.get("requireModule"), config["qualityRules"]["requireModule"]),
+            "requireTypeAssets": bool_value(rules.get("requireTypeAssets"), config["qualityRules"]["requireTypeAssets"]),
+        }
 
     source_slides = value.get("slides")
     if not isinstance(source_slides, list):

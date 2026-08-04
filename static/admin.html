@@ -135,6 +135,28 @@
               <label class="check-inline"><input id="qualityRequireModule" type="checkbox" /> 要求标准板块</label>
               <label class="check-inline"><input id="qualityRequireTypeAssets" type="checkbox" /> 检查类型素材</label>
             </div>
+            <section class="module-quality-editor" aria-label="板块质量规则">
+              <div class="field-head">
+                <span>板块规则特例</span>
+                <small>没有配置特例的板块使用上方默认规则；适合视频、荣誉、概况等板块单独调整。</small>
+              </div>
+              <div class="form-grid quality-rules-grid">
+                <select id="qualityModuleSelect" aria-label="选择板块质量规则"></select>
+                <label class="stack">
+                  <span>板块最少正文字数</span>
+                  <input id="moduleQualityMinBodyChars" type="number" min="0" max="2000" step="10" />
+                </label>
+                <label class="check-inline"><input id="moduleQualityRequireSummary" type="checkbox" /> 要求摘要</label>
+                <label class="check-inline"><input id="moduleQualityRequireMedia" type="checkbox" /> 要求图片/视频</label>
+                <label class="check-inline"><input id="moduleQualityRequireModule" type="checkbox" /> 要求标准板块</label>
+                <label class="check-inline"><input id="moduleQualityRequireTypeAssets" type="checkbox" /> 检查类型素材</label>
+              </div>
+              <div class="actions">
+                <button id="applyModuleQualityRule" class="button ghost" type="button">应用到板块</button>
+                <button id="removeModuleQualityRule" class="button ghost" type="button">移除特例</button>
+              </div>
+              <div id="moduleQualityRuleList" class="module-quality-list"></div>
+            </section>
           </fieldset>
           <button id="projectSubmitButton" class="button primary" type="submit">保存/提交审核</button>
           <p id="projectStatus" class="status-text"></p>

@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -359,9 +359,31 @@ function normalizeQualityRules(value = {}) {
     requireTypeAssets: value.requireTypeAssets !== false,
   };
 }
+function normalizeModuleQualityRules(value = {}, baseRules = normalizeQualityRules()) {
+  const result = {};
+  Object.entries(value || {}).forEach(([moduleKey, rules]) => {
+    const key = String(moduleKey || "").trim();
+    if (!key || !rules || typeof rules !== "object") return;
+    result[key] = normalizeQualityRules({ ...baseRules, ...rules });
+  });
+  return result;
+}
 function projectQualityRules(project = currentProject()) {
   const config = project && project.displayConfig ? project.displayConfig : {};
   return normalizeQualityRules(config.qualityRules || {});
+}
+function projectModuleQualityRules(project = currentProject()) {
+  const config = project && project.displayConfig ? project.displayConfig : {};
+  return normalizeModuleQualityRules(config.moduleQualityRules || {}, projectQualityRules(project));
+}
+function qualityModuleKeyForItem(item = {}, portalType = selectedPortalType()) {
+  return item.moduleKey || localModuleKeyForCategory(item.category, portalType) || "";
+}
+function itemQualityRules(item = {}, project = currentProject()) {
+  const baseRules = projectQualityRules(project);
+  const moduleRules = projectModuleQualityRules(project);
+  const moduleKey = qualityModuleKeyForItem(item, project?.portalType || selectedPortalType());
+  return moduleRules[moduleKey] || baseRules;
 }
 function qualityRulesSummary(rules = projectQualityRules()) {
   return [
@@ -2260,7 +2282,7 @@ function exportModuleGapsCsv() {
 }
 function contentItemQualityIssues(item) {
   const issues = [];
-  const rules = projectQualityRules();
+  const rules = itemQualityRules(item);
   const assets = orderedContentAssets(item.assets || []);
   const bodyText = textFromBodyJson(item.bodyJson || []).trim();
   const summaryText = String(item.summary || item.subtitle || "").trim();
@@ -2298,8 +2320,9 @@ function renderContentQuality() {
   const highCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level === "high").length, 0);
   const mediumCount = entries.reduce((count, entry) => count + entry.issues.filter(([level]) => level !== "high").length, 0);
   const rules = projectQualityRules();
+  const moduleRuleCount = Object.keys(projectModuleQualityRules()).length;
   $("contentQualitySummary").textContent = items.length
-    ? `已检查 ${items.length} 条结构化资料，发现 ${entries.length} 条需要关注。规则：${qualityRulesSummary(rules)}`
+    ? `已检查 ${items.length} 条结构化资料，发现 ${entries.length} 条需要关注。默认规则：${qualityRulesSummary(rules)}${moduleRuleCount ? `；板块特例 ${moduleRuleCount} 个` : ""}`
     : "当前门户暂无结构化资料。";
   $("contentQualityBadge").textContent = entries.length ? `${highCount} 高 · ${mediumCount} 中` : "良好";
   $("contentQualityBadge").className = `badge ${entries.length ? "warn" : "success"}`;
@@ -2324,12 +2347,14 @@ function exportContentQualityCsv() {
     return;
   }
   const project = currentProject();
-  const rules = projectQualityRules(project);
-  const headers = ["门户", "资料ID", "编号", "标题", "标准板块", "资料类型", "审核状态", "启用", "素材数", "规则摘要", "最少正文字数", "要求摘要", "要求图片/视频", "要求标准板块", "检查类型素材", "问题级别", "问题", "预览地址"];
+  const headers = ["门户", "资料ID", "编号", "标题", "标准板块", "资料类型", "审核状态", "启用", "素材数", "规则来源", "规则摘要", "最少正文字数", "要求摘要", "要求图片/视频", "要求标准板块", "检查类型素材", "问题级别", "问题", "预览地址"];
   const rows = [];
+  const moduleRules = projectModuleQualityRules(project);
   items.forEach((item) => {
     const issues = contentItemQualityIssues(item);
     const moduleLabel = item.moduleLabel || (moduleMeta(item.moduleKey) || {}).label || item.moduleKey || "-";
+    const moduleKey = qualityModuleKeyForItem(item, project?.portalType || selectedPortalType());
+    const rules = itemQualityRules(item, project);
     const previewUrl = item.reviewStatus === "approved" && item.enabled ? buildQrUrl(item.projectId, item.code) : "";
     const base = [
       project?.name || "",
@@ -2341,6 +2366,7 @@ function exportContentQualityCsv() {
       statusText(item.reviewStatus),
       item.enabled ? "是" : "否",
       (item.assets || []).length,
+      moduleRules[moduleKey] ? "板块特例" : "门户默认",
       qualityRulesSummary(rules),
       rules.minBodyChars,
       rules.requireSummary ? "是" : "否",
@@ -3395,6 +3421,70 @@ async function uploadImages(files, statusNode, onUploaded) {
   }
   return count;
 }
+function qualityRulesFromInputs(prefix = "quality") {
+  return normalizeQualityRules({
+    minBodyChars: $(`${prefix}MinBodyChars`).value,
+    requireSummary: $(`${prefix}RequireSummary`).checked,
+    requireMedia: $(`${prefix}RequireMedia`).checked,
+    requireModule: $(`${prefix}RequireModule`).checked,
+    requireTypeAssets: $(`${prefix}RequireTypeAssets`).checked,
+  });
+}
+function setQualityRuleInputs(prefix, rules) {
+  const normalized = normalizeQualityRules(rules);
+  $(`${prefix}MinBodyChars`).value = normalized.minBodyChars;
+  $(`${prefix}RequireSummary`).checked = normalized.requireSummary;
+  $(`${prefix}RequireMedia`).checked = normalized.requireMedia;
+  $(`${prefix}RequireModule`).checked = normalized.requireModule;
+  $(`${prefix}RequireTypeAssets`).checked = normalized.requireTypeAssets;
+}
+function selectedModuleQualityKey() {
+  return $("qualityModuleSelect") ? $("qualityModuleSelect").value : "";
+}
+function renderQualityModuleOptions(portalType = selectedPortalType()) {
+  const select = $("qualityModuleSelect");
+  if (!select) return;
+  const modules = modulesForPortalType(portalType);
+  select.innerHTML = modules.map((module) => `<option value="${module.key}">${escapeHtml(module.label)}</option>`).join("");
+}
+function syncModuleQualityEditor() {
+  const key = selectedModuleQualityKey();
+  if (!key || !$("moduleQualityMinBodyChars")) return;
+  const project = state.projects.find((item) => String(item.id) === String(state.editingProjectId)) || currentProject();
+  setQualityRuleInputs("moduleQuality", state.qualityModuleRuleDrafts[key] || projectQualityRules(project));
+  $("removeModuleQualityRule").disabled = !state.qualityModuleRuleDrafts[key];
+}
+function renderModuleQualityRuleList() {
+  const list = $("moduleQualityRuleList");
+  if (!list) return;
+  const portalType = normalizePortalType($("projectPortalType")?.value || selectedPortalType());
+  const modules = modulesForPortalType(portalType);
+  const rows = modules
+    .filter((module) => state.qualityModuleRuleDrafts[module.key])
+    .map((module) => ({ module, rules: state.qualityModuleRuleDrafts[module.key] }));
+  list.innerHTML = rows.length ? rows.map(({ module, rules }) => `<article class="module-quality-card">
+    <strong>${escapeHtml(module.label)}</strong>
+    <span>${escapeHtml(qualityRulesSummary(rules))}</span>
+  </article>`).join("") : `<div class="empty">暂无板块特例，所有板块使用默认质量规则。</div>`;
+}
+function applyModuleQualityRule() {
+  const key = selectedModuleQualityKey();
+  if (!key) return;
+  state.qualityModuleRuleDrafts = { ...state.qualityModuleRuleDrafts, [key]: qualityRulesFromInputs("moduleQuality") };
+  renderModuleQualityRuleList();
+  syncModuleQualityEditor();
+  setStatus($("projectStatus"), "板块质量规则已暂存，保存门户配置后生效。", "success");
+}
+function removeModuleQualityRule() {
+  const key = selectedModuleQualityKey();
+  if (!key) return;
+  const next = { ...state.qualityModuleRuleDrafts };
+  delete next[key];
+  state.qualityModuleRuleDrafts = next;
+  renderModuleQualityRuleList();
+  syncModuleQualityEditor();
+  setStatus($("projectStatus"), "板块质量规则特例已移除，保存门户配置后生效。", "warn");
+}
 function fillProject(project) {
   state.editingProjectId = project.id;
   $("projectName").value = project.name || "";
@@ -3408,24 +3498,22 @@ function fillProject(project) {
   $("idleCopy").value = project.idleCopy || "";
   $("defaultImageUrl").value = project.defaultImageUrl || "";
   const qualityRules = projectQualityRules(project);
-  $("qualityMinBodyChars").value = qualityRules.minBodyChars;
-  $("qualityRequireSummary").checked = qualityRules.requireSummary;
-  $("qualityRequireMedia").checked = qualityRules.requireMedia;
-  $("qualityRequireModule").checked = qualityRules.requireModule;
-  $("qualityRequireTypeAssets").checked = qualityRules.requireTypeAssets;
+  setQualityRuleInputs("quality", qualityRules);
+  state.qualityModuleRuleDrafts = projectModuleQualityRules(project);
+  renderQualityModuleOptions(normalizePortalType(project.portalType || "department"));
+  renderModuleQualityRuleList();
+  syncModuleQualityEditor();
   $("projectFormHint").textContent = isAdmin() ? "管理员保存后立即生效。" : "修改展览基础信息后提交管理员审核。";
   $("projectForm").hidden = false;
 }
 function projectPayload() {
   const current = state.projects.find((project) => String(project.id) === String(state.editingProjectId)) || {};
   const displayConfig = { ...(current.displayConfig || {}) };
-  displayConfig.qualityRules = normalizeQualityRules({
-    minBodyChars: $("qualityMinBodyChars").value,
-    requireSummary: $("qualityRequireSummary").checked,
-    requireMedia: $("qualityRequireMedia").checked,
-    requireModule: $("qualityRequireModule").checked,
-    requireTypeAssets: $("qualityRequireTypeAssets").checked,
-  });
+  displayConfig.qualityRules = qualityRulesFromInputs("quality");
+  const validModuleKeys = new Set(modulesForPortalType(normalizePortalType($("projectPortalType").value)).map((module) => module.key));
+  displayConfig.moduleQualityRules = Object.fromEntries(Object.entries(state.qualityModuleRuleDrafts || {})
+    .filter(([key]) => validModuleKeys.has(key))
+    .map(([key, rules]) => [key, normalizeQualityRules({ ...displayConfig.qualityRules, ...rules })]));
   return {
     name: $("projectName").value.trim(),
     portalType: normalizePortalType($("projectPortalType").value),
@@ -3552,7 +3640,13 @@ $("projectSelect").addEventListener("change", () => loadPages());
 $("projectPortalType").addEventListener("change", () => {
   syncProjectPortalSlugField();
   renderTemplateActions($("projectPortalType").value);
+  renderQualityModuleOptions($("projectPortalType").value);
+  renderModuleQualityRuleList();
+  syncModuleQualityEditor();
 });
+$("qualityModuleSelect").addEventListener("change", syncModuleQualityEditor);
+$("applyModuleQualityRule").addEventListener("click", applyModuleQualityRule);
+$("removeModuleQualityRule").addEventListener("click", removeModuleQualityRule);
 $("pageStatusFilter").addEventListener("change", renderPages);
 $("lowcodeRecordStatusFilter").addEventListener("change", (event) => {
   state.lowcodeRecordStatusFilter = event.target.value;
