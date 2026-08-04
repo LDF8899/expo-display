@@ -1220,6 +1220,10 @@ tr:last-child td { border-bottom: 0; }
   font-size: 13px;
   font-weight: 700;
 }
+.lowcode-field.is-hidden,
+.lowcode-choice-field.is-hidden {
+  display: none;
+}
 .lowcode-field.wide {
   grid-column: 1 / -1;
 }

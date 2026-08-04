@@ -3660,6 +3660,19 @@ def normalize_lowcode_field_key(key, label=""):
     return key
 
 
+def normalize_lowcode_visible_when(value, label=""):
+    if not isinstance(value, dict):
+        return None
+    depends_on = str(value.get("field") or "").strip()
+    if not depends_on:
+        return None
+    depends_on = normalize_lowcode_field_key(depends_on, f"{label or '字段'}的条件字段")
+    return {
+        "field": depends_on,
+        "value": str(value.get("value") or "").strip()[:200],
+    }
+
+
 def normalize_lowcode_schema(schema, form):
     schema = json_value(schema, {})
     if not isinstance(schema, dict):
@@ -3698,6 +3711,11 @@ def normalize_lowcode_schema(schema, form):
                 re.compile(normalized["pattern"])
             except re.error as exc:
                 raise ValueError(f"{label}的格式规则不合法：{exc}")
+        visible_when = normalize_lowcode_visible_when(field.get("visibleWhen"), label)
+        if visible_when:
+            if visible_when["field"].lower() == key_identity:
+                raise ValueError(f"{label}不能依赖自身显示")
+            normalized["visibleWhen"] = visible_when
         if not normalized["group"]:
             normalized["group"] = default_lowcode_field_group(normalized)
         options = field.get("options")
@@ -3720,6 +3738,11 @@ def normalize_lowcode_schema(schema, form):
         schema = lowcode_schema_for_module(form.get("targetPortalType", "department"), module)
     else:
         schema["fields"] = sorted(normalized_fields, key=lambda item: item.get("sortOrder", 0))
+    field_key_set = {str(field.get("key") or "").lower() for field in schema.get("fields", []) if isinstance(field, dict)}
+    for field in schema.get("fields", []):
+        visible_when = field.get("visibleWhen") if isinstance(field, dict) and isinstance(field.get("visibleWhen"), dict) else None
+        if visible_when and str(visible_when.get("field") or "").lower() not in field_key_set:
+            raise ValueError(f"{field.get('label') or field.get('key') or '字段'}的条件字段不存在：{visible_when.get('field')}")
     schema["moduleKey"] = form.get("targetModuleKey") or schema.get("moduleKey") or ""
     schema["contentType"] = normalize_content_type(form.get("targetContentType") or schema.get("contentType"))
     schema["portalType"] = normalize_portal_type(form.get("targetPortalType") or schema.get("portalType"))
@@ -3864,6 +3887,22 @@ def valid_lowcode_link(value):
     return parsed.scheme in {"http", "https", "mailto", "tel"} and bool(parsed.path or parsed.netloc)
 
 
+def lowcode_field_visible(field, submitted):
+    condition = field.get("visibleWhen") if isinstance(field.get("visibleWhen"), dict) else None
+    if not condition:
+        return True
+    depends_on = str(condition.get("field") or "").strip()
+    if not depends_on:
+        return True
+    expected = str(condition.get("value") or "").strip()
+    current = submitted.get(depends_on)
+    if not expected:
+        return bool(lowcode_scalar_text(current))
+    if isinstance(current, list):
+        return expected in {str(item) for item in current}
+    return str(current if current is not None else "") == expected
+
+
 def lowcode_record_payload(form, submitted, validate_required=True):
     schema = form.get("schema") or {}
     submitted = submitted if isinstance(submitted, dict) else {}
@@ -3887,6 +3926,8 @@ def lowcode_record_payload(form, submitted, validate_required=True):
     for field in fields:
         key = str(field.get("key") or "")
         if not key:
+            continue
+        if not lowcode_field_visible(field, submitted):
             continue
         value = submitted.get(key)
         if (value is None or lowcode_scalar_text(value) == "") and field.get("defaultValue") not in (None, ""):

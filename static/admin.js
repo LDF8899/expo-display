@@ -597,6 +597,54 @@ function lowcodeAssetsFromFieldValue(value, role) {
     .map((url) => normalizeContentAsset({ url: url.trim(), role }))
     .filter(Boolean);
 }
+function lowcodeVisibleWhen(field = {}) {
+  const source = field.visibleWhen && typeof field.visibleWhen === "object" ? field.visibleWhen : {};
+  const dependsOn = String(source.field || field.visibleWhenField || "").trim();
+  const value = String(source.value ?? field.visibleWhenValue ?? "").trim();
+  return dependsOn ? { field: dependsOn, value } : null;
+}
+function lowcodeConditionMatches(condition, values) {
+  if (!condition || !condition.field) return true;
+  const current = values[condition.field];
+  if (!condition.value) return Array.isArray(current) ? current.length > 0 : Boolean(String(current ?? "").trim());
+  if (Array.isArray(current)) return current.map(String).includes(condition.value);
+  return String(current ?? "") === condition.value;
+}
+function lowcodeFieldConditionAttrs(field = {}) {
+  const condition = lowcodeVisibleWhen(field);
+  return condition ? ` data-lowcode-visible-field="${escapeHtml(condition.field)}" data-lowcode-visible-value="${escapeHtml(condition.value)}"` : "";
+}
+function lowcodeFormValues(options = {}) {
+  const values = {};
+  document.querySelectorAll("[data-lowcode-field]").forEach((field) => {
+    const wrapper = field.closest(".lowcode-field, .lowcode-choice-field");
+    if (!options.includeHidden && wrapper && wrapper.classList.contains("is-hidden")) return;
+    const key = field.dataset.lowcodeField;
+    if (field.type === "radio") {
+      if (field.checked) values[key] = field.value;
+      return;
+    }
+    if (field.type === "checkbox" && field.closest(".lowcode-choice-field")) {
+      if (!Array.isArray(values[key])) values[key] = [];
+      if (field.checked) values[key].push(field.value);
+      return;
+    }
+    values[key] = field.type === "checkbox" ? field.checked : field.value.trim();
+  });
+  return values;
+}
+function updateLowcodeFieldVisibility() {
+  const values = lowcodeFormValues({ includeHidden: true });
+  document.querySelectorAll("[data-lowcode-visible-field]").forEach((node) => {
+    const condition = { field: node.dataset.lowcodeVisibleField || "", value: node.dataset.lowcodeVisibleValue || "" };
+    const visible = lowcodeConditionMatches(condition, values);
+    node.classList.toggle("is-hidden", !visible);
+    node.querySelectorAll("input, textarea, select, button").forEach((control) => {
+      const belongsToField = control.hasAttribute("data-lowcode-field") || control.hasAttribute("data-lowcode-file-for") || control.hasAttribute("data-lowcode-field-upload");
+      if (belongsToField) control.disabled = !visible;
+    });
+  });
+}
 function renderContentAssetCards() {
   const list = $("contentAssetCards");
   if (!list) return;
@@ -736,6 +784,7 @@ function lowcodeFieldInput(field, submitted = {}) {
   const key = escapeHtml(field.key);
   const label = escapeHtml(field.label || field.key);
   const placeholder = escapeHtml(field.placeholder || "");
+  const conditionAttrs = lowcodeFieldConditionAttrs(field);
   const rawValue = Object.prototype.hasOwnProperty.call(submitted, field.key) ? submitted[field.key] : field.defaultValue;
   const defaultValue = escapeHtml(rawValue == null ? "" : rawValue);
   const required = field.required ? " required" : "";
@@ -745,25 +794,25 @@ function lowcodeFieldInput(field, submitted = {}) {
   const patternTitle = field.patternMessage ? ` title="${escapeHtml(field.patternMessage)}"` : "";
   const options = Array.isArray(field.options) ? field.options : [];
   if (field.type === "textarea" || field.type === "richtext") {
-    return `<label class="lowcode-field wide"><span>${label}${field.required ? " *" : ""}</span><textarea data-lowcode-field="${key}" rows="4" placeholder="${placeholder}"${required}${maxLength}>${defaultValue}</textarea>${lengthHint}</label>`;
+    return `<label class="lowcode-field wide"${conditionAttrs}><span>${label}${field.required ? " *" : ""}</span><textarea data-lowcode-field="${key}" rows="4" placeholder="${placeholder}"${required}${maxLength}>${defaultValue}</textarea>${lengthHint}</label>`;
   }
   if (field.type === "checkbox" || field.type === "switch") {
-    return `<label class="lowcode-field lowcode-check"><input data-lowcode-field="${key}" type="checkbox" ${rawValue === true || rawValue === "true" || rawValue === "1" ? "checked" : ""} /> <span>${label}</span></label>`;
+    return `<label class="lowcode-field lowcode-check"${conditionAttrs}><input data-lowcode-field="${key}" type="checkbox" ${rawValue === true || rawValue === "true" || rawValue === "1" ? "checked" : ""} /> <span>${label}</span></label>`;
   }
   if (field.type === "select" && Array.isArray(field.options) && field.options.length) {
-    return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><select data-lowcode-field="${key}"${required}>${field.options.map((option) => `<option value="${escapeHtml(option.value)}"${String(option.value) === String(rawValue || "") ? " selected" : ""}>${escapeHtml(option.label || option.value)}</option>`).join("")}</select></label>`;
+    return `<label class="lowcode-field"${conditionAttrs}><span>${label}${field.required ? " *" : ""}</span><select data-lowcode-field="${key}"${required}>${field.options.map((option) => `<option value="${escapeHtml(option.value)}"${String(option.value) === String(rawValue || "") ? " selected" : ""}>${escapeHtml(option.label || option.value)}</option>`).join("")}</select></label>`;
   }
   if (field.type === "radio" && options.length) {
-    return `<fieldset class="lowcode-choice-field"><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option, index) => `<label><input data-lowcode-field="${key}" name="lowcode_${key}" type="radio" value="${escapeHtml(option.value)}" ${String(option.value) === String(rawValue || "") || (!rawValue && index === 0) ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
+    return `<fieldset class="lowcode-choice-field"${conditionAttrs}><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option, index) => `<label><input data-lowcode-field="${key}" name="lowcode_${key}" type="radio" value="${escapeHtml(option.value)}" ${String(option.value) === String(rawValue || "") || (!rawValue && index === 0) ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
   }
   if (field.type === "checkbox_group" && options.length) {
     const defaults = new Set((Array.isArray(rawValue) ? rawValue : String(rawValue || "").split(/[，,、]/)).map((item) => String(item).trim()).filter(Boolean));
-    return `<fieldset class="lowcode-choice-field wide"><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option) => `<label><input data-lowcode-field="${key}" type="checkbox" value="${escapeHtml(option.value)}" ${defaults.has(String(option.value)) ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
+    return `<fieldset class="lowcode-choice-field wide"${conditionAttrs}><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option) => `<label><input data-lowcode-field="${key}" type="checkbox" value="${escapeHtml(option.value)}" ${defaults.has(String(option.value)) ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
   }
   if (["image_upload", "video_upload", "attachment_upload"].includes(field.type)) {
     const accept = escapeHtml(lowcodeUploadAccept(field));
     const role = escapeHtml(lowcodeUploadFieldRole(field));
-    return `<label class="lowcode-field wide lowcode-upload-field">
+    return `<label class="lowcode-field wide lowcode-upload-field"${conditionAttrs}>
       <span>${label}${field.required ? " *" : ""}</span>
       <div class="lowcode-upload-line">
         <input data-lowcode-field="${key}" type="text" value="${defaultValue}" placeholder="${placeholder || lowcodeUploadHint(field)}"${required}${maxLength} />
@@ -779,7 +828,7 @@ function lowcodeFieldInput(field, submitted = {}) {
   const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
   const linkAttrs = field.type === "link" ? ` inputmode="url" autocomplete="url"` : "";
   const textAttrs = type === "text" ? `${maxLength}${pattern}${patternTitle}${linkAttrs}` : "";
-  return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required}${textAttrs} />${type === "text" ? lengthHint : ""}</label>`;
+  return `<label class="lowcode-field"${conditionAttrs}><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" value="${defaultValue}" placeholder="${placeholder}"${required}${textAttrs} />${type === "text" ? lengthHint : ""}</label>`;
 }
 function updateLowcodeCounters() {
   const values = {};
@@ -796,6 +845,7 @@ function updateLowcodeCounters() {
   });
 }
 function updateLowcodeRecordState() {
+  updateLowcodeFieldVisibility();
   updateLowcodeCounters();
   updateLowcodeRecordPreview();
 }
@@ -1614,31 +1664,20 @@ function fillLowcodeRecordForm(form, record = null) {
   $("lowcodeRecordForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function lowcodeRecordPayload() {
-  const data = {};
-  document.querySelectorAll("[data-lowcode-field]").forEach((field) => {
-    const key = field.dataset.lowcodeField;
-    if (field.type === "radio") {
-      if (field.checked) data[key] = field.value;
-      return;
-    }
-    if (field.type === "checkbox" && field.closest(".lowcode-choice-field")) {
-      if (!Array.isArray(data[key])) data[key] = [];
-      if (field.checked) data[key].push(field.value);
-      return;
-    }
-    data[key] = field.type === "checkbox" ? field.checked : field.value.trim();
-  });
+  updateLowcodeFieldVisibility();
+  const data = lowcodeFormValues();
   data.assets = orderedContentAssets(state.lowcodeAssetDrafts);
   return { data };
 }
 function normalizeLowcodeFieldDraft(field = {}, index = 0) {
   const key = String(field.key || `field${index + 1}`).trim();
   const type = lowcodeFieldTypes.some((item) => item.key === field.type) ? field.type : "text";
+  const visibleWhen = lowcodeVisibleWhen(field);
   const options = Array.isArray(field.options) ? field.options.map((option) => ({
     label: String(option.label || option.value || "").trim(),
     value: String(option.value || option.label || "").trim(),
   })).filter((option) => option.value) : [];
-  return {
+  const normalized = {
     key,
     label: String(field.label || key || "字段").trim(),
     type,
@@ -1653,10 +1692,13 @@ function normalizeLowcodeFieldDraft(field = {}, index = 0) {
     options,
     sortOrder: index,
   };
+  if (visibleWhen) normalized.visibleWhen = visibleWhen;
+  return normalized;
 }
 function validateLowcodeFieldDrafts(fields = state.lowcodeFieldDrafts) {
   const seen = new Set();
-  fields.forEach((field) => {
+  const normalizedFields = fields.map(normalizeLowcodeFieldDraft);
+  normalizedFields.forEach((field) => {
     const label = field.label || field.key || "字段";
     const key = String(field.key || "").trim();
     if (!/^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(key)) {
@@ -1671,6 +1713,17 @@ function validateLowcodeFieldDrafts(fields = state.lowcodeFieldDrafts) {
       } catch (err) {
         throw new Error(`${label}的格式规则不合法`);
       }
+    }
+    const visibleWhen = lowcodeVisibleWhen(field);
+    if (visibleWhen) {
+      if (!/^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(visibleWhen.field)) throw new Error(`${label}的条件字段编码不合法`);
+      if (visibleWhen.field.toLowerCase() === identity) throw new Error(`${label}不能依赖自身显示`);
+    }
+  });
+  normalizedFields.forEach((field) => {
+    const visibleWhen = lowcodeVisibleWhen(field);
+    if (visibleWhen && !seen.has(visibleWhen.field.toLowerCase())) {
+      throw new Error(`${field.label || field.key || "字段"}的条件字段不存在：${visibleWhen.field}`);
     }
   });
 }
@@ -1919,6 +1972,7 @@ function applyLowcodeMappingPreset(index, presetValue) {
   return mapping;
 }
 function lowcodeFieldEditorRow(field, index) {
+  const visibleWhen = lowcodeVisibleWhen(field) || { field: "", value: "" };
   return `<article class="lowcode-field-editor-row" data-lowcode-field-row="${index}">
     <button class="lowcode-field-drag" type="button" draggable="true" data-lowcode-field-drag="${index}" title="拖拽排序">拖拽</button>
     <div class="lowcode-field-editor-main">
@@ -1938,6 +1992,8 @@ function lowcodeFieldEditorRow(field, index) {
       <input data-lowcode-config-field="pattern" value="${escapeHtml(field.pattern || "")}" placeholder="格式规则，如 ^\\d{4}$" />
       <input data-lowcode-config-field="patternMessage" value="${escapeHtml(field.patternMessage || "")}" placeholder="格式错误提示" />
       <input data-lowcode-config-field="optionsText" value="${escapeHtml(lowcodeOptionsText(field.options))}" placeholder="选项：一项一行或逗号分隔" />
+      <input data-lowcode-config-field="visibleWhenField" value="${escapeHtml(visibleWhen.field)}" placeholder="条件显示：依赖字段 key" />
+      <input data-lowcode-config-field="visibleWhenValue" value="${escapeHtml(visibleWhen.value)}" placeholder="条件显示：等于值" />
     </div>
     <div class="lowcode-field-editor-actions">
       <label class="check-inline"><input data-lowcode-config-field="required" type="checkbox" ${field.required ? "checked" : ""} /> 必填</label>
@@ -1957,10 +2013,21 @@ function renderLowcodeFieldEditor() {
 function updateLowcodeFieldDraft(index, field, value) {
   if (!state.lowcodeFieldDrafts[index]) return;
   const next = [...state.lowcodeFieldDrafts];
+  if (field === "visibleWhenField" || field === "visibleWhenValue") {
+    const visibleWhen = {
+      ...(next[index].visibleWhen || {}),
+      [field === "visibleWhenField" ? "field" : "value"]: String(value || "").trim(),
+    };
+    next[index] = {
+      ...next[index],
+      visibleWhen: visibleWhen.field ? visibleWhen : null,
+    };
+  } else {
   next[index] = {
     ...next[index],
     [field === "optionsText" ? "options" : field]: field === "required" ? Boolean(value) : field === "optionsText" ? parseLowcodeOptions(value) : field === "maxLength" ? Math.max(0, Number.parseInt(value || 0, 10) || 0) : String(value || "").trim(),
   };
+  }
   state.lowcodeFieldDrafts = next.map(normalizeLowcodeFieldDraft);
   renderLowcodeTemplatePreview();
   renderLowcodeTemplateQualityGuide();
