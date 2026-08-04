@@ -39,6 +39,7 @@ const contentAssetRoles = [
   { key: "certificate", label: "证书/荣誉" },
   { key: "gallery", label: "图集" },
   { key: "video", label: "视频" },
+  { key: "attachment", label: "附件" },
 ];
 const contentAssetRoleLabels = Object.fromEntries(contentAssetRoles.map((item) => [item.key, item.label]));
 const lowcodeMappingPresets = [
@@ -54,6 +55,7 @@ const lowcodeMappingPresets = [
   { value: "content_item.assets.certificate", label: "证书/荣誉图" },
   { value: "content_item.assets.gallery", label: "图集" },
   { value: "content_item.assets.video", label: "视频" },
+  { value: "content_item.assets.attachment", label: "附件" },
   { value: "__meta_label__", label: "扩展字段" },
 ];
 const lowcodeFieldTypes = [
@@ -207,7 +209,7 @@ const views = {
   users: ["老师管理", "创建、导入、禁用和维护老师账号。"],
   projects: ["门户管理", "统一维护学校门户、系部门户和专题门户，并分配归属老师。"],
   pages: ["板块资料", "维护门户下的板块资料，审核通过后进入展示。"],
-  assets: ["素材库", "上传、复用和删除图片素材。"],
+  assets: ["素材库", "上传、复用和删除图片、视频和附件素材。"],
   reviews: ["审核发布", "审核板块资料草稿、删除申请和门户配置草稿。"],
   deploy: ["展厅发布", "选择欢迎页项目和实际展示资料。"],
   logs: ["操作日志", "查询和导出关键操作日志。"],
@@ -215,7 +217,7 @@ const views = {
 };
 const teacherViews = {
   pages: ["板块资料", "上传、编辑并提交板块资料，审核通过后进入展示。"],
-  assets: ["素材库", "上传和复用门户展示素材。"],
+  assets: ["素材库", "上传和复用门户展示素材及归档附件。"],
   projects: ["我的门户", "查看自己负责的门户，提交基础信息修改。"],
   account: ["个人设置", "查看个人资料并修改密码。"],
 };
@@ -417,9 +419,11 @@ function normalizeContentAsset(asset = {}, index = 0) {
   const url = String(asset.url || asset.src || "").trim();
   if (!url) return null;
   return {
+    assetId: asset.assetId || asset.id || null,
     url,
     caption: String(asset.caption || asset.title || "").trim(),
     role: normalizeContentAssetRole(asset.role, index),
+    mimeType: String(asset.mimeType || "").trim(),
     sortOrder: index,
   };
 }
@@ -472,7 +476,29 @@ function removeContentAsset(index) {
   setContentAssetDrafts(state.contentAssetDrafts.filter((_, itemIndex) => itemIndex !== index));
 }
 function looksLikeVideoAsset(asset) {
-  return asset.role === "video" || /\.(mp4|mov|m4v|webm|ogg)(\?.*)?$/i.test(asset.url);
+  return asset.role === "video" || /^video\//i.test(asset.mimeType || "") || /\.(mp4|mov|m4v|webm|ogg)(\?.*)?$/i.test(asset.url);
+}
+function looksLikeImageAsset(asset) {
+  return /^image\//i.test(asset.mimeType || "") || /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(asset.url);
+}
+function looksLikeAttachmentAsset(asset) {
+  return asset.role === "attachment" || (!looksLikeImageAsset(asset) && !looksLikeVideoAsset(asset));
+}
+function defaultRoleForFile(file, index = 0) {
+  const mime = String(file?.type || "");
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("image/")) return index === 0 ? "cover" : "gallery";
+  return "attachment";
+}
+function assetKindLabel(asset) {
+  if (looksLikeVideoAsset(asset)) return "VIDEO";
+  if (looksLikeAttachmentAsset(asset)) return "FILE";
+  return "IMAGE";
+}
+function assetThumbHtml(asset, alt = "asset") {
+  return looksLikeImageAsset(asset)
+    ? `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(alt)}" loading="lazy" />`
+    : `<span>${assetKindLabel(asset)}</span>`;
 }
 function renderContentAssetCards() {
   const list = $("contentAssetCards");
@@ -481,7 +507,7 @@ function renderContentAssetCards() {
   list.innerHTML = assets.length ? assets.map((asset, index) => `
     <article class="content-asset-card">
       <figure class="content-asset-thumb">
-        ${looksLikeVideoAsset(asset) ? `<span>VIDEO</span>` : `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.caption || "asset")}" loading="lazy" />`}
+        ${assetThumbHtml(asset, asset.caption || "asset")}
       </figure>
       <div class="content-asset-fields">
         <input data-content-asset-index="${index}" data-content-asset-field="url" value="${escapeHtml(asset.url)}" placeholder="素材地址" />
@@ -496,7 +522,7 @@ function renderContentAssetCards() {
         <button class="button small danger" type="button" data-content-asset-remove="${index}">删除</button>
       </div>
     </article>
-  `).join("") : `<div class="content-asset-empty">暂无素材。可上传图片、从素材库选择，或粘贴图片/视频地址。</div>`;
+  `).join("") : `<div class="content-asset-empty">暂无素材。可上传图片、视频、附件，从素材库选择，或粘贴素材地址。</div>`;
 }
 function appendContentAssetLine(url, caption = "", role = "gallery") {
   addContentAsset({ url, caption, role });
@@ -543,7 +569,7 @@ function renderLowcodeAssetCards() {
   list.innerHTML = assets.length ? assets.map((asset, index) => `
     <article class="content-asset-card">
       <figure class="content-asset-thumb">
-        ${looksLikeVideoAsset(asset) ? `<span>VIDEO</span>` : `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.caption || "asset")}" loading="lazy" />`}
+        ${assetThumbHtml(asset, asset.caption || "asset")}
       </figure>
       <div class="content-asset-fields">
         <input data-lowcode-asset-index="${index}" data-lowcode-asset-field="url" value="${escapeHtml(asset.url)}" placeholder="素材地址" />
@@ -558,7 +584,7 @@ function renderLowcodeAssetCards() {
         <button class="button small danger" type="button" data-lowcode-asset-remove="${index}">删除</button>
       </div>
     </article>
-  `).join("") : `<div class="content-asset-empty">暂无素材。可上传图片、从素材库选择，或粘贴图片/视频地址。</div>`;
+  `).join("") : `<div class="content-asset-empty">暂无素材。可上传图片、视频、附件，从素材库选择，或粘贴素材地址。</div>`;
 }
 function lowcodePreviewPayload() {
   const form = currentLowcodeForm();
@@ -604,7 +630,7 @@ function updateLowcodeRecordPreview() {
     <p>${escapeHtml(payload.summary || payload.subtitle || "摘要会进入卡片和抽屉开头。")}</p>
     ${payload.meta.length ? `<div class="content-preview-meta">${payload.meta.slice(0, 6).map(([key, value]) => `<span>${escapeHtml(key)}：${escapeHtml(value)}</span>`).join("")}</div>` : ""}
     ${payload.body ? `<div class="preview-body">${escapeHtml(payload.body).replace(/\n/g, "<br>")}</div>` : ""}
-    ${assets.length ? `<div class="lowcode-preview-assets">${assets.slice(0, 6).map((asset) => looksLikeVideoAsset(asset) ? `<span>VIDEO</span>` : `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.caption || "asset")}" loading="lazy" />`).join("")}</div>` : ""}
+    ${assets.length ? `<div class="lowcode-preview-assets">${assets.slice(0, 6).map((asset) => assetThumbHtml(asset, asset.caption || "asset")).join("")}</div>` : ""}
   `;
 }
 function lowcodeFieldInput(field, submitted = {}) {
@@ -1282,7 +1308,7 @@ function lowcodeTemplatePayload() {
     .map((field, index) => ({ ...field, sortOrder: index }));
   fields.push({
     key: "assets",
-    label: "图片/视频素材",
+    label: "图片/视频/附件素材",
     type: "asset_list",
     required: false,
     mapping: "content_item.assets.gallery",
@@ -1420,7 +1446,7 @@ function contentItemQualityIssues(item) {
   const bodyText = textFromBodyJson(item.bodyJson || []).trim();
   const summaryText = String(item.summary || item.subtitle || "").trim();
   const type = normalizeContentType(item.contentType || "article");
-  const hasAnyAsset = Boolean(item.coverAssetId) || assets.length > 0;
+  const hasVisualAsset = Boolean(item.coverAssetId) || assets.some((asset) => !looksLikeAttachmentAsset(asset));
   const hasVideo = assets.some((asset) => asset.role === "video" || looksLikeVideoAsset(asset));
   const hasPortrait = assets.some((asset) => ["portrait", "cover"].includes(asset.role)) || Boolean(item.coverAssetId);
   const hasCertificate = assets.some((asset) => ["certificate", "cover", "gallery"].includes(asset.role)) || Boolean(item.coverAssetId);
@@ -1428,7 +1454,7 @@ function contentItemQualityIssues(item) {
   if (!String(item.title || "").trim()) issues.push(["high", "缺少标题"]);
   if (!summaryText) issues.push(["medium", "缺少卡片摘要"]);
   if (!bodyText || bodyText.length < 80) issues.push(["medium", "正文偏少"]);
-  if (!hasAnyAsset) issues.push(["medium", "缺少图片/视频素材"]);
+  if (!hasVisualAsset) issues.push(["medium", "缺少图片/视频素材"]);
   if (type === "video" && !hasVideo) issues.push(["high", "视频类资料缺少视频素材"]);
   if (type === "person" && !hasPortrait) issues.push(["medium", "人物类资料建议配置人物照"]);
   if (type === "honor" && !hasCertificate) issues.push(["medium", "荣誉类资料建议配置证书/荣誉图"]);
@@ -1644,9 +1670,9 @@ function updateContentPreview() {
   const fieldHtml = Object.keys(fields).length
     ? `<div class="content-preview-fields">${Object.entries(fields).map(([key, value]) => `<span><b>${escapeHtml(key)}</b>${escapeHtml(value)}</span>`).join("")}</div>`
     : "";
-  const firstAsset = assets[0];
+  const firstAsset = assets.find((asset) => looksLikeImageAsset(asset));
   $("contentPreview").innerHTML = `
-    ${firstAsset ? `<figure><img src="${escapeHtml(firstAsset.url)}" alt="${escapeHtml(firstAsset.caption || $("contentTitle").value)}" /></figure>` : ""}
+    ${firstAsset ? `<figure>${assetThumbHtml(firstAsset, firstAsset.caption || $("contentTitle").value)}</figure>` : ""}
     <div>
       <span>${escapeHtml(contentTypeLabel(type))}</span>
       <h3>${escapeHtml($("contentTitle").value.trim() || module.label || "结构化资料")}</h3>
@@ -1707,7 +1733,7 @@ function setupNav() {
   $("pageFormTitle").textContent = isAdmin() ? "板块资料编辑" : "板块资料编辑";
   $("pageSubmitButton").textContent = isAdmin() ? "保存/提交审核" : "提交审核";
   $("assetsHeading").textContent = isAdmin() ? "素材库" : "素材库";
-  $("assetsIntro").textContent = isAdmin() ? "上传、复用和删除门户展示素材；老师只能管理自己上传的素材。" : "上传板块资料所需图片，只能查看和管理自己上传的素材。";
+  $("assetsIntro").textContent = isAdmin() ? "上传、复用和删除门户展示素材及归档附件；老师只能管理自己上传的素材。" : "上传板块资料所需图片、视频和附件，只能查看和管理自己上传的素材。";
 }
 function showView(view) {
   if (isTeacherPortal() && !teacherViews[view]) view = "pages";
@@ -2339,7 +2365,7 @@ function renderAssets() {
   $("cancelAssetPick").hidden = !state.assetTargetInput;
   $("assetsGrid").innerHTML = state.assets.length ? state.assets.map((asset) => `
     <article class="asset-card">
-      <div class="asset-thumb"><img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.originalFilename)}" loading="lazy" /></div>
+      <div class="asset-thumb">${assetThumbHtml(asset, asset.originalFilename || "asset")}</div>
       <div class="asset-meta">
         <strong title="${escapeHtml(asset.originalFilename)}">${escapeHtml(asset.originalFilename || asset.storageKey)}</strong>
         <span>${escapeHtml(asset.ownerUsername)} · ${formatBytes(asset.sizeBytes)} · ${formatTime(asset.createdAt)}</span>
@@ -2360,8 +2386,8 @@ async function openAssetPicker(inputId) {
 function useAsset(asset) {
   if (!asset || !state.assetTargetInput) return;
   if (state.assetTargetInput === "__contentAssetManager") {
-    const role = state.contentAssetDrafts.length ? "gallery" : "cover";
-    addContentAsset({ url: asset.url, caption: $("contentTitle")?.value.trim() || asset.originalFilename || "", role });
+    const role = looksLikeAttachmentAsset(asset) ? "attachment" : looksLikeVideoAsset(asset) ? "video" : state.contentAssetDrafts.length ? "gallery" : "cover";
+    addContentAsset({ assetId: asset.id, url: asset.url, caption: $("contentTitle")?.value.trim() || asset.originalFilename || "", role, mimeType: asset.mimeType || "" });
     const returnView = state.assetReturnView || "pages";
     state.assetTargetInput = "";
     state.assetReturnView = "";
@@ -2369,8 +2395,8 @@ function useAsset(asset) {
     return;
   }
   if (state.assetTargetInput === "__lowcodeAssetManager") {
-    const role = state.lowcodeAssetDrafts.length ? "gallery" : "cover";
-    addLowcodeAsset({ url: asset.url, caption: asset.originalFilename || "", role });
+    const role = looksLikeAttachmentAsset(asset) ? "attachment" : looksLikeVideoAsset(asset) ? "video" : state.lowcodeAssetDrafts.length ? "gallery" : "cover";
+    addLowcodeAsset({ assetId: asset.id, url: asset.url, caption: asset.originalFilename || "", role, mimeType: asset.mimeType || "" });
     const returnView = state.assetReturnView || "pages";
     state.assetTargetInput = "";
     state.assetReturnView = "";
@@ -2419,7 +2445,7 @@ async function refreshView(view = state.activeView) {
   if (view === "logs") await renderLogs();
 }
 
-async function uploadImage(file, statusNode) {
+async function uploadAssetFile(file, statusNode) {
   if (!file) return "";
   const reader = new FileReader();
   const dataUrl = await new Promise((resolve, reject) => {
@@ -2428,19 +2454,28 @@ async function uploadImage(file, statusNode) {
     reader.readAsDataURL(file);
   });
   const data = await jsonApi("/api/assets", body({ filename: file.name, dataUrl }));
-  setStatus(statusNode, "图片已上传", "success");
-  return data.url;
+  setStatus(statusNode, "素材已上传", "success");
+  return data;
+}
+async function uploadImage(file, statusNode) {
+  if (!file) return "";
+  if (file && !String(file.type || "").startsWith("image/")) {
+    throw new Error("该位置只能上传图片");
+  }
+  const data = await uploadAssetFile(file, statusNode);
+  return data.url || "";
 }
 async function uploadImages(files, statusNode, onUploaded) {
   const list = Array.from(files || []);
   if (!list.length) return 0;
   let count = 0;
   for (const file of list) {
-    const url = await uploadImage(file, statusNode);
-    if (url) {
+    const data = await uploadAssetFile(file, statusNode);
+    const asset = data.asset || {};
+    if (data.url) {
       count += 1;
-      onUploaded(url, file);
-      setStatus(statusNode, `已上传 ${count}/${list.length} 张图片`, "success");
+      onUploaded(data.url, file, asset);
+      setStatus(statusNode, `已上传 ${count}/${list.length} 个素材`, "success");
     }
   }
   return count;
@@ -2948,19 +2983,21 @@ $("lowcodeDynamicFields").addEventListener("input", updateLowcodeRecordState);
 $("lowcodeDynamicFields").addEventListener("change", updateLowcodeRecordState);
 $("uploadLowcodeAsset").addEventListener("click", async () => {
   try {
-    const count = await uploadImages($("lowcodeAssetFile").files, $("lowcodeRecordStatus"), (url, file) => {
+    const count = await uploadImages($("lowcodeAssetFile").files, $("lowcodeRecordStatus"), (url, file, asset) => {
       addLowcodeAsset({
+        assetId: asset.id || null,
         url,
         caption: $("lowcodeAssetCaption").value.trim() || file.name,
-        role: state.lowcodeAssetDrafts.length ? "gallery" : $("lowcodeAssetRole").value,
+        role: defaultRoleForFile(file, state.lowcodeAssetDrafts.length),
+        mimeType: asset.mimeType || file.type || "",
       });
     });
     if (!count) {
-      setStatus($("lowcodeRecordStatus"), "请选择图片", "error");
+      setStatus($("lowcodeRecordStatus"), "请选择素材或附件", "error");
       return;
     }
     $("lowcodeAssetFile").value = "";
-    setStatus($("lowcodeRecordStatus"), `已批量加入 ${count} 张图片`, "success");
+    setStatus($("lowcodeRecordStatus"), `已批量加入 ${count} 个素材`, "success");
   } catch (err) { setStatus($("lowcodeRecordStatus"), err.message, "error"); }
 });
 $("addLowcodeAssetUrl").addEventListener("click", () => {
@@ -3015,19 +3052,21 @@ $("contentItemForm").addEventListener("submit", async (event) => {
 });
 $("uploadContentAsset").addEventListener("click", async () => {
   try {
-    const count = await uploadImages($("contentAssetFile").files, $("contentItemStatus"), (url, file) => {
-      appendContentAssetLine(
+    const count = await uploadImages($("contentAssetFile").files, $("contentItemStatus"), (url, file, asset) => {
+      addContentAsset({
+        assetId: asset.id || null,
         url,
-        $("contentAssetCaption").value.trim() || $("contentTitle").value.trim() || file.name,
-        state.contentAssetDrafts.length ? "gallery" : "cover"
-      );
+        caption: $("contentAssetCaption").value.trim() || $("contentTitle").value.trim() || file.name,
+        role: defaultRoleForFile(file, state.contentAssetDrafts.length),
+        mimeType: asset.mimeType || file.type || "",
+      });
     });
     if (!count) {
-      setStatus($("contentItemStatus"), "请选择图片", "error");
+      setStatus($("contentItemStatus"), "请选择素材或附件", "error");
       return;
     }
     $("contentAssetFile").value = "";
-    setStatus($("contentItemStatus"), `已批量加入 ${count} 张图片`, "success");
+    setStatus($("contentItemStatus"), `已批量加入 ${count} 个素材`, "success");
   } catch (err) { setStatus($("contentItemStatus"), err.message, "error"); }
 });
 $("addContentAssetUrl").addEventListener("click", () => {
@@ -3114,9 +3153,9 @@ $("refreshAssets").addEventListener("click", async () => {
 });
 $("uploadAsset").addEventListener("click", async () => {
   try {
-    const url = await uploadImage($("assetFile").files[0], $("assetStatus"));
-    if (!url) {
-      setStatus($("assetStatus"), "请选择图片", "error");
+    const data = await uploadAssetFile($("assetFile").files[0], $("assetStatus"));
+    if (!data || !data.url) {
+      setStatus($("assetStatus"), "请选择素材或附件", "error");
       return;
     }
     $("assetFile").value = "";
@@ -3144,7 +3183,7 @@ $("assetsGrid").addEventListener("click", async (event) => {
     }
     if (copy) {
       if (navigator.clipboard) await navigator.clipboard.writeText(asset.url);
-      setStatus($("assetStatus"), `图片地址：${asset.url}`, "success");
+      setStatus($("assetStatus"), `素材地址：${asset.url}`, "success");
       return;
     }
     if (del && confirm("确定删除该资源？")) {

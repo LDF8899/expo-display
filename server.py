@@ -587,7 +587,7 @@ def lowcode_schema_for_module(portal_type, module):
         [
             lowcode_field("sortOrder", "排序", "number", False, "content_item.sort_order", "数字越小越靠前", group="展示设置"),
             lowcode_field("featured", "重点展示", "checkbox", False, "content_item.featured", "", group="展示设置"),
-            lowcode_field("assets", "图片/视频素材", "asset_list", False, "content_item.assets.gallery", "可上传、从素材库选择，或一行一个素材地址", group="媒体素材"),
+            lowcode_field("assets", "图片/视频/附件素材", "asset_list", False, "content_item.assets.gallery", "可上传、从素材库选择，或一行一个素材地址", group="媒体素材"),
         ]
     )
     return {
@@ -710,6 +710,19 @@ UPLOAD_MIME_EXTENSIONS = {
     "image/png": ".png",
     "image/jpeg": ".jpg",
     "image/webp": ".webp",
+    "application/pdf": ".pdf",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.ms-excel": ".xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.ms-powerpoint": ".ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "text/plain": ".txt",
+    "text/csv": ".csv",
+    "application/zip": ".zip",
+    "application/x-zip-compressed": ".zip",
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
 }
 if ALLOW_SVG_UPLOADS:
     UPLOAD_MIME_EXTENSIONS["image/svg+xml"] = ".svg"
@@ -4345,6 +4358,11 @@ def content_item_body_html(snapshot, assets):
                 f'<figcaption><strong>{html_attr(asset.get("title") or "视频资源")}</strong> '
                 f'<a href="{html_attr(url)}">{html_attr(caption or "视频")}</a></figcaption></figure>'
             )
+        elif role == "attachment" or re.search(r"\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip)(\?|#|$)", url, flags=re.I):
+            html += (
+                f'<p><strong>{html_attr(asset.get("title") or "附件资料")}</strong>：'
+                f'<a href="{html_attr(url)}">{html_attr(caption or "查看附件")}</a></p>'
+            )
         else:
             html += (
                 f'<figure><img src="{html_attr(url)}" alt="{html_attr(caption)}">'
@@ -4364,7 +4382,7 @@ def content_item_cover_url(conn, snapshot, assets):
         if asset.get("role") in preferred_roles and asset.get("url"):
             return asset["url"]
     for asset in assets or []:
-        if asset.get("url") and not re.search(r"\.(mp4|webm|ogg)(\?|#|$)", asset["url"], flags=re.I):
+        if asset.get("url") and not re.search(r"\.(mp4|webm|ogg|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip)(\?|#|$)", asset["url"], flags=re.I):
             return asset["url"]
     return ""
 
@@ -8136,22 +8154,22 @@ class ExpoHandler(BaseHTTPRequestHandler):
             data = self.read_json(max_bytes=max(MAX_JSON_BYTES, int(MAX_UPLOAD_BYTES * 1.5) + 1024))
             data_url = str(data.get("dataUrl", ""))
             filename = str(data.get("filename", "upload")).strip()
-            match = re.match(r"data:(image/[a-zA-Z0-9.+-]+);base64,(.+)", data_url)
+            match = re.match(r"data:([a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+);base64,(.+)", data_url)
             if not match:
-                self.send_json(400, {"ok": False, "error": "图片数据无效"})
+                self.send_json(400, {"ok": False, "error": "上传文件数据无效"})
                 return
 
             mime, encoded = match.groups()
             ext = UPLOAD_MIME_EXTENSIONS.get(mime)
             if not ext:
-                self.send_json(415, {"ok": False, "error": "不支持的图片类型"})
+                self.send_json(415, {"ok": False, "error": "不支持的文件类型"})
                 return
             safe_name = f"{uuid.uuid4().hex}{ext}"
             storage_key = f"{ASSET_KEY_PREFIX}/{safe_name}" if ASSET_KEY_PREFIX else safe_name
             try:
                 payload = base64.b64decode(encoded, validate=True)
                 if len(payload) > MAX_UPLOAD_BYTES:
-                    self.send_json(413, {"ok": False, "error": "上传图片太大"})
+                    self.send_json(413, {"ok": False, "error": "上传文件太大"})
                     return
                 url = asset_storage(UPLOAD_DIR).save(storage_key, payload, mime)
                 asset = create_asset_record(user, filename, storage_key, url, mime, len(payload))

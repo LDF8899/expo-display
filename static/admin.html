@@ -240,8 +240,8 @@
           <div id="lowcodeDynamicFields" class="lowcode-dynamic-fields"></div>
           <section class="content-asset-manager" aria-label="模板素材">
             <div class="field-head">
-              <span>图片/视频素材</span>
-              <small>可上传、从素材库选择，或粘贴地址；前台仍按现有样式自动轮播展示。</small>
+              <span>图片/视频/附件素材</span>
+              <small>可上传、从素材库选择，或粘贴地址；图片用于展示轮播，附件用于资料归档。</small>
             </div>
             <div class="content-asset-entry">
               <input id="lowcodeAssetUrl" placeholder="粘贴图片/视频地址" />
@@ -252,13 +252,14 @@
                 <option value="certificate">证书/荣誉</option>
                 <option value="gallery">图集</option>
                 <option value="video">视频</option>
+                <option value="attachment">附件</option>
               </select>
               <button id="addLowcodeAssetUrl" class="button ghost" type="button">加入</button>
               <button id="selectLowcodeAsset" class="button ghost" type="button">素材库</button>
             </div>
             <div class="form-grid four">
-              <input id="lowcodeAssetFile" type="file" accept="image/*" multiple />
-              <button id="uploadLowcodeAsset" class="button ghost" type="button">批量上传并加入图片组</button>
+              <input id="lowcodeAssetFile" type="file" accept="image/*,video/mp4,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" multiple />
+              <button id="uploadLowcodeAsset" class="button ghost" type="button">批量上传并加入素材组</button>
             </div>
             <div id="lowcodeAssetCards" class="content-asset-list"></div>
           </section>
@@ -303,6 +304,7 @@
             <option value="content_item.assets.certificate"></option>
             <option value="content_item.assets.gallery"></option>
             <option value="content_item.assets.video"></option>
+            <option value="content_item.assets.attachment"></option>
             <option value="content_item.meta_json.自定义字段"></option>
           </datalist>
           <section class="lowcode-field-editor" aria-label="模板字段配置">
@@ -354,8 +356,8 @@
             <textarea id="contentMetaText" rows="6" placeholder="类型字段：每行一个，例如&#10;姓名：张三&#10;身份：优秀校友&#10;年份：2026"></textarea>
             <section class="content-asset-manager" aria-label="结构化素材">
               <div class="field-head">
-                <span>图片/视频组</span>
-                <small>统一管理顺序、说明和展示角色</small>
+                <span>图片/视频/附件组</span>
+                <small>统一管理顺序、说明、展示角色和归档附件</small>
               </div>
               <div class="content-asset-entry">
                 <input id="contentAssetUrl" placeholder="粘贴图片/视频地址" />
@@ -366,6 +368,7 @@
                   <option value="certificate">证书/荣誉</option>
                   <option value="gallery">图集</option>
                   <option value="video">视频</option>
+                  <option value="attachment">附件</option>
                 </select>
                 <button id="addContentAssetUrl" class="button ghost" type="button">加入</button>
                 <button id="selectContentAsset" class="button ghost" type="button">素材库</button>
@@ -377,8 +380,8 @@
           <div class="form-grid four">
             <label class="check-inline"><input id="contentFeatured" type="checkbox" /> 重点展示</label>
             <label class="check-inline"><input id="contentEnabled" type="checkbox" checked /> 启用资料</label>
-            <input id="contentAssetFile" type="file" accept="image/*" multiple />
-            <button id="uploadContentAsset" class="button ghost" type="button">批量上传并加入图片组</button>
+            <input id="contentAssetFile" type="file" accept="image/*,video/mp4,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" multiple />
+            <button id="uploadContentAsset" class="button ghost" type="button">批量上传并加入素材组</button>
           </div>
           <section class="exhibit-guide" aria-label="结构化预览">
             <div class="field-head">
@@ -495,8 +498,8 @@
             <button id="refreshAssets" class="button ghost" type="button">刷新素材</button>
           </div>
           <div class="form-grid three">
-            <input id="assetFile" type="file" accept="image/*" />
-            <button id="uploadAsset" class="button primary" type="button">上传图片</button>
+            <input id="assetFile" type="file" accept="image/*,video/mp4,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" />
+            <button id="uploadAsset" class="button primary" type="button">上传素材/附件</button>
             <button id="cancelAssetPick" class="button ghost" type="button" hidden>返回编辑</button>
           </div>
           <p id="assetStatus" class="status-text"></p>
