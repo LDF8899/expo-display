@@ -308,6 +308,35 @@ async (page) => {{
   if (JSON.stringify(topicTabs) !== JSON.stringify(expectedTabs)) {{
     throw new Error(`topic tabs should use fixed 11-section template, got ${{JSON.stringify(topicTabs)}}`);
   }}
+  await page.goto({json.dumps(base_url + "/topics/digital-tourism?section=competitions")});
+  await page.waitForSelector(".topic-loop-card[data-section-id='competitions'][role='button']", {{ timeout: 10000 }});
+  await page.locator(".topic-loop-card[data-section-id='competitions'][role='button']").first().click();
+  await page.waitForSelector("#drawer:not([hidden]) .topic-display-carousel[data-detail-carousel]", {{ timeout: 10000 }});
+  const drawerCarouselBefore = await page.evaluate(() => {{
+    const body = document.querySelector("#drawerBody");
+    const carousel = document.querySelector("#drawer .topic-display-carousel[data-detail-carousel]");
+    const slides = Array.from(carousel.querySelectorAll(".topic-display-carousel-slide"));
+    const active = slides.findIndex((slide) => slide.classList.contains("is-active"));
+    return {{
+      mediaCount: Number(carousel.dataset.mediaCount || 0),
+      activeCount: slides.filter((slide) => slide.classList.contains("is-active")).length,
+      active,
+      overflowY: getComputedStyle(body).overflowY,
+      objectFits: Array.from(carousel.querySelectorAll("img")).map((img) => getComputedStyle(img).objectFit),
+      loopTrack: !!body.querySelector("[data-drawer-loop-track]"),
+    }};
+  }});
+  if (drawerCarouselBefore.mediaCount < 2) throw new Error(`drawer detail carousel should contain multiple media items, got ${{drawerCarouselBefore.mediaCount}}`);
+  if (drawerCarouselBefore.activeCount !== 1) throw new Error(`drawer detail carousel should show one active image, got ${{drawerCarouselBefore.activeCount}}`);
+  if (drawerCarouselBefore.overflowY !== "auto" && drawerCarouselBefore.overflowY !== "scroll") throw new Error(`drawer body should be scrollable, got ${{drawerCarouselBefore.overflowY}}`);
+  if (!drawerCarouselBefore.loopTrack) throw new Error("drawer should keep auto-loop content track");
+  if (!drawerCarouselBefore.objectFits.every((value) => value === "contain")) throw new Error(`drawer images should use contain, got ${{drawerCarouselBefore.objectFits.join(",")}}`);
+  await page.waitForTimeout(3800);
+  const drawerCarouselAfter = await page.evaluate(() => {{
+    const slides = Array.from(document.querySelectorAll("#drawer .topic-display-carousel-slide"));
+    return slides.findIndex((slide) => slide.classList.contains("is-active"));
+  }});
+  if (drawerCarouselAfter === drawerCarouselBefore.active) throw new Error("drawer detail carousel should auto-rotate");
 }}
 """
 

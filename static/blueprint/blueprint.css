@@ -1888,6 +1888,7 @@ html, body {
 .topic-display-body p,
 .topic-display-body figure,
 .topic-display-body .topic-display-photo-strip,
+.topic-display-body .topic-display-carousel,
 .topic-display-body .topic-display-video {
   margin: 0.9em 0;
 }
@@ -1969,6 +1970,39 @@ html, body {
 .topic-display-body .topic-display-photo-strip.single {
   max-width: 460px;
 }
+.topic-display-carousel {
+  position: relative;
+  width: min(100%, 760px);
+  min-height: 360px;
+  border: 1px solid rgba(148, 179, 225, 0.28);
+  border-radius: 8px;
+  background: rgba(8, 22, 45, 0.24);
+  overflow: hidden;
+}
+.topic-display-carousel-stage {
+  position: relative;
+  min-height: 360px;
+}
+.topic-display-carousel-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 520ms var(--ease);
+}
+.topic-display-carousel-slide.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.topic-display-carousel.is-single .topic-display-carousel-slide {
+  position: relative;
+  opacity: 1;
+  pointer-events: auto;
+}
+.topic-display-carousel-counter {
+  right: 16px;
+  bottom: 14px;
+}
 .topic-display-photo {
   min-width: 0;
   flex: 1 1 280px;
@@ -2000,12 +2034,42 @@ html, body {
   object-fit: contain;
   background: transparent;
 }
+.topic-display-carousel .topic-display-photo {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border-radius: 0;
+  background: transparent;
+}
+.topic-display-carousel .topic-display-photo img {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  background: transparent;
+}
 .topic-display-photo figcaption {
   position: static;
   padding: 9px 11px 10px;
   background: rgba(8, 22, 45, 0.70);
   color: rgba(196, 214, 238, 0.82);
   font: 14px/1.45 500;
+}
+.topic-display-carousel .topic-display-photo figcaption {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  z-index: 2;
+  width: max-content;
+  max-width: calc(100% - 28px);
+  border: 1px solid rgba(196, 228, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(4, 31, 63, 0.66);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .topic-display-video {
   max-width: 860px;
@@ -2099,17 +2163,14 @@ html, body {
   margin-top: 0.6em;
 }
 .topic-honor-gallery {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
+  width: min(100%, 680px);
 }
 .topic-honor-gallery .topic-display-photo {
-  flex: 1 1 320px;
+  flex: none;
 }
 .topic-honor-gallery .topic-display-photo.media-tall,
 .topic-honor-gallery .topic-display-photo.media-portrait {
-  flex-basis: 220px;
+  flex-basis: auto;
 }
 .topic-display-footer {
   display: flex;

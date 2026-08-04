@@ -123,7 +123,7 @@
   var stage = $("bpStage"), screenHome = $("screenHome"), screenDetail = $("screenDetail");
 
   var state = { kind: null, id: null, section: 0, sections: [], lastScanAt: 0, playingVideo: false };
-  var idleTimer = null, lbImages = [], lbIndex = 0, topicMediaCarouselTimers = [];
+  var idleTimer = null, lbImages = [], lbIndex = 0, topicMediaCarouselTimers = [], drawerMediaCarouselTimers = [];
   var drawerLoopTimer = null, drawerLoopLastAt = 0, drawerLoopCycle = 0, drawerLoopPauseUntil = 0;
   var DRAWER_LOOP_SPEED = 24;
   var DRAWER_LOOP_RESUME_MS = 2600;
@@ -1142,7 +1142,7 @@
       : "";
     var restPhotos = grouped.images.slice(1);
     var restPhotoHtml = restPhotos.length
-      ? '<div class="topic-display-photo-strip">' + restPhotos.map(function (b, index) { return renderTopicDisplayFigure(b, title, index + 1); }).join("") + '</div>'
+      ? renderTopicDisplayCarousel(restPhotos, title, "topic-person-gallery")
       : "";
     var videoHtml = grouped.videos.map(function (b) { return '<div class="topic-display-video">' + renderVideo(b) + '</div>'; }).join("");
     return '<section class="topic-person-layout">' + portraitHtml +
@@ -1152,7 +1152,7 @@
   function renderHonorFullSequence(blocks, title) {
     var grouped = splitTopicBlocks(blocks);
     var photoHtml = grouped.images.length
-      ? '<div class="topic-honor-gallery">' + grouped.images.map(function (b, index) { return renderTopicDisplayFigure(b, title, index + 1); }).join("") + '</div>'
+      ? renderTopicDisplayCarousel(grouped.images, title, "topic-honor-gallery")
       : "";
     var copy = renderTopicTextFlow(grouped.texts) || '<p>荣誉资料正在整理中。</p>';
     var videoHtml = grouped.videos.map(function (b) { return '<div class="topic-display-video">' + renderVideo(b) + '</div>'; }).join("");
@@ -1165,7 +1165,7 @@
     var videoHtml = grouped.videos.map(function (b) { return '<div class="topic-display-video">' + renderVideo(b) + '</div>'; }).join("");
     var copy = renderTopicTextFlow(grouped.texts);
     var photoHtml = grouped.images.length
-      ? '<div class="topic-display-photo-strip">' + grouped.images.map(function (b, index) { return renderTopicDisplayFigure(b, title, index + 1); }).join("") + '</div>'
+      ? renderTopicDisplayCarousel(grouped.images, title)
       : "";
     return videoHtml + (copy ? '<section class="topic-video-copy">' + copy + '</section>' : "") + photoHtml || '<p>视频资料正在整理中。</p>';
   }
@@ -1196,9 +1196,7 @@
     var i = 0;
     var flushPhotos = function () {
       if (!photoGroup.length) return;
-      html += '<div class="topic-display-photo-strip' + (photoGroup.length === 1 ? " single" : "") + '">' + photoGroup.map(function (b, index) {
-        return renderTopicDisplayFigure(b, title, index + 1);
-      }).join("") + '</div>';
+      html += renderTopicDisplayCarousel(photoGroup, title);
       photoGroup = [];
     };
 
@@ -1287,16 +1285,41 @@
       '</figure>';
   }
 
-  function stopTopicMediaCarousels() {
-    topicMediaCarouselTimers.forEach(function (timer) { window.clearInterval(timer); });
-    topicMediaCarouselTimers = [];
+  function renderTopicDisplayCarousel(images, title, extraClass) {
+    var list = (images || []).filter(function (b) { return b && b.src; });
+    if (!list.length) return "";
+    var count = list.length;
+    return '<div class="topic-display-carousel ' + (extraClass ? esc(extraClass) + " " : "") +
+      (count > 1 ? 'has-carousel' : 'is-single') +
+      '" data-detail-carousel data-media-count="' + count + '">' +
+      '<div class="topic-display-carousel-stage">' + list.map(function (b, index) {
+        return renderTopicDisplayCarouselSlide(b, title, index);
+      }).join("") + '</div>' +
+      (count > 1 ? '<div class="topic-loop-counter topic-display-carousel-counter" aria-hidden="true"><span data-carousel-current>1</span><em>/</em><span>' + count + '</span></div>' : '') +
+      '</div>';
   }
 
-  function startTopicMediaCarousels(root) {
-    stopTopicMediaCarousels();
+  function renderTopicDisplayCarouselSlide(b, title, index) {
+    var caption = b.caption || "";
+    var lightboxCaption = caption || title || ("图片资料 " + (index + 1));
+    return '<figure class="photo-frame topic-display-photo topic-display-carousel-slide' +
+      (index === 0 ? " is-active" : "") + '" tabindex="0" data-slide-index="' + index + '" ' +
+      'data-lightbox="' + esc(b.src) + '" data-caption="' + esc(lightboxCaption) + '">' +
+      '<img src="' + esc(b.src) + '" alt="' + esc(lightboxCaption) + '" loading="lazy">' +
+      (caption ? '<figcaption>' + esc(caption) + '</figcaption>' : "") +
+      '</figure>';
+  }
+
+  function stopCarouselTimers(timers) {
+    timers.forEach(function (timer) { window.clearInterval(timer); });
+    timers.length = 0;
+  }
+
+  function startMediaCarousels(root, timers, carouselSelector, slideSelector, baseDelay) {
+    stopCarouselTimers(timers);
     if (!root) return;
-    root.querySelectorAll("[data-topic-carousel]").forEach(function (carousel, carouselIndex) {
-      var slides = Array.prototype.slice.call(carousel.querySelectorAll(".topic-loop-slide"));
+    root.querySelectorAll(carouselSelector).forEach(function (carousel, carouselIndex) {
+      var slides = Array.prototype.slice.call(carousel.querySelectorAll(slideSelector));
       var current = carousel.querySelector("[data-carousel-current]");
       if (slides.length <= 1) return;
       var active = 0;
@@ -1308,10 +1331,25 @@
         if (current) current.textContent = String(active + 1);
       };
       setActive(0);
-      var delay = 3400 + (carouselIndex % 4) * 420;
-      var timer = window.setInterval(function () { setActive(active + 1); }, delay);
-      topicMediaCarouselTimers.push(timer);
+      var delay = baseDelay + (carouselIndex % 4) * 420;
+      timers.push(window.setInterval(function () { setActive(active + 1); }, delay));
     });
+  }
+
+  function stopTopicMediaCarousels() {
+    stopCarouselTimers(topicMediaCarouselTimers);
+  }
+
+  function startTopicMediaCarousels(root) {
+    startMediaCarousels(root, topicMediaCarouselTimers, "[data-topic-carousel]", ".topic-loop-slide", 3400);
+  }
+
+  function stopDrawerMediaCarousels() {
+    stopCarouselTimers(drawerMediaCarouselTimers);
+  }
+
+  function startDrawerMediaCarousels(root) {
+    startMediaCarousels(root, drawerMediaCarouselTimers, "[data-detail-carousel]", ".topic-display-carousel-slide", 3200);
   }
 
   function prepareTopicLoop(page) {
@@ -1631,16 +1669,19 @@
   function closeDrawer() {
     $("drawer").hidden = true;
     stopDrawerAutoLoop();
+    stopDrawerMediaCarousels();
     setTopicLoopPaused(false);
   }
 
   function openDrawer(fullHtml) {
     stopDrawerAutoLoop();
+    stopDrawerMediaCarousels();
     $("drawerBody").innerHTML = drawerLoopContent(fullHtml);
     bindVideos($("drawerBody"));
     prepareAdaptiveMedia($("drawerBody"), measureDrawerLoop);
     $("drawer").hidden = false;
     setTopicLoopPaused(true);
+    startDrawerMediaCarousels($("drawerBody"));
     startDrawerAutoLoop();
     $("drawerClose").focus();
   }
