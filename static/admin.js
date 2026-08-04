@@ -773,6 +773,14 @@ function groupedLowcodeFields(fields = []) {
   });
   return groups;
 }
+function lowcodeTemplateUsageStats(formId) {
+  const records = (state.lowcodeRecords || []).filter((record) => String(record.formId) === String(formId));
+  return lowcodeRecordStats(records);
+}
+function lowcodeTemplateUsageText(formId) {
+  const stats = lowcodeTemplateUsageStats(formId);
+  return `填报 ${stats.total || 0} · 草稿 ${stats.draft || 0} · 待审 ${stats.pending || 0} · 通过 ${stats.approved || 0} · 驳回 ${stats.rejected || 0}`;
+}
 function renderLowcodeForms() {
   const grid = $("lowcodeFormsGrid");
   if (!grid) return;
@@ -795,6 +803,7 @@ function renderLowcodeForms() {
         <span class="badge ${enabled ? "" : "warn"}">${fieldCount} 项</span>
       </header>
       <p>${escapeHtml(form.description || "按模板规范填写资料。")}</p>
+      <p class="lowcode-form-usage">${escapeHtml(lowcodeTemplateUsageText(form.id))}</p>
       <div class="actions">
         <button class="button small primary" type="button" data-lowcode-start="${form.id}" ${enabled ? "" : "disabled"}>按模板填写</button>
         ${isAdmin() ? `<button class="button small" type="button" data-lowcode-edit="${form.id}">编辑模板</button>
@@ -1581,6 +1590,26 @@ function addLowcodeFieldDraft() {
     options: [],
   }]);
 }
+function updateLowcodeTemplateEnabledHint() {
+  const statusNode = $("lowcodeTemplateStatus");
+  if (!statusNode || !$("lowcodeTemplateForm") || $("lowcodeTemplateForm").hidden) return;
+  const formId = state.editingLowcodeFormId;
+  if (!formId || $("lowcodeTemplateEnabled").checked) {
+    if (statusNode.dataset.hint === "disable-warning") {
+      delete statusNode.dataset.hint;
+      setStatus(statusNode, "", "");
+    }
+    return;
+  }
+  const stats = lowcodeTemplateUsageStats(formId);
+  if (stats.total > 0) {
+    statusNode.dataset.hint = "disable-warning";
+    setStatus(statusNode, `停用提醒：该模板已有 ${lowcodeTemplateUsageText(formId)}。停用后不能继续按模板新填，但历史记录和生成资料仍会保留。`, "warn");
+  } else if (statusNode.dataset.hint === "disable-warning") {
+    delete statusNode.dataset.hint;
+    setStatus(statusNode, "", "");
+  }
+}
 function fillLowcodeTemplateForm(form = {}) {
   if (!isAdmin()) return;
   renderLowcodeTemplatePortalOptions();
@@ -1606,6 +1635,7 @@ function fillLowcodeTemplateForm(form = {}) {
   $("contentItemForm").hidden = true;
   $("pageForm").hidden = true;
   setStatus($("lowcodeTemplateStatus"), "", "");
+  updateLowcodeTemplateEnabledHint();
   renderLowcodeTemplatePreview();
   $("lowcodeTemplateForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -3365,6 +3395,7 @@ $("lowcodeTemplateModule").addEventListener("change", () => {
   const moduleKey = $("lowcodeTemplateModule").value;
   $("lowcodeTemplateContentType").value = defaultContentTypeForModule(moduleKey);
 });
+$("lowcodeTemplateEnabled").addEventListener("change", updateLowcodeTemplateEnabledHint);
 $("addLowcodeField").addEventListener("click", addLowcodeFieldDraft);
 $("applyLowcodeStandardFields").addEventListener("click", () => applyLowcodeStandardFields(false));
 $("lowcodeFieldEditorList").addEventListener("input", (event) => {
@@ -3435,6 +3466,9 @@ $("lowcodeTemplateForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const id = state.editingLowcodeFormId;
+    const current = id ? state.lowcodeForms.find((form) => String(form.id) === String(id)) : null;
+    const disablingUsedTemplate = current && current.enabled !== false && !$("lowcodeTemplateEnabled").checked && lowcodeTemplateUsageStats(id).total > 0;
+    if (disablingUsedTemplate && !confirm(`该模板已有 ${lowcodeTemplateUsageText(id)}。停用后老师不能继续新填，历史记录仍保留。确定停用吗？`)) return;
     const url = id ? `/api/lowcode/forms/${id}` : "/api/lowcode/forms";
     const method = id ? putBody(lowcodeTemplatePayload()) : body(lowcodeTemplatePayload());
     await jsonApi(url, method);

@@ -914,6 +914,14 @@ tr:last-child td { border-bottom: 0; }
   font-size: 13px;
   line-height: 1.55;
 }
+.lowcode-form-card .lowcode-form-usage {
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #eef4fb;
+  color: #42546a;
+  font-size: 12px;
+  line-height: 1.4;
+}
 .lowcode-record-list {
   display: grid;
   gap: 10px;
