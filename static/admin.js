@@ -47,6 +47,8 @@ const lowcodeFieldTypes = [
   { key: "number", label: "数字" },
   { key: "date", label: "日期" },
   { key: "select", label: "下拉选择" },
+  { key: "radio", label: "单选" },
+  { key: "checkbox_group", label: "多选" },
   { key: "checkbox", label: "开关" },
   { key: "asset_list", label: "素材组" },
 ];
@@ -514,15 +516,17 @@ function lowcodePreviewPayload() {
     meta: [],
     assets: orderedContentAssets(state.lowcodeAssetDrafts),
   };
+  const previewText = (value) => Array.isArray(value) ? value.join("、") : String(value || "");
   (schema.fields || []).forEach((field) => {
     const rawValue = data[field.key];
     const value = rawValue === undefined || rawValue === null || rawValue === "" ? (field.defaultValue || "") : rawValue;
+    const text = previewText(value);
     const mapping = String(field.mapping || "");
-    if (mapping === "content_item.title") payload.title = value;
-    else if (mapping === "content_item.subtitle") payload.subtitle = value;
-    else if (mapping === "content_item.summary") payload.summary = value;
-    else if (mapping === "content_item.body_text") payload.body = [payload.body, value].filter(Boolean).join("\n\n");
-    else if (mapping.startsWith("content_item.meta_json.") && value) payload.meta.push([mapping.replace("content_item.meta_json.", ""), value]);
+    if (mapping === "content_item.title") payload.title = text;
+    else if (mapping === "content_item.subtitle") payload.subtitle = text;
+    else if (mapping === "content_item.summary") payload.summary = text;
+    else if (mapping === "content_item.body_text") payload.body = [payload.body, text].filter(Boolean).join("\n\n");
+    else if (mapping.startsWith("content_item.meta_json.") && text) payload.meta.push([mapping.replace("content_item.meta_json.", ""), text]);
   });
   return payload;
 }
@@ -551,6 +555,7 @@ function lowcodeFieldInput(field) {
   const placeholder = escapeHtml(field.placeholder || "");
   const defaultValue = escapeHtml(field.defaultValue || "");
   const required = field.required ? " required" : "";
+  const options = Array.isArray(field.options) ? field.options : [];
   if (field.type === "textarea" || field.type === "richtext") {
     return `<label class="lowcode-field wide"><span>${label}${field.required ? " *" : ""}</span><textarea data-lowcode-field="${key}" rows="4" placeholder="${placeholder}"${required}>${defaultValue}</textarea></label>`;
   }
@@ -559,6 +564,13 @@ function lowcodeFieldInput(field) {
   }
   if (field.type === "select" && Array.isArray(field.options) && field.options.length) {
     return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><select data-lowcode-field="${key}"${required}>${field.options.map((option) => `<option value="${escapeHtml(option.value)}"${String(option.value) === String(field.defaultValue || "") ? " selected" : ""}>${escapeHtml(option.label || option.value)}</option>`).join("")}</select></label>`;
+  }
+  if (field.type === "radio" && options.length) {
+    return `<fieldset class="lowcode-choice-field"><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option, index) => `<label><input data-lowcode-field="${key}" name="lowcode_${key}" type="radio" value="${escapeHtml(option.value)}" ${String(option.value) === String(field.defaultValue || "") || (!field.defaultValue && index === 0) ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
+  }
+  if (field.type === "checkbox_group" && options.length) {
+    const defaults = new Set(String(field.defaultValue || "").split(/[，,、]/).map((item) => item.trim()).filter(Boolean));
+    return `<fieldset class="lowcode-choice-field wide"><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option) => `<label><input data-lowcode-field="${key}" type="checkbox" value="${escapeHtml(option.value)}" ${defaults.has(String(option.value)) ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
   }
   if (field.type === "asset_list" || field.type === "image_upload" || field.type === "video_upload") {
     return "";
@@ -688,6 +700,15 @@ function lowcodeRecordPayload() {
   const data = {};
   document.querySelectorAll("[data-lowcode-field]").forEach((field) => {
     const key = field.dataset.lowcodeField;
+    if (field.type === "radio") {
+      if (field.checked) data[key] = field.value;
+      return;
+    }
+    if (field.type === "checkbox" && field.closest(".lowcode-choice-field")) {
+      if (!Array.isArray(data[key])) data[key] = [];
+      if (field.checked) data[key].push(field.value);
+      return;
+    }
     data[key] = field.type === "checkbox" ? field.checked : field.value.trim();
   });
   data.assets = orderedContentAssets(state.lowcodeAssetDrafts);
@@ -696,6 +717,10 @@ function lowcodeRecordPayload() {
 function normalizeLowcodeFieldDraft(field = {}, index = 0) {
   const key = String(field.key || `field${index + 1}`).trim();
   const type = lowcodeFieldTypes.some((item) => item.key === field.type) ? field.type : "text";
+  const options = Array.isArray(field.options) ? field.options.map((option) => ({
+    label: String(option.label || option.value || "").trim(),
+    value: String(option.value || option.label || "").trim(),
+  })).filter((option) => option.value) : [];
   return {
     key,
     label: String(field.label || key || "字段").trim(),
@@ -704,8 +729,22 @@ function normalizeLowcodeFieldDraft(field = {}, index = 0) {
     mapping: String(field.mapping || "").trim(),
     placeholder: String(field.placeholder || "").trim(),
     defaultValue: field.defaultValue == null ? "" : String(field.defaultValue),
+    options,
     sortOrder: index,
   };
+}
+function lowcodeOptionsText(options = []) {
+  return (options || []).map((option) => option.label && option.label !== option.value ? `${option.label}|${option.value}` : option.value).join("，");
+}
+function parseLowcodeOptions(value) {
+  return String(value || "")
+    .split(/[\n,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const parts = item.split("|").map((part) => part.trim());
+      return { label: parts[0], value: parts[1] || parts[0] };
+    });
 }
 function setLowcodeFieldDrafts(fields = []) {
   state.lowcodeFieldDrafts = fields.map(normalizeLowcodeFieldDraft);
@@ -740,6 +779,7 @@ function lowcodeFieldEditorRow(field, index) {
       <input data-lowcode-config-field="mapping" list="lowcodeMappingOptions" value="${escapeHtml(field.mapping)}" placeholder="映射目标" />
       <input data-lowcode-config-field="placeholder" value="${escapeHtml(field.placeholder)}" placeholder="提示语" />
       <input data-lowcode-config-field="defaultValue" value="${escapeHtml(field.defaultValue)}" placeholder="默认值" />
+      <input data-lowcode-config-field="optionsText" value="${escapeHtml(lowcodeOptionsText(field.options))}" placeholder="选项：一项一行或逗号分隔" />
     </div>
     <div class="lowcode-field-editor-actions">
       <label class="check-inline"><input data-lowcode-config-field="required" type="checkbox" ${field.required ? "checked" : ""} /> 必填</label>
@@ -761,7 +801,7 @@ function updateLowcodeFieldDraft(index, field, value) {
   const next = [...state.lowcodeFieldDrafts];
   next[index] = {
     ...next[index],
-    [field]: field === "required" ? Boolean(value) : String(value || "").trim(),
+    [field === "optionsText" ? "options" : field]: field === "required" ? Boolean(value) : field === "optionsText" ? parseLowcodeOptions(value) : String(value || "").trim(),
   };
   state.lowcodeFieldDrafts = next.map(normalizeLowcodeFieldDraft);
 }
@@ -784,6 +824,7 @@ function addLowcodeFieldDraft() {
     mapping: "content_item.meta_json.新字段",
     placeholder: "",
     defaultValue: "",
+    options: [],
   }]);
 }
 function fillLowcodeTemplateForm(form = {}) {

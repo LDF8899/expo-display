@@ -3684,6 +3684,14 @@ def lowcode_assets_from_value(value, role="gallery"):
     return normalized
 
 
+def lowcode_scalar_text(value):
+    if isinstance(value, list):
+        return "、".join(str(item).strip() for item in value if str(item).strip())
+    if isinstance(value, dict):
+        return json_text(value, {})
+    return str(value or "").strip()
+
+
 def lowcode_record_payload(form, submitted):
     schema = form.get("schema") or {}
     submitted = submitted if isinstance(submitted, dict) else {}
@@ -3709,29 +3717,30 @@ def lowcode_record_payload(form, submitted):
         if not key:
             continue
         value = submitted.get(key)
-        if (value is None or str(value).strip() == "") and field.get("defaultValue") not in (None, ""):
+        if (value is None or lowcode_scalar_text(value) == "") and field.get("defaultValue") not in (None, ""):
             value = field.get("defaultValue")
-        if field.get("required") and (value is None or str(value).strip() == ""):
+        text_value = lowcode_scalar_text(value)
+        if field.get("required") and (value is None or text_value == ""):
             errors.append(f"{field.get('label') or key}不能为空")
             continue
         mapping = str(field.get("mapping") or "")
         if mapping == "content_item.title":
-            payload["title"] = str(value or "").strip()
+            payload["title"] = text_value
         elif mapping == "content_item.subtitle":
-            payload["subtitle"] = str(value or "").strip()
+            payload["subtitle"] = text_value
         elif mapping == "content_item.summary":
-            payload["summary"] = str(value or "").strip()
+            payload["summary"] = text_value
         elif mapping == "content_item.body_text":
-            if str(value or "").strip():
-                body_parts.append(str(value or "").strip())
+            if text_value:
+                body_parts.append(text_value)
         elif mapping == "content_item.sort_order":
             payload["sortOrder"] = int_value(value)
         elif mapping == "content_item.featured":
             payload["featured"] = bool_value(value)
         elif mapping.startswith("content_item.meta_json."):
             meta_key = mapping.removeprefix("content_item.meta_json.").strip() or field.get("label") or key
-            if str(value or "").strip():
-                payload["metaJson"][meta_key] = str(value or "").strip()
+            if text_value:
+                payload["metaJson"][meta_key] = text_value
         elif mapping.startswith("content_item.assets."):
             role = mapping.rsplit(".", 1)[-1] or "gallery"
             payload["assets"].extend(lowcode_assets_from_value(value, role))

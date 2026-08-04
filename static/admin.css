@@ -825,8 +825,38 @@ tr:last-child td { border-bottom: 0; }
 }
 .lowcode-field-editor-main {
   display: grid;
-  grid-template-columns: minmax(90px, 1fr) minmax(90px, 1fr) 110px minmax(160px, 1.4fr) minmax(120px, 1fr) minmax(110px, 1fr);
+  grid-template-columns: minmax(90px, 1fr) minmax(90px, 1fr) 110px minmax(150px, 1.2fr) minmax(110px, 1fr) minmax(100px, 1fr) minmax(130px, 1fr);
   gap: 8px;
+}
+.lowcode-choice-field {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
+  border: 1px solid #c9d5e2;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fff;
+}
+.lowcode-choice-field.wide {
+  grid-column: 1 / -1;
+}
+.lowcode-choice-field legend {
+  padding: 0 4px;
+  color: #203246;
+  font-size: 13px;
+  font-weight: 700;
+}
+.lowcode-choice-field label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #53657a;
+  font-size: 13px;
+}
+.lowcode-choice-field input {
+  width: auto;
 }
 .lowcode-field-editor-actions {
   display: flex;
