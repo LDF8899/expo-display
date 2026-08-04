@@ -452,6 +452,7 @@ function addLowcodeAsset(asset) {
   const next = normalizeContentAsset(asset, state.lowcodeAssetDrafts.length);
   if (!next) return false;
   setLowcodeAssetDrafts([...state.lowcodeAssetDrafts, next]);
+  updateLowcodeRecordPreview();
   return true;
 }
 function updateLowcodeAsset(index, field, value, options = {}) {
@@ -463,6 +464,7 @@ function updateLowcodeAsset(index, field, value, options = {}) {
   };
   state.lowcodeAssetDrafts = orderedContentAssets(next);
   if (!options.skipRender) renderLowcodeAssetCards();
+  updateLowcodeRecordPreview();
 }
 function moveLowcodeAsset(index, direction) {
   const target = index + direction;
@@ -497,6 +499,51 @@ function renderLowcodeAssetCards() {
       </div>
     </article>
   `).join("") : `<div class="content-asset-empty">暂无素材。可上传图片、从素材库选择，或粘贴图片/视频地址。</div>`;
+}
+function lowcodePreviewPayload() {
+  const form = currentLowcodeForm();
+  const schema = (form && form.schema) || {};
+  const data = lowcodeRecordPayload().data;
+  const payload = {
+    moduleKey: form?.targetModuleKey || schema.moduleKey || "",
+    contentType: normalizeContentType(form?.targetContentType || schema.contentType || "article"),
+    title: "",
+    subtitle: "",
+    summary: "",
+    body: "",
+    meta: [],
+    assets: orderedContentAssets(state.lowcodeAssetDrafts),
+  };
+  (schema.fields || []).forEach((field) => {
+    const rawValue = data[field.key];
+    const value = rawValue === undefined || rawValue === null || rawValue === "" ? (field.defaultValue || "") : rawValue;
+    const mapping = String(field.mapping || "");
+    if (mapping === "content_item.title") payload.title = value;
+    else if (mapping === "content_item.subtitle") payload.subtitle = value;
+    else if (mapping === "content_item.summary") payload.summary = value;
+    else if (mapping === "content_item.body_text") payload.body = [payload.body, value].filter(Boolean).join("\n\n");
+    else if (mapping.startsWith("content_item.meta_json.") && value) payload.meta.push([mapping.replace("content_item.meta_json.", ""), value]);
+  });
+  return payload;
+}
+function updateLowcodeRecordPreview() {
+  const node = $("lowcodeRecordPreview");
+  if (!node || $("lowcodeRecordForm")?.hidden) return;
+  const payload = lowcodePreviewPayload();
+  const moduleLabel = (moduleMeta(payload.moduleKey) || {}).label || payload.moduleKey || "-";
+  const assets = payload.assets || [];
+  node.innerHTML = `
+    <div class="content-preview-head">
+      <span>${escapeHtml(moduleLabel)}</span>
+      <span>${escapeHtml(contentTypeLabel(payload.contentType))}</span>
+      <span>素材 ${assets.length}</span>
+    </div>
+    <h3>${escapeHtml(payload.title || "资料标题会显示在这里")}</h3>
+    <p>${escapeHtml(payload.summary || payload.subtitle || "摘要会进入卡片和抽屉开头。")}</p>
+    ${payload.meta.length ? `<div class="content-preview-meta">${payload.meta.slice(0, 6).map(([key, value]) => `<span>${escapeHtml(key)}：${escapeHtml(value)}</span>`).join("")}</div>` : ""}
+    ${payload.body ? `<div class="preview-body">${escapeHtml(payload.body).replace(/\n/g, "<br>")}</div>` : ""}
+    ${assets.length ? `<div class="lowcode-preview-assets">${assets.slice(0, 6).map((asset) => looksLikeVideoAsset(asset) ? `<span>VIDEO</span>` : `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.caption || "asset")}" loading="lazy" />`).join("")}</div>` : ""}
+  `;
 }
 function lowcodeFieldInput(field) {
   const key = escapeHtml(field.key);
@@ -634,6 +681,7 @@ function fillLowcodeRecordForm(form) {
   $("contentItemForm").hidden = true;
   $("pageForm").hidden = true;
   setStatus($("lowcodeRecordStatus"), "", "");
+  updateLowcodeRecordPreview();
   $("lowcodeRecordForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function lowcodeRecordPayload() {
@@ -1835,6 +1883,20 @@ async function uploadImage(file, statusNode) {
   setStatus(statusNode, "图片已上传", "success");
   return data.url;
 }
+async function uploadImages(files, statusNode, onUploaded) {
+  const list = Array.from(files || []);
+  if (!list.length) return 0;
+  let count = 0;
+  for (const file of list) {
+    const url = await uploadImage(file, statusNode);
+    if (url) {
+      count += 1;
+      onUploaded(url, file);
+      setStatus(statusNode, `已上传 ${count}/${list.length} 张图片`, "success");
+    }
+  }
+  return count;
+}
 function fillProject(project) {
   state.editingProjectId = project.id;
   $("projectName").value = project.name || "";
@@ -2221,20 +2283,23 @@ $("lowcodeRecordForm").addEventListener("submit", async (event) => {
     await loadPages();
   } catch (err) { setStatus($("lowcodeRecordStatus"), err.message, "error"); }
 });
+$("lowcodeDynamicFields").addEventListener("input", updateLowcodeRecordPreview);
+$("lowcodeDynamicFields").addEventListener("change", updateLowcodeRecordPreview);
 $("uploadLowcodeAsset").addEventListener("click", async () => {
   try {
-    const url = await uploadImage($("lowcodeAssetFile").files[0], $("lowcodeRecordStatus"));
-    if (!url) {
+    const count = await uploadImages($("lowcodeAssetFile").files, $("lowcodeRecordStatus"), (url, file) => {
+      addLowcodeAsset({
+        url,
+        caption: $("lowcodeAssetCaption").value.trim() || file.name,
+        role: state.lowcodeAssetDrafts.length ? "gallery" : $("lowcodeAssetRole").value,
+      });
+    });
+    if (!count) {
       setStatus($("lowcodeRecordStatus"), "请选择图片", "error");
       return;
     }
-    addLowcodeAsset({
-      url,
-      caption: $("lowcodeAssetCaption").value.trim(),
-      role: $("lowcodeAssetRole").value,
-    });
     $("lowcodeAssetFile").value = "";
-    setStatus($("lowcodeRecordStatus"), "素材已加入模板资料", "success");
+    setStatus($("lowcodeRecordStatus"), `已批量加入 ${count} 张图片`, "success");
   } catch (err) { setStatus($("lowcodeRecordStatus"), err.message, "error"); }
 });
 $("addLowcodeAssetUrl").addEventListener("click", () => {
@@ -2252,6 +2317,7 @@ $("addLowcodeAssetUrl").addEventListener("click", () => {
   $("lowcodeAssetCaption").value = "";
   $("lowcodeAssetRole").value = state.lowcodeAssetDrafts.length ? "gallery" : "cover";
   setStatus($("lowcodeRecordStatus"), "素材已加入模板资料", "success");
+  updateLowcodeRecordPreview();
 });
 $("selectLowcodeAsset").addEventListener("click", () => openAssetPicker("__lowcodeAssetManager"));
 $("lowcodeAssetCards").addEventListener("input", (event) => {
@@ -2288,13 +2354,19 @@ $("contentItemForm").addEventListener("submit", async (event) => {
 });
 $("uploadContentAsset").addEventListener("click", async () => {
   try {
-    const url = await uploadImage($("contentAssetFile").files[0], $("contentItemStatus"));
-    if (!url) {
+    const count = await uploadImages($("contentAssetFile").files, $("contentItemStatus"), (url, file) => {
+      appendContentAssetLine(
+        url,
+        $("contentAssetCaption").value.trim() || $("contentTitle").value.trim() || file.name,
+        state.contentAssetDrafts.length ? "gallery" : "cover"
+      );
+    });
+    if (!count) {
       setStatus($("contentItemStatus"), "请选择图片", "error");
       return;
     }
-    appendContentAssetLine(url, $("contentTitle").value.trim(), state.contentAssetDrafts.length ? "gallery" : "cover");
     $("contentAssetFile").value = "";
+    setStatus($("contentItemStatus"), `已批量加入 ${count} 张图片`, "success");
   } catch (err) { setStatus($("contentItemStatus"), err.message, "error"); }
 });
 $("addContentAssetUrl").addEventListener("click", () => {

@@ -235,10 +235,17 @@
               <button id="selectLowcodeAsset" class="button ghost" type="button">素材库</button>
             </div>
             <div class="form-grid four">
-              <input id="lowcodeAssetFile" type="file" accept="image/*" />
-              <button id="uploadLowcodeAsset" class="button ghost" type="button">上传并加入图片组</button>
+              <input id="lowcodeAssetFile" type="file" accept="image/*" multiple />
+              <button id="uploadLowcodeAsset" class="button ghost" type="button">批量上传并加入图片组</button>
             </div>
             <div id="lowcodeAssetCards" class="content-asset-list"></div>
+          </section>
+          <section class="exhibit-guide" aria-label="模板提交预览">
+            <div class="field-head">
+              <span>提交预览</span>
+              <small>这里预览模板数据会怎样转换为结构化资料，不影响前台固定展示样式。</small>
+            </div>
+            <article id="lowcodeRecordPreview" class="content-preview"></article>
           </section>
           <button id="lowcodeRecordSubmitButton" class="button primary" type="submit">按模板提交资料</button>
           <p id="lowcodeRecordStatus" class="status-text"></p>
@@ -337,8 +344,8 @@
           <div class="form-grid four">
             <label class="check-inline"><input id="contentFeatured" type="checkbox" /> 重点展示</label>
             <label class="check-inline"><input id="contentEnabled" type="checkbox" checked /> 启用资料</label>
-            <input id="contentAssetFile" type="file" accept="image/*" />
-            <button id="uploadContentAsset" class="button ghost" type="button">上传并加入图片组</button>
+            <input id="contentAssetFile" type="file" accept="image/*" multiple />
+            <button id="uploadContentAsset" class="button ghost" type="button">批量上传并加入图片组</button>
           </div>
           <section class="exhibit-guide" aria-label="结构化预览">
             <div class="field-head">

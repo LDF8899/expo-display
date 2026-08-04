@@ -1031,6 +1031,36 @@ tr:last-child td { border-bottom: 0; }
   margin-right: 4px;
   color: #203246;
 }
+#lowcodeRecordPreview {
+  grid-template-columns: 1fr;
+  min-height: 120px;
+}
+.content-preview-head,
+.content-preview-meta,
+.lowcode-preview-assets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.content-preview-head span,
+.content-preview-meta span {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #eef4fb;
+  color: #53657a;
+  font-size: 12px;
+}
+.lowcode-preview-assets img,
+.lowcode-preview-assets span {
+  width: 78px;
+  height: 54px;
+  border-radius: 7px;
+  border: 1px solid #dce5ef;
+  background: #edf3fa;
+  object-fit: contain;
+  display: grid;
+  place-items: center;
+}
 .ops-panel { display: grid; gap: 12px; }
 .ops-grid {
   display: grid;
