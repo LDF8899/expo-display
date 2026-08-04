@@ -1108,6 +1108,27 @@ function lowcodeRecordStats(records) {
   });
   return stats;
 }
+function daysSince(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return 0;
+  return Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
+}
+function lowcodeRecordAgeDays(record) {
+  return daysSince(record.updatedAt || record.submittedAt);
+}
+function lowcodeOverdueStats(records) {
+  const stats = { draft: 0, pending: 0, maxDays: 0, labels: [] };
+  (records || []).forEach((record) => {
+    const status = lowcodeRecordStatus(record);
+    const age = lowcodeRecordAgeDays(record);
+    stats.maxDays = Math.max(stats.maxDays, age);
+    if (status === "draft" && age >= 7) stats.draft += 1;
+    if (status === "pending" && age >= 3) stats.pending += 1;
+  });
+  if (stats.draft) stats.labels.push(`草稿超 7 天 ${stats.draft}`);
+  if (stats.pending) stats.labels.push(`待审超 3 天 ${stats.pending}`);
+  return stats;
+}
 function lowcodeReportStatsHtml(stats) {
   return `<div class="lowcode-report-stats">
     <span><b>${stats.total || 0}</b>总数</span>
@@ -1164,8 +1185,10 @@ function lowcodeSubmitterReportRows() {
   });
   return [...rows.values()].sort((a, b) => (b.stats.total - a.stats.total) || a.label.localeCompare(b.label, "zh-Hans-CN"));
 }
-function lowcodeReminderAction(module, recordStats, rejectedCount, enabledTemplates) {
+function lowcodeReminderAction(module, recordStats, rejectedCount, enabledTemplates, overdueStats) {
   if (module.publishReady) return ["ok", "已完成", "保持资料更新"];
+  if (overdueStats && overdueStats.draft) return ["danger", "草稿超期", "优先提醒填报人提交草稿，避免资料长期停留。"];
+  if (overdueStats && overdueStats.pending) return ["danger", "审核超期", "优先处理超期待审资料，审核通过后前台自动展示。"];
   if (recordStats.pending) return ["warn", "待审核", "尽快审核模板提交，审核通过后前台自动展示。"];
   if (module.pendingCount) return ["warn", "待审核", "处理结构化资料审核，让该板块进入可发布状态。"];
   if (recordStats.rejected || rejectedCount) return ["danger", "需修改", "按退回意见修改后重新提交。"];
@@ -1192,12 +1215,13 @@ function lowcodeReminderRows() {
   return (coverage.modules || []).map((module) => {
     const moduleRecords = records.filter((record) => record.contentModuleKey === module.key);
     const recordStats = lowcodeRecordStats(moduleRecords);
+    const overdueStats = lowcodeOverdueStats(moduleRecords);
     const rejectedCount = (module.pages || []).filter((page) => page.reviewStatus === "rejected").length;
     const enabledTemplates = forms
       .filter((form) => form.enabled !== false && form.targetModuleKey === module.key)
       .map((form) => form.name || form.code)
       .filter(Boolean);
-    const [kind, status, action] = lowcodeReminderAction(module, recordStats, rejectedCount, enabledTemplates);
+    const [kind, status, action] = lowcodeReminderAction(module, recordStats, rejectedCount, enabledTemplates, overdueStats);
     return {
       key: module.key,
       label: module.label,
@@ -1212,11 +1236,12 @@ function lowcodeReminderRows() {
       pendingCount: module.pendingCount || 0,
       rejectedCount,
       stats: recordStats,
+      overdue: overdueStats,
       publishReady: Boolean(module.publishReady),
     };
   }).sort((a, b) => {
     const order = { danger: 0, warn: 1, ok: 2 };
-    return (order[a.kind] - order[b.kind]) || a.label.localeCompare(b.label, "zh-Hans-CN");
+    return (order[a.kind] - order[b.kind]) || ((b.overdue?.maxDays || 0) - (a.overdue?.maxDays || 0)) || a.label.localeCompare(b.label, "zh-Hans-CN");
   });
 }
 function renderLowcodeReportGroup(title, subtitle, rows, emptyText) {
@@ -1259,7 +1284,7 @@ function renderLowcodeReminderReport(rows) {
           <span>${escapeHtml(row.status)} · ${escapeHtml(row.owner)}</span>
         </div>
         <p>${escapeHtml(row.action)}</p>
-        <small>${escapeHtml(row.templates.length ? `可用模板：${row.templates.join("、")}` : "暂无启用模板")}</small>
+        <small>${escapeHtml([row.overdue?.labels?.join("、"), row.overdue?.maxDays ? `最久停留 ${row.overdue.maxDays} 天` : "", row.templates.length ? `可用模板：${row.templates.join("、")}` : "暂无启用模板"].filter(Boolean).join(" · "))}</small>
       </section>
     `).join("") : `<div class="empty">当前门户标准板块均已有可发布资料</div>`}
     ${pendingCount > visibleRows.length ? `<p class="muted">仅展示前 ${visibleRows.length} 项，完整提醒可导出 CSV。</p>` : ""}
@@ -1314,7 +1339,7 @@ function exportLowcodeReminderReportCsv() {
     return;
   }
   const project = currentProject();
-  const headers = ["门户", "门户类型", "板块key", "标准板块", "负责人/填报人", "提醒状态", "建议动作", "结构化资料数", "已通过", "待审核", "已驳回", "模板记录数", "模板草稿", "模板待审", "模板已通过", "模板已驳回", "可用模板"];
+  const headers = ["门户", "门户类型", "板块key", "标准板块", "负责人/填报人", "提醒状态", "建议动作", "超期提醒", "最久停留天数", "结构化资料数", "已通过", "待审核", "已驳回", "模板记录数", "模板草稿", "模板待审", "模板已通过", "模板已驳回", "可用模板"];
   const bodyRows = rows.map((row) => [
     project?.name || "",
     portalTypeLabel(project?.portalType || selectedPortalType()),
@@ -1323,6 +1348,8 @@ function exportLowcodeReminderReportCsv() {
     row.owner,
     row.status,
     row.action,
+    row.overdue?.labels?.join("、") || "",
+    row.overdue?.maxDays || 0,
     row.pageCount,
     row.approvedCount,
     row.pendingCount,
