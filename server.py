@@ -3597,12 +3597,22 @@ def normalize_lowcode_mapping(mapping, label=""):
     raise ValueError(f"{label or '字段'}的映射目标不合法")
 
 
+def normalize_lowcode_field_key(key, label=""):
+    key = str(key or "").strip()[:80]
+    if not key:
+        raise ValueError(f"{label or '字段'}的字段编码不能为空")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,79}", key):
+        raise ValueError(f"{label or key}的字段编码只能以英文字母开头，并使用字母、数字、下划线或短横线")
+    return key
+
+
 def normalize_lowcode_schema(schema, form):
     schema = json_value(schema, {})
     if not isinstance(schema, dict):
         schema = {}
     fields = schema.get("fields") if isinstance(schema.get("fields"), list) else []
     normalized_fields = []
+    seen_keys = set()
     for index, field in enumerate(fields):
         if not isinstance(field, dict):
             continue
@@ -3610,8 +3620,13 @@ def normalize_lowcode_schema(schema, form):
         label = str(field.get("label") or key).strip()
         if not key or not label:
             continue
+        key = normalize_lowcode_field_key(key, label)
+        key_identity = key.lower()
+        if key_identity in seen_keys:
+            raise ValueError(f"{label}的字段编码重复：{key}")
+        seen_keys.add(key_identity)
         normalized = {
-            "key": key[:80],
+            "key": key,
             "label": label[:120],
             "type": str(field.get("type") or "text").strip()[:40] or "text",
             "required": bool_value(field.get("required")),

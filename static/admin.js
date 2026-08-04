@@ -865,6 +865,26 @@ function normalizeLowcodeFieldDraft(field = {}, index = 0) {
     sortOrder: index,
   };
 }
+function validateLowcodeFieldDrafts(fields = state.lowcodeFieldDrafts) {
+  const seen = new Set();
+  fields.forEach((field) => {
+    const label = field.label || field.key || "字段";
+    const key = String(field.key || "").trim();
+    if (!/^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(key)) {
+      throw new Error(`${label}的字段编码只能以英文字母开头，并使用字母、数字、下划线或短横线`);
+    }
+    const identity = key.toLowerCase();
+    if (seen.has(identity)) throw new Error(`${label}的字段编码重复：${key}`);
+    seen.add(identity);
+    if (field.pattern) {
+      try {
+        new RegExp(field.pattern);
+      } catch (err) {
+        throw new Error(`${label}的格式规则不合法`);
+      }
+    }
+  });
+}
 function lowcodeOptionsText(options = []) {
   return (options || []).map((option) => option.label && option.label !== option.value ? `${option.label}|${option.value}` : option.value).join("，");
 }
@@ -1059,6 +1079,7 @@ function lowcodeTemplatePayload() {
   const portalType = normalizePortalType($("lowcodeTemplatePortalType").value);
   const moduleKey = $("lowcodeTemplateModule").value;
   const contentType = normalizeContentType($("lowcodeTemplateContentType").value, defaultContentTypeForModule(moduleKey));
+  validateLowcodeFieldDrafts();
   const fields = state.lowcodeFieldDrafts
     .map(normalizeLowcodeFieldDraft)
     .filter((field) => field.key && field.label)
