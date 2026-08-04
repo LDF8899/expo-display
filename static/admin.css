@@ -866,8 +866,12 @@ tr:last-child td { border-bottom: 0; }
 }
 .lowcode-field-editor-main {
   display: grid;
-  grid-template-columns: minmax(90px, 1fr) minmax(90px, 1fr) 110px minmax(90px, 0.8fr) minmax(150px, 1.2fr) minmax(110px, 1fr) minmax(100px, 1fr) minmax(130px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
+}
+.lowcode-binding-preset {
+  border-color: #b9c9d9;
+  background: #f8fbfe;
 }
 .lowcode-choice-field {
   min-width: 0;

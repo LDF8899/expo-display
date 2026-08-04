@@ -41,6 +41,21 @@ const contentAssetRoles = [
   { key: "video", label: "视频" },
 ];
 const contentAssetRoleLabels = Object.fromEntries(contentAssetRoles.map((item) => [item.key, item.label]));
+const lowcodeMappingPresets = [
+  { value: "", label: "选择绑定" },
+  { value: "content_item.title", label: "标题" },
+  { value: "content_item.subtitle", label: "副标题" },
+  { value: "content_item.summary", label: "卡片摘要" },
+  { value: "content_item.body_text", label: "正文段落" },
+  { value: "content_item.sort_order", label: "排序" },
+  { value: "content_item.featured", label: "重点展示" },
+  { value: "content_item.assets.cover", label: "封面图" },
+  { value: "content_item.assets.portrait", label: "人物照" },
+  { value: "content_item.assets.certificate", label: "证书/荣誉图" },
+  { value: "content_item.assets.gallery", label: "图集" },
+  { value: "content_item.assets.video", label: "视频" },
+  { value: "__meta_label__", label: "扩展字段" },
+];
 const lowcodeFieldTypes = [
   { key: "text", label: "单行文本" },
   { key: "textarea", label: "多行文本" },
@@ -798,6 +813,26 @@ function renderLowcodeTemplateContentTypeOptions() {
   if (!select) return;
   select.innerHTML = contentTypes.map((type) => `<option value="${type.key}">${escapeHtml(type.label)}</option>`).join("");
 }
+function lowcodeMappingPresetValue(mapping) {
+  if (lowcodeMappingPresets.some((preset) => preset.value === mapping)) return mapping;
+  if (String(mapping || "").startsWith("content_item.meta_json.")) return "__meta_label__";
+  return "";
+}
+function lowcodeMappingPresetOptions(mapping) {
+  const selected = lowcodeMappingPresetValue(mapping);
+  return lowcodeMappingPresets.map((preset) => `<option value="${escapeHtml(preset.value)}"${preset.value === selected ? " selected" : ""}>${escapeHtml(preset.label)}</option>`).join("");
+}
+function applyLowcodeMappingPreset(index, presetValue) {
+  const field = state.lowcodeFieldDrafts[index];
+  if (!field) return "";
+  let mapping = String(presetValue || "");
+  if (mapping === "__meta_label__") {
+    const metaKey = String(field.label || field.key || "自定义字段").trim().replace(/[<>/\\]/g, "") || "自定义字段";
+    mapping = `content_item.meta_json.${metaKey}`;
+  }
+  updateLowcodeFieldDraft(index, "mapping", mapping);
+  return mapping;
+}
 function lowcodeFieldEditorRow(field, index) {
   return `<article class="lowcode-field-editor-row" data-lowcode-field-row="${index}">
     <button class="lowcode-field-drag" type="button" draggable="true" data-lowcode-field-drag="${index}" title="拖拽排序">拖拽</button>
@@ -808,6 +843,9 @@ function lowcodeFieldEditorRow(field, index) {
         ${lowcodeFieldTypes.map((type) => `<option value="${type.key}"${field.type === type.key ? " selected" : ""}>${escapeHtml(type.label)}</option>`).join("")}
       </select>
       <input data-lowcode-config-field="group" value="${escapeHtml(field.group)}" placeholder="字段分组" />
+      <select data-lowcode-binding-preset="${index}" class="lowcode-binding-preset" title="数据绑定预设">
+        ${lowcodeMappingPresetOptions(field.mapping)}
+      </select>
       <input data-lowcode-config-field="mapping" list="lowcodeMappingOptions" value="${escapeHtml(field.mapping)}" placeholder="映射目标" />
       <input data-lowcode-config-field="placeholder" value="${escapeHtml(field.placeholder)}" placeholder="提示语" />
       <input data-lowcode-config-field="defaultValue" value="${escapeHtml(field.defaultValue)}" placeholder="默认值" />
@@ -2333,6 +2371,15 @@ $("lowcodeFieldEditorList").addEventListener("input", (event) => {
   updateLowcodeFieldDraft(Number(row.dataset.lowcodeFieldRow), input.dataset.lowcodeConfigField, input.value);
 });
 $("lowcodeFieldEditorList").addEventListener("change", (event) => {
+  const preset = event.target.closest("[data-lowcode-binding-preset]");
+  if (preset) {
+    const row = event.target.closest("[data-lowcode-field-row]");
+    if (!row) return;
+    const mapping = applyLowcodeMappingPreset(Number(row.dataset.lowcodeFieldRow), preset.value);
+    const mappingInput = row.querySelector('[data-lowcode-config-field="mapping"]');
+    if (mappingInput) mappingInput.value = mapping;
+    return;
+  }
   const input = event.target.closest("[data-lowcode-config-field]");
   const row = event.target.closest("[data-lowcode-field-row]");
   if (!input || !row) return;

@@ -3532,6 +3532,30 @@ def default_lowcode_field_group(field):
     return "详情内容"
 
 
+def normalize_lowcode_mapping(mapping, label=""):
+    mapping = str(mapping or "").strip()[:160]
+    if not mapping:
+        return ""
+    if mapping in {
+        "content_item.title",
+        "content_item.subtitle",
+        "content_item.summary",
+        "content_item.body_text",
+        "content_item.sort_order",
+        "content_item.featured",
+    }:
+        return mapping
+    if mapping.startswith("content_item.assets."):
+        role = mapping.removeprefix("content_item.assets.").strip()
+        if role in {"cover", "portrait", "certificate", "gallery", "video", "attachment"}:
+            return mapping
+    if mapping.startswith("content_item.meta_json."):
+        meta_key = mapping.removeprefix("content_item.meta_json.").strip()
+        if meta_key and len(meta_key) <= 80 and not re.search(r"[\x00-\x1f<>/\\]", meta_key):
+            return f"content_item.meta_json.{meta_key}"
+    raise ValueError(f"{label or '字段'}的映射目标不合法")
+
+
 def normalize_lowcode_schema(schema, form):
     schema = json_value(schema, {})
     if not isinstance(schema, dict):
@@ -3550,7 +3574,7 @@ def normalize_lowcode_schema(schema, form):
             "label": label[:120],
             "type": str(field.get("type") or "text").strip()[:40] or "text",
             "required": bool_value(field.get("required")),
-            "mapping": str(field.get("mapping") or "").strip()[:160],
+            "mapping": normalize_lowcode_mapping(field.get("mapping"), label),
             "placeholder": str(field.get("placeholder") or "").strip()[:512],
             "defaultValue": str(field.get("defaultValue") if "defaultValue" in field else field.get("default_value") or "").strip()[:1024],
             "group": str(field.get("group") or "").strip()[:80],
