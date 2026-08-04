@@ -67,6 +67,49 @@ const lowcodeFieldTypes = [
   { key: "checkbox", label: "开关" },
   { key: "asset_list", label: "素材组" },
 ];
+const lowcodeMetaFieldTemplates = {
+  person: [
+    ["personName", "姓名", "text", "content_item.meta_json.姓名", "人物姓名", 40],
+    ["identity", "身份/职务", "text", "content_item.meta_json.身份", "教师职务、校友岗位或学生班级", 80],
+    ["tags", "荣誉标签", "text", "content_item.meta_json.标签", "技能能手、优秀毕业生等", 120],
+    ["story", "主要事迹", "textarea", "content_item.body_text", "成长经历、代表成果和可展示亮点", 2000],
+  ],
+  activity: [
+    ["eventDate", "时间", "text", "content_item.meta_json.时间", "活动或比赛时间", 60],
+    ["location", "地点", "text", "content_item.meta_json.地点", "举办地点或实践场景", 80],
+    ["units", "参与单位", "text", "content_item.meta_json.参与单位", "主办、承办或合作单位", 120],
+    ["outcome", "活动成效", "textarea", "content_item.body_text", "活动过程、学生参与和成果", 2000],
+  ],
+  honor: [
+    ["honorName", "荣誉名称", "text", "content_item.meta_json.荣誉名称", "奖项、资质或认定名称", 120],
+    ["level", "级别", "text", "content_item.meta_json.级别", "国家级、省级、市级、校级等", 40],
+    ["year", "年份", "text", "content_item.meta_json.年份", "获评或获奖年份", 20],
+    ["recipient", "获奖单位/个人", "text", "content_item.meta_json.获奖单位或个人", "对应团队或人员", 120],
+    ["value", "展示说明", "textarea", "content_item.body_text", "荣誉对专业建设或人才培养的价值", 1600],
+  ],
+  achievement: [
+    ["achievementName", "成果名称", "text", "content_item.meta_json.成果名称", "项目、课程、案例或建设成果", 120],
+    ["period", "建设周期", "text", "content_item.meta_json.建设周期", "起止时间或阶段", 60],
+    ["team", "参与团队", "text", "content_item.meta_json.参与团队", "教师、学生或合作单位", 120],
+    ["metrics", "关键指标", "textarea", "content_item.meta_json.关键指标", "获奖、立项、服务人数等数据", 1000],
+    ["value", "成果价值", "textarea", "content_item.body_text", "成果如何支撑人才培养、专业建设或服务地方", 2000],
+  ],
+  scene: [
+    ["sceneName", "场景名称", "text", "content_item.meta_json.场景名称", "实训室、基地或设备名称", 100],
+    ["positioning", "功能定位", "text", "content_item.meta_json.功能定位", "服务课程、训练项目和开放对象", 160],
+    ["equipment", "设备条件", "textarea", "content_item.meta_json.设备条件", "关键设备、软件平台或工位数量", 1200],
+    ["application", "教学应用", "textarea", "content_item.body_text", "支撑课程教学、技能训练或社会培训的方式", 2000],
+  ],
+  video: [
+    ["duration", "视频时长", "text", "content_item.meta_json.视频时长", "如 02:30", 20],
+    ["videoUrl", "视频地址", "text", "content_item.assets.video", "视频文件地址或外部链接", 600],
+    ["scenario", "适用场景", "text", "content_item.meta_json.适用场景", "宣传片、访谈、课堂展示或纪实片", 120],
+    ["intro", "内容简介", "textarea", "content_item.body_text", "概括视频重点", 1000],
+  ],
+  article: [
+    ["bodyText", "正文内容", "textarea", "content_item.body_text", "按短段落填写，一段一行或空行分隔", 3000],
+  ],
+};
 const moduleDefaultContentTypes = {
   training: "scene",
   cooperation: "activity",
@@ -853,6 +896,34 @@ function renderLowcodeTemplateContentTypeOptions() {
   if (!select) return;
   select.innerHTML = contentTypes.map((type) => `<option value="${type.key}">${escapeHtml(type.label)}</option>`).join("");
 }
+function lowcodeStandardField(key, label, type, mapping, placeholder = "", group = "详情内容", maxLength = 0, required = false) {
+  return { key, label, type, required, mapping, placeholder, defaultValue: "", group, maxLength, options: [] };
+}
+function lowcodeStandardFields(moduleKey, contentType, portalType = $("lowcodeTemplatePortalType")?.value || selectedPortalType()) {
+  const module = moduleMeta(moduleKey, portalType) || { label: "资料", description: "" };
+  const normalizedType = normalizeContentType(contentType || defaultContentTypeForModule(moduleKey));
+  const fields = [
+    lowcodeStandardField("title", "资料标题", "text", "content_item.title", `${module.label}标题`, "基础信息", 80, true),
+    lowcodeStandardField("subtitle", "副标题/身份信息", "text", "content_item.subtitle", module.description || "", "基础信息", 120),
+    lowcodeStandardField("summary", "卡片摘要", "textarea", "content_item.summary", "用于门户卡片和抽屉开头，建议 40 到 100 字", "基础信息", 180, true),
+  ];
+  (lowcodeMetaFieldTemplates[normalizedType] || lowcodeMetaFieldTemplates.article).forEach(([key, label, type, mapping, placeholder, maxLength]) => {
+    fields.push(lowcodeStandardField(key, label, type, mapping, placeholder, "详情内容", maxLength));
+  });
+  fields.push(
+    lowcodeStandardField("sortOrder", "排序", "number", "content_item.sort_order", "数字越小越靠前", "展示设置"),
+    lowcodeStandardField("featured", "重点展示", "checkbox", "content_item.featured", "", "展示设置"),
+  );
+  return fields;
+}
+function applyLowcodeStandardFields(force = false) {
+  if (!force && state.lowcodeFieldDrafts.length && !confirm("套用标准字段会替换当前字段配置，确定继续？")) return;
+  const portalType = normalizePortalType($("lowcodeTemplatePortalType").value);
+  const moduleKey = $("lowcodeTemplateModule").value;
+  const contentType = normalizeContentType($("lowcodeTemplateContentType").value, defaultContentTypeForModule(moduleKey));
+  setLowcodeFieldDrafts(lowcodeStandardFields(moduleKey, contentType, portalType));
+  setStatus($("lowcodeTemplateStatus"), "已套用标准字段，可继续调整分组、必填和数据绑定。", "success");
+}
 function lowcodeMappingPresetValue(mapping) {
   if (lowcodeMappingPresets.some((preset) => preset.value === mapping)) return mapping;
   if (String(mapping || "").startsWith("content_item.meta_json.")) return "__meta_label__";
@@ -964,7 +1035,8 @@ function fillLowcodeTemplateForm(form = {}) {
   $("lowcodeTemplateCode").value = form.code || `LC-${portalType.toUpperCase()}-${String(moduleKey || "CUSTOM").toUpperCase()}-${Date.now().toString().slice(-4)}`;
   $("lowcodeTemplateDescription").value = form.description || "";
   $("lowcodeTemplateEnabled").checked = form.enabled !== false;
-  setLowcodeFieldDrafts(((form.schema || {}).fields || []).filter((field) => field.type !== "asset_list"));
+  const schemaFields = ((form.schema || {}).fields || []).filter((field) => field.type !== "asset_list");
+  setLowcodeFieldDrafts(schemaFields.length ? schemaFields : lowcodeStandardFields(moduleKey, contentType, portalType));
   $("lowcodeTemplateForm").hidden = false;
   $("lowcodeRecordForm").hidden = true;
   $("lowcodeVersionPanel").hidden = true;
@@ -2409,6 +2481,7 @@ $("lowcodeTemplateModule").addEventListener("change", () => {
   $("lowcodeTemplateContentType").value = defaultContentTypeForModule(moduleKey);
 });
 $("addLowcodeField").addEventListener("click", addLowcodeFieldDraft);
+$("applyLowcodeStandardFields").addEventListener("click", () => applyLowcodeStandardFields(false));
 $("lowcodeFieldEditorList").addEventListener("input", (event) => {
   const input = event.target.closest("[data-lowcode-config-field]");
   const row = event.target.closest("[data-lowcode-field-row]");
