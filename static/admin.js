@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeAssetDrafts: [], activeLowcodeFormId: "", editingLowcodeFormId: "", lowcodeFieldDrafts: [], assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeAssetDrafts: [], activeLowcodeFormId: "", editingLowcodeFormId: "", lowcodeFieldDrafts: [], assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -545,6 +545,38 @@ function renderLowcodeForms() {
       </div>
     </article>`;
   }).join("") : `<div class="empty">当前门户暂无资料采集模板</div>`;
+}
+function renderLowcodeRecords() {
+  const listNode = $("lowcodeRecordsList");
+  if (!listNode) return;
+  const records = state.lowcodeRecords || [];
+  const approved = records.filter((record) => (record.effectiveStatus || record.status) === "approved").length;
+  $("lowcodeRecordsSummary").textContent = `${approved}/${records.length || 0} 已通过`;
+  listNode.innerHTML = records.length ? records.slice(0, 12).map((record) => {
+    const status = record.effectiveStatus || record.contentReviewStatus || record.status;
+    const data = record.data && record.data.fields ? record.data.fields : {};
+    const summary = data.summary || data.subtitle || record.contentTitle || "暂无摘要";
+    return `<article class="lowcode-record-card">
+      <header>
+        <div>
+          <strong>${escapeHtml(record.contentTitle || data.title || "未命名资料")}</strong>
+          <span>${escapeHtml(record.formName || "资料采集模板")} · v${escapeHtml(record.formVersionNo || "-")} · ${escapeHtml(record.submittedBy || "-")} · ${formatTime(record.submittedAt)}</span>
+        </div>
+        ${badge(status)}
+      </header>
+      <p>${escapeHtml(summary)}</p>
+      <div class="content-item-meta">
+        <span>${escapeHtml(record.contentModuleLabel || "-")}</span>
+        <span>${escapeHtml(record.contentTypeLabel || contentTypeLabel(record.contentType))}</span>
+        <span>资料 ID ${escapeHtml(record.contentItemId || "-")}</span>
+      </div>
+      ${record.reviewNote ? `<p class="warn-text">审核意见：${escapeHtml(record.reviewNote)}</p>` : ""}
+      <div class="actions">
+        ${record.contentItemId ? `<button class="button small primary" type="button" data-lowcode-record-edit="${record.contentItemId}">编辑生成资料</button>` : ""}
+        ${record.previewUrl && status === "approved" ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(record.previewUrl)}">预览</a>` : ""}
+      </div>
+    </article>`;
+  }).join("") : `<div class="empty">暂无模板提交记录</div>`;
 }
 function fillLowcodeRecordForm(form) {
   if (!form) return;
@@ -1401,6 +1433,7 @@ async function loadPages(projectId = $("projectSelect").value) {
     state.pages = [];
     state.contentItems = [];
     state.lowcodeForms = [];
+    state.lowcodeRecords = [];
     state.moduleCoverage = buildCoverageFromPages([]);
     renderCurrentPortalStrip();
     renderTemplateActions();
@@ -1408,14 +1441,16 @@ async function loadPages(projectId = $("projectSelect").value) {
     renderPages();
     return;
   }
-  const [data, contentData, lowcodeData] = await Promise.all([
+  const [data, contentData, lowcodeData, lowcodeRecordsData] = await Promise.all([
     jsonApi(`/api/projects/${projectId}/pages`),
     jsonApi(`/api/projects/${projectId}/content-items`),
     jsonApi(`/api/projects/${projectId}/lowcode/forms`),
+    jsonApi(`/api/projects/${projectId}/lowcode/records`),
   ]);
   state.pages = data.pages || [];
   state.contentItems = contentData.items || [];
   state.lowcodeForms = lowcodeData.forms || [];
+  state.lowcodeRecords = lowcodeRecordsData.records || [];
   state.moduleCoverage = data.coverage || buildCoverageFromPages(state.pages);
   renderTemplateActions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentModuleOptions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
@@ -1431,6 +1466,7 @@ function renderPages() {
   const emptyText = isAdmin() ? "暂无板块资料" : "暂无板块资料";
   renderModuleLibrary();
   renderLowcodeForms();
+  renderLowcodeRecords();
   renderContentItems(filter);
   $("pagesTable").innerHTML = list.length ? list.map((p) => {
     const qr = p.qrAvailable ? `<a class="button small" target="_blank" href="/api/qr?data=${encodeURIComponent(buildQrUrl(p.projectId, p.code))}">二维码</a>` : `<span class="muted">审核后可用</span>`;
@@ -2056,6 +2092,12 @@ $("lowcodeFormsGrid").addEventListener("click", (event) => {
   if (edit) {
     fillLowcodeTemplateForm(state.lowcodeForms.find((form) => String(form.id) === String(edit.dataset.lowcodeEdit)));
   }
+});
+$("lowcodeRecordsList").addEventListener("click", (event) => {
+  const edit = event.target.closest("[data-lowcode-record-edit]");
+  if (!edit) return;
+  const item = state.contentItems.find((entry) => String(entry.id) === String(edit.dataset.lowcodeRecordEdit));
+  if (item) fillContentItem(item);
 });
 $("newLowcodeTemplate").addEventListener("click", () => fillLowcodeTemplateForm({}));
 $("closeLowcodeRecordForm").addEventListener("click", () => { $("lowcodeRecordForm").hidden = true; });

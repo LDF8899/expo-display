@@ -3693,6 +3693,13 @@ def lowcode_record_payload(form, submitted):
 def row_to_lowcode_record(row):
     if not row:
         return None
+    keys = row.keys()
+    project_portal_type = normalize_portal_type(row["project_portal_type"] if "project_portal_type" in keys else "department")
+    module_key = row["content_module_key"] if "content_module_key" in keys and row["content_module_key"] else ""
+    module_meta = module_meta_for_key(module_key, project_portal_type)
+    content_type = normalize_content_type(row["content_type"] if "content_type" in keys and row["content_type"] else "article")
+    content_status = row["content_review_status"] if "content_review_status" in keys and row["content_review_status"] else ""
+    content_code = row["content_code"] if "content_code" in keys and row["content_code"] else ""
     return {
         "id": row["id"],
         "formId": row["form_id"],
@@ -3700,6 +3707,18 @@ def row_to_lowcode_record(row):
         "projectId": row["project_id"],
         "contentItemId": row["content_item_id"],
         "status": row["status"],
+        "effectiveStatus": content_status or row["status"],
+        "formName": row["form_name"] if "form_name" in keys else "",
+        "formCode": row["form_code"] if "form_code" in keys else "",
+        "formVersionNo": int_value(row["form_version_no"] if "form_version_no" in keys else 0),
+        "contentTitle": row["content_title"] if "content_title" in keys else "",
+        "contentCode": content_code,
+        "contentModuleKey": module_key,
+        "contentModuleLabel": module_meta["label"] if module_meta else module_key,
+        "contentType": content_type,
+        "contentTypeLabel": content_type_label(content_type),
+        "contentReviewStatus": content_status,
+        "previewUrl": f"/display?project={row['project_id']}&code={content_code}" if content_code else "",
         "data": json_value(row["data_json"], {}),
         "submittedBy": row["submitted_by"],
         "submittedAt": row["submitted_at"],
@@ -3715,9 +3734,24 @@ def list_lowcode_records(project_id):
     with db_connect() as conn:
         rows = conn.execute(
             """
-            SELECT * FROM lowcode_records
-            WHERE project_id = ?
-            ORDER BY submitted_at DESC, id DESC
+            SELECT
+                lowcode_records.*,
+                lowcode_forms.name AS form_name,
+                lowcode_forms.code AS form_code,
+                lowcode_form_versions.version_no AS form_version_no,
+                content_items.code AS content_code,
+                content_items.title AS content_title,
+                content_items.module_key AS content_module_key,
+                content_items.content_type AS content_type,
+                content_items.review_status AS content_review_status,
+                projects.portal_type AS project_portal_type
+            FROM lowcode_records
+            LEFT JOIN lowcode_forms ON lowcode_forms.id = lowcode_records.form_id
+            LEFT JOIN lowcode_form_versions ON lowcode_form_versions.id = lowcode_records.form_version_id
+            LEFT JOIN content_items ON content_items.id = lowcode_records.content_item_id
+            LEFT JOIN projects ON projects.id = lowcode_records.project_id
+            WHERE lowcode_records.project_id = ?
+            ORDER BY lowcode_records.submitted_at DESC, lowcode_records.id DESC
             """,
             (project_id,),
         ).fetchall()
@@ -4358,6 +4392,14 @@ def approve_content_item_version(version_id, actor, note=""):
             """,
             (actor["username"], now_iso(), note, version_id),
         )
+        conn.execute(
+            """
+            UPDATE lowcode_records SET status = 'approved', reviewed_by = ?,
+                reviewed_at = ?, review_note = ?, updated_at = ?
+            WHERE content_item_id = ?
+            """,
+            (actor["username"], now_iso(), note, now_iso(), item_id),
+        )
     return get_content_item_by_id(item_id)
 
 
@@ -4381,6 +4423,16 @@ def reject_content_item_version(version_id, actor, note=""):
             WHERE pending_version_id = ?
             """,
             (note, actor["username"], now_iso(), version_id),
+        )
+        conn.execute(
+            """
+            UPDATE lowcode_records SET status = 'rejected', reviewed_by = ?,
+                reviewed_at = ?, review_note = ?, updated_at = ?
+            WHERE content_item_id IN (
+                SELECT content_item_id FROM content_item_versions WHERE id = ?
+            )
+            """,
+            (actor["username"], now_iso(), note, now_iso(), version_id),
         )
     return row_to_content_item_version(row)
 
