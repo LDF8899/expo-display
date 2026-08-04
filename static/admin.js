@@ -800,6 +800,7 @@ function renderLowcodeTemplateContentTypeOptions() {
 }
 function lowcodeFieldEditorRow(field, index) {
   return `<article class="lowcode-field-editor-row" data-lowcode-field-row="${index}">
+    <button class="lowcode-field-drag" type="button" draggable="true" data-lowcode-field-drag="${index}" title="拖拽排序">拖拽</button>
     <div class="lowcode-field-editor-main">
       <input data-lowcode-config-field="label" value="${escapeHtml(field.label)}" placeholder="字段名称" />
       <input data-lowcode-config-field="key" value="${escapeHtml(field.key)}" placeholder="字段编码" />
@@ -841,6 +842,13 @@ function moveLowcodeFieldDraft(index, direction) {
   if (target < 0 || target >= state.lowcodeFieldDrafts.length) return;
   const next = [...state.lowcodeFieldDrafts];
   [next[index], next[target]] = [next[target], next[index]];
+  setLowcodeFieldDrafts(next);
+}
+function reorderLowcodeFieldDraft(fromIndex, toIndex) {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= state.lowcodeFieldDrafts.length || toIndex >= state.lowcodeFieldDrafts.length) return;
+  const next = [...state.lowcodeFieldDrafts];
+  const [field] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, field);
   setLowcodeFieldDrafts(next);
 }
 function removeLowcodeFieldDraft(index) {
@@ -2337,6 +2345,41 @@ $("lowcodeFieldEditorList").addEventListener("click", (event) => {
   if (up) moveLowcodeFieldDraft(Number(up.dataset.lowcodeFieldUp), -1);
   if (down) moveLowcodeFieldDraft(Number(down.dataset.lowcodeFieldDown), 1);
   if (remove) removeLowcodeFieldDraft(Number(remove.dataset.lowcodeFieldRemove));
+});
+$("lowcodeFieldEditorList").addEventListener("dragstart", (event) => {
+  const handle = event.target.closest("[data-lowcode-field-drag]");
+  const row = event.target.closest("[data-lowcode-field-row]");
+  if (!handle || !row) {
+    event.preventDefault();
+    return;
+  }
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", row.dataset.lowcodeFieldRow);
+  row.classList.add("is-dragging");
+});
+$("lowcodeFieldEditorList").addEventListener("dragover", (event) => {
+  const row = event.target.closest("[data-lowcode-field-row]");
+  if (!row) return;
+  event.preventDefault();
+  row.classList.add("is-drop-target");
+});
+$("lowcodeFieldEditorList").addEventListener("dragleave", (event) => {
+  const row = event.target.closest("[data-lowcode-field-row]");
+  if (row) row.classList.remove("is-drop-target");
+});
+$("lowcodeFieldEditorList").addEventListener("drop", (event) => {
+  const row = event.target.closest("[data-lowcode-field-row]");
+  if (!row) return;
+  event.preventDefault();
+  const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+  const toIndex = Number(row.dataset.lowcodeFieldRow);
+  document.querySelectorAll(".lowcode-field-editor-row.is-drop-target").forEach((node) => node.classList.remove("is-drop-target"));
+  reorderLowcodeFieldDraft(fromIndex, toIndex);
+});
+$("lowcodeFieldEditorList").addEventListener("dragend", () => {
+  document.querySelectorAll(".lowcode-field-editor-row.is-dragging, .lowcode-field-editor-row.is-drop-target").forEach((node) => {
+    node.classList.remove("is-dragging", "is-drop-target");
+  });
 });
 $("lowcodeTemplateForm").addEventListener("submit", async (event) => {
   event.preventDefault();
