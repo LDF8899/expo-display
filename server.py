@@ -2319,6 +2319,41 @@ def verify_password(password, stored):
         return False
 
 
+ROLE_ADMIN = "admin"
+ROLE_DEPARTMENT_ADMIN = "department_admin"
+ROLE_TEACHER = "teacher"
+VALID_USER_ROLES = {ROLE_ADMIN, ROLE_DEPARTMENT_ADMIN, ROLE_TEACHER}
+REVIEW_ROLES = {ROLE_ADMIN, ROLE_DEPARTMENT_ADMIN}
+
+
+def is_admin_user(user):
+    return bool(user and user.get("role") == ROLE_ADMIN)
+
+
+def is_department_admin_user(user):
+    return bool(user and user.get("role") == ROLE_DEPARTMENT_ADMIN)
+
+
+def can_review_user(user):
+    return bool(user and user.get("role") in REVIEW_ROLES)
+
+
+def user_role_label(role):
+    return {
+        ROLE_ADMIN: "管理员",
+        ROLE_DEPARTMENT_ADMIN: "系部管理员",
+        ROLE_TEACHER: "老师",
+    }.get(role or "", "老师")
+
+
+def project_owner_department(username):
+    if not username:
+        return ""
+    with db_connect() as conn:
+        row = conn.execute("SELECT department FROM users WHERE username = ?", (username,)).fetchone()
+    return row["department"] if row else ""
+
+
 def row_to_user(row):
     if not row:
         return None
@@ -2352,7 +2387,8 @@ def list_users():
             LEFT JOIN projects p ON p.owner_username = u.username
             LEFT JOIN pages ON pages.project_id = p.id
             GROUP BY u.username
-            ORDER BY CASE u.role WHEN 'admin' THEN 0 ELSE 1 END, u.enabled DESC, u.username
+            ORDER BY CASE u.role WHEN 'admin' THEN 0 WHEN 'department_admin' THEN 1 ELSE 2 END,
+                     u.enabled DESC, u.username
             """
         ).fetchall()
     users = []
@@ -2370,9 +2406,9 @@ def upsert_user(data, actor="admin"):
         raise ValueError("username 不能为空")
     if not re.match(r"^[A-Za-z0-9_.-]{2,64}$", username):
         raise ValueError("username 只能使用字母、数字、点、短横线或下划线")
-    role = str(data.get("role") or "teacher").strip()
-    if role not in {"admin", "teacher"}:
-        role = "teacher"
+    role = str(data.get("role") or ROLE_TEACHER).strip()
+    if role not in VALID_USER_ROLES:
+        role = ROLE_TEACHER
     display_name = str(data.get("displayName") or data.get("name") or username).strip()
     department = str(data.get("department") or "").strip()
     enabled = 1 if data.get("enabled", True) else 0
@@ -2615,6 +2651,7 @@ def row_to_project(row):
     pending_page_count = row["pending_page_count"] if "pending_page_count" in row.keys() else 0
     owner_username = row["owner_username"] if "owner_username" in row.keys() else ADMIN_USERNAME
     owner_display_name = row["owner_display_name"] if "owner_display_name" in row.keys() else owner_username
+    owner_department = row["owner_department"] if "owner_department" in row.keys() else ""
     owner_enabled = row["owner_enabled"] if "owner_enabled" in row.keys() else 1
     portal_type = normalize_portal_type(row["portal_type"] if "portal_type" in row.keys() else "department")
     portal_slug = normalize_portal_slug(row["portal_slug"] if "portal_slug" in row.keys() else "")
@@ -2627,6 +2664,7 @@ def row_to_project(row):
         "previewUrl": portal_preview_url(portal_type, portal_slug),
         "ownerUsername": owner_username,
         "ownerDisplayName": owner_display_name or owner_username,
+        "ownerDepartment": owner_department or "",
         "ownerEnabled": bool(owner_enabled),
         "idleKicker": row["idle_kicker"],
         "idleTitle": row["idle_title"],
@@ -2652,7 +2690,8 @@ def get_project(project_id):
     with db_connect() as conn:
         row = conn.execute(
             """
-            SELECT p.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
+            SELECT p.*, users.display_name AS owner_display_name,
+                   users.department AS owner_department, users.enabled AS owner_enabled
             FROM projects p
             LEFT JOIN users ON users.username = p.owner_username
             WHERE p.id = ?
@@ -2665,9 +2704,32 @@ def get_project(project_id):
 def project_accessible(project, user):
     if not project or not user:
         return False
-    if user.get("role") == "admin":
+    if is_admin_user(user):
         return True
-    return project.get("ownerUsername") == user.get("username")
+    if project.get("ownerUsername") == user.get("username"):
+        return True
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        owner_department = str(project.get("ownerDepartment") or "").strip()
+        if not owner_department:
+            owner_department = str(project_owner_department(project.get("ownerUsername")) or "").strip()
+        return bool(department and owner_department and department == owner_department)
+    return False
+
+
+def project_scope_sql(user, project_alias="projects", owner_alias="project_owners"):
+    if is_admin_user(user):
+        return "", "", []
+    username = user.get("username", "") if user else ""
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if department:
+            return (
+                f"LEFT JOIN users {owner_alias} ON {owner_alias}.username = {project_alias}.owner_username",
+                f"WHERE ({project_alias}.owner_username = ? OR {owner_alias}.department = ?)",
+                [username, department],
+            )
+    return "", f"WHERE {project_alias}.owner_username = ?", [username]
 
 
 def get_deployed_project():
@@ -2729,10 +2791,18 @@ def get_deployed_content_project():
 
 
 def list_projects(user=None):
-    user = user or {"role": "admin"}
+    user = user or {"role": ROLE_ADMIN}
     owner_filter = ""
     params = []
-    if user.get("role") != "admin":
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if department:
+            owner_filter = "WHERE (p.owner_username = ? OR users.department = ?)"
+            params.extend([user.get("username", ""), department])
+        else:
+            owner_filter = "WHERE p.owner_username = ?"
+            params.append(user.get("username", ""))
+    elif not is_admin_user(user):
         owner_filter = "WHERE p.owner_username = ?"
         params.append(user.get("username", ""))
     with db_connect() as conn:
@@ -2741,6 +2811,7 @@ def list_projects(user=None):
             SELECT
                 p.*,
                 users.display_name AS owner_display_name,
+                users.department AS owner_department,
                 users.enabled AS owner_enabled,
                 COUNT(DISTINCT pages.id) AS page_count,
                 SUM(CASE WHEN pages.review_status IN ('pending','pending_delete','rejected') THEN 1 ELSE 0 END) AS pending_page_count,
@@ -2914,15 +2985,25 @@ def list_admin_logs(limit=80, username="", action="", date_from="", date_to=""):
 
 
 def operations_summary(user=None):
-    user = user or {"role": "admin", "username": ""}
+    user = user or {"role": ROLE_ADMIN, "username": ""}
     ready = ready_status()
-    owner_join = ""
-    owner_where = ""
-    owner_params = []
-    if user.get("role") != "admin":
-        owner_join = "JOIN projects ON projects.id = pages.project_id"
-        owner_where = "WHERE projects.owner_username = ?"
-        owner_params.append(user.get("username", ""))
+    page_project_join = "JOIN projects ON projects.id = pages.project_id"
+    owner_join, owner_where, owner_params = project_scope_sql(user, "projects", "project_owners")
+    asset_join = ""
+    asset_where = ""
+    asset_params = []
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if department:
+            asset_join = "LEFT JOIN users asset_owners ON asset_owners.username = assets.owner_username"
+            asset_where = "WHERE assets.owner_username = ? OR asset_owners.department = ?"
+            asset_params.extend([user.get("username", ""), department])
+        else:
+            asset_where = "WHERE assets.owner_username = ?"
+            asset_params.append(user.get("username", ""))
+    elif not is_admin_user(user):
+        asset_where = "WHERE assets.owner_username = ?"
+        asset_params.append(user.get("username", ""))
     with db_connect() as conn:
         deployed = conn.execute(
             """
@@ -2938,19 +3019,35 @@ def operations_summary(user=None):
             f"""
             SELECT COUNT(*) AS value
             FROM pages
+            {page_project_join}
             {owner_join}
             {owner_where + (' AND' if owner_where else 'WHERE')} pages.review_status IN ('pending','pending_delete')
             """,
             owner_params,
         ).fetchone()["value"]
         pending_projects = 0
-        if user.get("role") == "admin":
+        if is_admin_user(user):
             pending_projects = conn.execute(
                 "SELECT COUNT(*) AS value FROM projects WHERE config_status = 'pending'"
             ).fetchone()["value"]
+        elif can_review_user(user):
+            pending_projects = conn.execute(
+                f"""
+                SELECT COUNT(*) AS value
+                FROM projects
+                {owner_join}
+                {owner_where + (' AND' if owner_where else 'WHERE')} projects.config_status = 'pending'
+                """,
+                owner_params,
+            ).fetchone()["value"]
         asset_count = conn.execute(
-            "SELECT COUNT(*) AS value FROM assets" if user.get("role") == "admin" else "SELECT COUNT(*) AS value FROM assets WHERE owner_username = ?",
-            () if user.get("role") == "admin" else (user.get("username", ""),),
+            f"""
+            SELECT COUNT(*) AS value
+            FROM assets
+            {asset_join}
+            {asset_where}
+            """,
+            asset_params,
         ).fetchone()["value"]
         recent_errors = conn.execute(
             """
@@ -2959,7 +3056,7 @@ def operations_summary(user=None):
             ORDER BY created_at DESC, id DESC
             LIMIT 5
             """
-        ).fetchall() if user.get("role") == "admin" else []
+        ).fetchall() if is_admin_user(user) else []
     return {
         "ready": ready,
         "deployed": {
@@ -2974,7 +3071,7 @@ def operations_summary(user=None):
         },
         "assets": {"count": int(asset_count or 0)},
         "recentErrors": [row_to_admin_log(row) for row in recent_errors],
-        "config": online_config_audit() if user.get("role") == "admin" else {"ok": True, "errors": [], "warnings": []},
+        "config": online_config_audit() if is_admin_user(user) else {"ok": True, "errors": [], "warnings": []},
     }
 
 
@@ -3036,7 +3133,7 @@ def acceptance_report(user):
         "warnings": [],
         "eligiblePageIds": [],
     }
-    reviews = list_reviews("pending")
+    reviews = list_reviews("pending", user)
     return {
         "ok": bool(operations.get("ready", {}).get("ok")) and bool(operations.get("config", {}).get("ok")) and bool(content_check.get("ok")),
         "generatedAt": now_iso(),
@@ -3080,16 +3177,27 @@ def list_assets(user, limit=80):
     limit = max(1, min(limit, 200))
     where = ""
     params = []
-    if user.get("role") != "admin":
-        where = "WHERE owner_username = ?"
+    join = ""
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if department:
+            join = "LEFT JOIN users ON users.username = assets.owner_username"
+            where = "WHERE assets.owner_username = ? OR users.department = ?"
+            params.extend([user.get("username", ""), department])
+        else:
+            where = "WHERE assets.owner_username = ?"
+            params.append(user.get("username", ""))
+    elif not is_admin_user(user):
+        where = "WHERE assets.owner_username = ?"
         params.append(user.get("username", ""))
     with db_connect() as conn:
         rows = conn.execute(
             f"""
-            SELECT *
+            SELECT assets.*
             FROM assets
+            {join}
             {where}
-            ORDER BY created_at DESC, id DESC
+            ORDER BY assets.created_at DESC, assets.id DESC
             LIMIT ?
             """,
             (*params, limit),
@@ -3106,8 +3214,12 @@ def get_asset(asset_id):
 def asset_accessible(asset, user):
     if not asset or not user:
         return False
-    if user.get("role") == "admin":
+    if is_admin_user(user):
         return True
+    if is_department_admin_user(user):
+        owner_department = project_owner_department(asset.get("ownerUsername"))
+        department = str(user.get("department") or "").strip()
+        return bool(department and owner_department and department == owner_department)
     return asset.get("ownerUsername") == user.get("username")
 
 
@@ -4037,7 +4149,7 @@ def row_to_lowcode_record(row):
 def list_lowcode_records(project_id, actor=None):
     where = "WHERE lowcode_records.project_id = ?"
     params = [project_id]
-    if actor and actor.get("role") != "admin":
+    if actor and not can_review_user(actor):
         where += " AND lowcode_records.submitted_by = ?"
         params.append(actor.get("username", ""))
     with db_connect() as conn:
@@ -4102,7 +4214,7 @@ def assert_lowcode_record_editable(conn, record_id, project_id, form_id, actor, 
     ).fetchone()
     if not row or row["status"] not in allowed_statuses:
         raise ValueError("记录不存在或当前状态不可继续修改")
-    if actor.get("role") != "admin" and row["submitted_by"] != actor.get("username", ""):
+    if not can_review_user(actor) and row["submitted_by"] != actor.get("username", ""):
         raise ValueError("只能继续修改自己的模板记录")
     return row
 
@@ -4216,7 +4328,7 @@ def delete_lowcode_record_draft(project_id, record_id, actor):
             return None
         if row["status"] != "draft":
             raise ValueError("只能删除草稿记录")
-        if actor.get("role") != "admin" and row["submitted_by"] != actor.get("username", ""):
+        if not can_review_user(actor) and row["submitted_by"] != actor.get("username", ""):
             raise ValueError("只能删除自己的草稿")
         conn.execute("DELETE FROM lowcode_record_assets WHERE record_id = ?", (record_id,))
         conn.execute("DELETE FROM lowcode_records WHERE id = ?", (record_id,))
@@ -4245,7 +4357,7 @@ def submit_lowcode_record(project_id, form_id, data, actor):
             content_item_id = existing_record["content_item_id"]
     payload = lowcode_record_payload(form, submitted)
     validate_content_asset_access(payload.get("coverAssetId"), payload.get("assets", []), actor)
-    approve_now = actor.get("role") == "admin"
+    approve_now = can_review_user(actor)
     item = save_content_item(project_id, content_item_id, payload, actor, approve_now=approve_now)
     now = now_iso()
     status = "approved" if approve_now else "pending"
@@ -4911,7 +5023,7 @@ def add_content_item_asset(content_item_id, data, actor):
     project = get_project(item["projectId"])
     if not project_accessible(project, actor):
         return None
-    if actor.get("role") != "admin":
+    if not can_review_user(actor):
         raise ValueError("素材关联直接修改需要管理员权限，请通过资料草稿提交")
     asset_id = int_value(data.get("assetId") or data.get("asset_id"))
     if asset_id:
@@ -4950,7 +5062,7 @@ def reorder_content_item_assets(content_item_id, assets, actor):
     project = get_project(item["projectId"])
     if not project_accessible(project, actor):
         return None
-    if actor.get("role") != "admin":
+    if not can_review_user(actor):
         raise ValueError("素材排序直接修改需要管理员权限，请通过资料草稿提交")
     with db_connect() as conn:
         for index, asset in enumerate(assets or []):
@@ -4975,7 +5087,7 @@ def delete_content_item_asset(content_item_id, asset_ref, actor):
     project = get_project(item["projectId"])
     if not project_accessible(project, actor):
         return None
-    if actor.get("role") != "admin":
+    if not can_review_user(actor):
         raise ValueError("素材关联直接删除需要管理员权限，请通过资料草稿提交")
     ref = int_value(asset_ref)
     with db_connect() as conn:
@@ -4998,26 +5110,36 @@ def delete_content_item_asset(content_item_id, asset_ref, actor):
 
 
 def admin_dashboard(user=None):
-    user = user or {"role": "admin", "username": ""}
-    owner_where = ""
-    owner_params = []
-    scan_owner_where = ""
-    scan_owner_params = []
-    if user.get("role") != "admin":
-        owner_where = "WHERE projects.owner_username = ?"
-        owner_params.append(user.get("username", ""))
-        scan_owner_where = "WHERE projects.owner_username = ?"
-        scan_owner_params.append(user.get("username", ""))
+    user = user or {"role": ROLE_ADMIN, "username": ""}
+    owner_join, owner_where, owner_params = project_scope_sql(user, "projects", "project_owners")
+    scan_owner_join, scan_owner_where, scan_owner_params = project_scope_sql(user, "projects", "scan_project_owners")
+    recent_project_join, recent_project_where, recent_project_params = project_scope_sql(user, "p", "recent_project_owners")
     with db_connect() as conn:
-        project_count = conn.execute(f"SELECT COUNT(*) AS value FROM projects {owner_where}", owner_params).fetchone()["value"]
+        project_count = conn.execute(
+            f"""
+            SELECT COUNT(*) AS value
+            FROM projects
+            {owner_join}
+            {owner_where}
+            """,
+            owner_params,
+        ).fetchone()["value"]
         page_count = conn.execute(
-            f"SELECT COUNT(*) AS value FROM pages JOIN projects ON projects.id = pages.project_id {owner_where}",
+            f"""
+            SELECT COUNT(*) AS value
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
+            {owner_where}
+            """,
             owner_params,
         ).fetchone()["value"]
         enabled_page_count = conn.execute(
             f"""
             SELECT COUNT(*) AS value
-            FROM pages JOIN projects ON projects.id = pages.project_id
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
             {owner_where + (' AND' if owner_where else 'WHERE')} pages.enabled = 1 AND pages.review_status = 'approved'
             """,
             owner_params,
@@ -5025,7 +5147,9 @@ def admin_dashboard(user=None):
         pending_count = conn.execute(
             f"""
             SELECT COUNT(*) AS value
-            FROM pages JOIN projects ON projects.id = pages.project_id
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
             {owner_where + (' AND' if owner_where else 'WHERE')} pages.review_status IN ('pending','pending_delete')
             """,
             owner_params,
@@ -5033,12 +5157,14 @@ def admin_dashboard(user=None):
         rejected_count = conn.execute(
             f"""
             SELECT COUNT(*) AS value
-            FROM pages JOIN projects ON projects.id = pages.project_id
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
             {owner_where + (' AND' if owner_where else 'WHERE')} pages.review_status = 'rejected'
             """,
             owner_params,
         ).fetchone()["value"]
-        if user.get("role") == "admin":
+        if is_admin_user(user):
             scan_count = conn.execute("SELECT COUNT(*) AS value FROM scans").fetchone()["value"]
             today_scan_count = conn.execute(
                 "SELECT COUNT(*) AS value FROM scans WHERE substr(created_at, 1, 10) = ?",
@@ -5046,20 +5172,22 @@ def admin_dashboard(user=None):
             ).fetchone()["value"]
         else:
             scan_count = conn.execute(
-                """
+                f"""
                 SELECT COUNT(*) AS value
                 FROM scans
                 JOIN projects ON projects.id = scans.project_id
-                WHERE projects.owner_username = ?
+                {scan_owner_join}
+                {scan_owner_where}
                 """,
                 scan_owner_params,
             ).fetchone()["value"]
             today_scan_count = conn.execute(
-                """
+                f"""
                 SELECT COUNT(*) AS value
                 FROM scans
                 JOIN projects ON projects.id = scans.project_id
-                WHERE projects.owner_username = ? AND substr(scans.created_at, 1, 10) = ?
+                {scan_owner_join}
+                {scan_owner_where + (' AND' if scan_owner_where else 'WHERE')} substr(scans.created_at, 1, 10) = ?
                 """,
                 (*scan_owner_params, now_iso()[:10]),
             ).fetchone()["value"]
@@ -5069,6 +5197,7 @@ def admin_dashboard(user=None):
                 MAX(CASE WHEN deployed = 1 THEN name ELSE '' END) AS welcome_name,
                 MAX(CASE WHEN content_deployed = 1 THEN name ELSE '' END) AS content_name
             FROM projects
+            {owner_join}
             {owner_where}
             """,
             owner_params,
@@ -5076,7 +5205,9 @@ def admin_dashboard(user=None):
         categories = conn.execute(
             f"""
             SELECT category, COUNT(*) AS count
-            FROM pages JOIN projects ON projects.id = pages.project_id
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
             {owner_where}
             GROUP BY category
             ORDER BY count DESC, category
@@ -5089,6 +5220,7 @@ def admin_dashboard(user=None):
             SELECT scans.id, scans.code, scans.raw_url, scans.created_at, pages.title, projects.name AS project_name
             FROM scans
             LEFT JOIN projects ON projects.id = scans.project_id
+            {scan_owner_join}
             LEFT JOIN pages ON pages.project_id = scans.project_id AND pages.code = scans.code
             {scan_owner_where}
             ORDER BY scans.created_at DESC, scans.id DESC
@@ -5103,12 +5235,13 @@ def admin_dashboard(user=None):
             FROM projects p
             LEFT JOIN users ON users.username = p.owner_username
             LEFT JOIN pages ON pages.project_id = p.id
-            {owner_where.replace('projects.', 'p.')}
+            {recent_project_join}
+            {recent_project_where}
             GROUP BY p.id
             ORDER BY p.updated_at DESC, p.id DESC
             LIMIT 6
             """,
-            owner_params,
+            recent_project_params,
         ).fetchall()
 
     return {
@@ -5137,7 +5270,7 @@ def admin_dashboard(user=None):
             for row in recent_scans
         ],
         "recentProjects": [row_to_project(row) for row in recent_projects],
-        "logs": list_admin_logs(8) if user.get("role") == "admin" else list_admin_logs(8, username=user.get("username", "")),
+        "logs": list_admin_logs(8) if is_admin_user(user) else list_admin_logs(8, username=user.get("username", "")),
         "operations": operations_summary(user),
     }
 
@@ -6312,37 +6445,79 @@ def row_to_project_version(row):
     }
 
 
-def list_reviews(status="pending"):
+def review_project_filter_sql(user, project_alias="projects", owner_alias="users"):
+    if is_admin_user(user):
+        return "", []
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if not department:
+            return f" AND {project_alias}.owner_username = ?", [user.get("username", "")]
+        return (
+            f" AND ({project_alias}.owner_username = ? OR {owner_alias}.department = ?)",
+            [user.get("username", ""), department],
+        )
+    return f" AND {project_alias}.owner_username = ?", [user.get("username", "")]
+
+
+def review_version_project(review_type, version_id):
+    table = {
+        "pages": "page_versions",
+        "projects": "project_versions",
+        "content-items": "content_item_versions",
+    }.get(review_type)
+    if not table or not version_id:
+        return None
+    with db_connect() as conn:
+        row = conn.execute(f"SELECT project_id FROM {table} WHERE id = ?", (version_id,)).fetchone()
+    return get_project(row["project_id"]) if row else None
+
+
+def review_version_accessible(review_type, version_id, user):
+    if not can_review_user(user):
+        return False
+    project = review_version_project(review_type, version_id)
+    return project_accessible(project, user)
+
+
+def list_reviews(status="pending", user=None):
+    user = user or {"role": ROLE_ADMIN}
+    review_filter, review_params = review_project_filter_sql(user)
     with db_connect() as conn:
         page_rows = conn.execute(
-            """
+            f"""
             SELECT page_versions.*, projects.name AS project_name
             FROM page_versions
             JOIN projects ON projects.id = page_versions.project_id
+            LEFT JOIN users ON users.username = projects.owner_username
             WHERE page_versions.status = ?
+              {review_filter}
             ORDER BY page_versions.submitted_at DESC, page_versions.id DESC
             """,
-            (status,),
+            (status, *review_params),
         ).fetchall()
         project_rows = conn.execute(
-            """
+            f"""
             SELECT project_versions.*, projects.name AS project_name
             FROM project_versions
             JOIN projects ON projects.id = project_versions.project_id
+            LEFT JOIN users ON users.username = projects.owner_username
             WHERE project_versions.status = ?
+              {review_filter}
             ORDER BY project_versions.submitted_at DESC, project_versions.id DESC
             """,
-            (status,),
+            (status, *review_params),
         ).fetchall()
         content_item_rows = conn.execute(
-            """
+            f"""
             SELECT content_item_versions.*, projects.name AS project_name
             FROM content_item_versions
             JOIN projects ON projects.id = content_item_versions.project_id
+            LEFT JOIN users ON users.username = projects.owner_username
             WHERE content_item_versions.status = ?
+              {review_filter}
             ORDER BY content_item_versions.submitted_at DESC, content_item_versions.id DESC
             """,
-            (status,),
+            (status, *review_params),
         ).fetchall()
     return {
         "pages": [row_to_page_version(row) for row in page_rows],
@@ -7141,7 +7316,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
 
     def current_admin(self):
         user = self.current_user()
-        return user["username"] if user and user.get("role") == "admin" else None
+        return user["username"] if is_admin_user(user) else None
 
     def current_user(self):
         return get_session_user(self.cookie_value(ADMIN_COOKIE))
@@ -7155,9 +7330,16 @@ class ExpoHandler(BaseHTTPRequestHandler):
 
     def require_admin(self):
         user = self.current_user()
-        if user and user.get("role") == "admin":
+        if is_admin_user(user):
             return user
         self.send_json(401, {"ok": False, "error": "需要管理员权限"})
+        return None
+
+    def require_reviewer(self):
+        user = self.current_user()
+        if can_review_user(user):
+            return user
+        self.send_json(401, {"ok": False, "error": "需要审核权限"})
         return None
 
     def csrf_exempt(self, path):
@@ -7280,7 +7462,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
         if path == "/login":
             user = self.current_user()
             if user:
-                self.send_redirect("/admin" if user.get("role") == "admin" else "/teacher?view=pages")
+                self.send_redirect("/admin" if can_review_user(user) else "/teacher?view=pages")
                 return
             self.serve_file(STATIC_DIR / "login.html")
             return
@@ -7290,7 +7472,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
             if not user:
                 self.send_redirect("/login")
                 return
-            if user.get("role") != "admin":
+            if not can_review_user(user):
                 self.send_redirect("/teacher?view=pages")
                 return
             self.serve_file(STATIC_DIR / "admin.html")
@@ -7301,7 +7483,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
             if not user:
                 self.send_redirect("/login")
                 return
-            if user.get("role") == "admin":
+            if can_review_user(user):
                 self.send_redirect("/admin")
                 return
             self.serve_file(STATIC_DIR / "admin.html")
@@ -7336,7 +7518,12 @@ class ExpoHandler(BaseHTTPRequestHandler):
             user = self.current_user()
             permissions = []
             if user:
-                permissions = ["admin"] if user["role"] == "admin" else ["teacher"]
+                if is_admin_user(user):
+                    permissions = ["admin", "review"]
+                elif can_review_user(user):
+                    permissions = ["department_admin", "review"]
+                else:
+                    permissions = ["teacher"]
             token = self.cookie_value(ADMIN_COOKIE)
             self.send_json(
                 200,
@@ -7516,14 +7703,16 @@ class ExpoHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/reviews":
-            if not self.require_admin():
+            user = self.require_reviewer()
+            if not user:
                 return
             status = (parse_qs(parsed.query).get("status") or ["pending"])[0]
-            self.send_json(200, {"ok": True, "reviews": list_reviews(status)})
+            self.send_json(200, {"ok": True, "reviews": list_reviews(status, user)})
             return
 
         if path.startswith("/api/reviews/pages/") and path.endswith("/preview"):
-            if not self.require_admin():
+            user = self.require_reviewer()
+            if not user:
                 return
             parts = path.strip("/").split("/")
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "reviews" and parts[2] == "pages":
@@ -7540,7 +7729,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     ).fetchone()
                 version = row_to_page_version(row) if row else None
                 project = get_project(version["projectId"]) if version else None
-                if not version or not project:
+                if not version or not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "审核记录不存在"})
                     return
                 page = {**version["snapshot"], "projectId": version["projectId"], "reviewStatus": version["status"], "qrAvailable": False}
@@ -7583,7 +7772,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
             if not user:
                 return
             filters = {key: values[0] for key, values in parse_qs(parsed.query).items() if values}
-            if user.get("role") != "admin":
+            if not is_admin_user(user):
                 filters["enabled"] = "1"
             self.send_json(200, {"ok": True, "forms": list_lowcode_forms(filters)})
             return
@@ -7607,7 +7796,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
             form_id_text = parts[-1]
             form_id = int(form_id_text) if form_id_text.isdigit() else 0
             form = get_lowcode_form(form_id)
-            if not form or (not form.get("enabled") and user.get("role") != "admin"):
+            if not form or (not form.get("enabled") and not is_admin_user(user)):
                 self.send_json(404, {"ok": False, "error": "资料采集模板不存在"})
                 return
             self.send_json(200, {"ok": True, "form": form})
@@ -7660,7 +7849,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 filters = {
                     "portalType": project.get("portalType"),
                 }
-                if user.get("role") != "admin":
+                if not is_admin_user(user):
                     filters["enabled"] = "1"
                 self.send_json(200, {"ok": True, "project": project, "forms": list_lowcode_forms(filters)})
                 return
@@ -7804,7 +7993,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 return
             token = create_admin_session(username)
             user = get_user(username)
-            redirect_url = "/admin" if user["role"] == "admin" else "/teacher?view=pages"
+            redirect_url = "/admin" if can_review_user(user) else "/teacher?view=pages"
             create_admin_log("login", "user", username, username, "login", username=username, role=user["role"], ip=self.client_ip())
             self.send_json(
                 200,
@@ -7976,7 +8165,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/api/reviews/"):
-            actor = self.require_admin()
+            actor = self.require_reviewer()
             if not actor:
                 return
             parts = path.strip("/").split("/")
@@ -7986,6 +8175,9 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 review_type = parts[2]
                 version_id = int(parts[3]) if parts[3].isdigit() else 0
                 action = parts[4]
+                if not review_version_accessible(review_type, version_id, actor):
+                    self.send_json(404, {"ok": False, "error": "审核记录不存在"})
+                    return
                 if review_type == "pages" and action == "approve":
                     item = approve_page_version(version_id, actor, note)
                 elif review_type == "pages" and action == "reject":
@@ -8019,12 +8211,13 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
                 try:
-                    item = save_content_item(project_id, None, self.read_json(), user, approve_now=user["role"] == "admin")
+                    approve_now = can_review_user(user)
+                    item = save_content_item(project_id, None, self.read_json(), user, approve_now=approve_now)
                 except ValueError as exc:
                     self.send_json(400, {"ok": False, "error": str(exc)})
                     return
                 self.log_admin(
-                    "save_content_item" if user["role"] == "admin" else "submit_content_item",
+                    "save_content_item" if can_review_user(user) else "submit_content_item",
                     "content_item",
                     item["id"],
                     item["title"],
@@ -8048,7 +8241,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     return
                 log_title = (result.get("item") or {}).get("title") or (result.get("record") or {}).get("contentTitle") or "低代码资料草稿"
                 self.log_admin(
-                    "save_lowcode_draft" if data.get("draft") else ("submit_lowcode_record" if user["role"] != "admin" else "save_lowcode_record"),
+                    "save_lowcode_draft" if data.get("draft") else ("save_lowcode_record" if can_review_user(user) else "submit_lowcode_record"),
                     "lowcode_record",
                     result["record"]["id"],
                     log_title,
@@ -8301,7 +8494,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
-                if user["role"] == "admin":
+                if can_review_user(user):
                     project = save_project(project_id, self.read_json(), user)
                     self.log_admin("update_project", "project", project["id"], project["name"], "update project", changes="config")
                 else:
@@ -8317,12 +8510,13 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
                 try:
-                    item = save_content_item(project_id, content_item_id, self.read_json(), user, approve_now=user["role"] == "admin")
+                    approve_now = can_review_user(user)
+                    item = save_content_item(project_id, content_item_id, self.read_json(), user, approve_now=approve_now)
                 except ValueError as exc:
                     self.send_json(400, {"ok": False, "error": str(exc)})
                     return
                 self.log_admin(
-                    "save_content_item" if user["role"] == "admin" else "submit_content_item",
+                    "save_content_item" if can_review_user(user) else "submit_content_item",
                     "content_item",
                     item["id"],
                     item["title"],
@@ -8360,11 +8554,12 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
                 try:
-                    page = save_page(project_id, code, self.read_json(), user, approve_now=user["role"] == "admin")
+                    approve_now = can_review_user(user)
+                    page = save_page(project_id, code, self.read_json(), user, approve_now=approve_now)
                 except ValueError as exc:
                     self.send_json(409, {"ok": False, "error": str(exc)})
                     return
-                self.log_admin("save_page" if user["role"] == "admin" else "submit_page", "page", page["code"], page["title"], f"project {project_id}", changes="content")
+                self.log_admin("save_page" if can_review_user(user) else "submit_page", "page", page["code"], page["title"], f"project {project_id}", changes="content")
                 self.send_json(200, {"ok": True, "page": page})
                 return
 
@@ -8396,11 +8591,12 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 self.send_json(500, {"ok": False, "error": "当前没有已部署的内容项目"})
                 return
             try:
-                page = save_page(project["id"], code, self.read_json(), user, approve_now=user["role"] == "admin")
+                approve_now = can_review_user(user)
+                page = save_page(project["id"], code, self.read_json(), user, approve_now=approve_now)
             except ValueError as exc:
                 self.send_json(409, {"ok": False, "error": str(exc)})
                 return
-            self.log_admin("save_page" if user["role"] == "admin" else "submit_page", "page", page["code"], page["title"], f"project {project['id']}", changes="content")
+            self.log_admin("save_page" if can_review_user(user) else "submit_page", "page", page["code"], page["title"], f"project {project['id']}", changes="content")
             self.send_json(200, {"ok": True, "page": page})
             return
 
@@ -8436,7 +8632,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 return
             parts = path.strip("/").split("/")
             if len(parts) == 3 and parts[0] == "api" and parts[1] == "projects":
-                if user["role"] != "admin":
+                if not is_admin_user(user):
                     self.send_json(403, {"ok": False, "error": "没有权限执行此操作"})
                     return
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
@@ -8454,12 +8650,13 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
-                item = delete_content_item(project_id, content_item_id, user, approve_now=user["role"] == "admin")
+                approve_now = can_review_user(user)
+                item = delete_content_item(project_id, content_item_id, user, approve_now=approve_now)
                 if not item:
                     self.send_json(404, {"ok": False, "error": "资料不存在"})
                     return
                 self.log_admin(
-                    "delete_content_item" if user["role"] == "admin" else "request_delete_content_item",
+                    "delete_content_item" if can_review_user(user) else "request_delete_content_item",
                     "content_item",
                     item["id"],
                     item["title"],
@@ -8474,11 +8671,12 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
-                ok = request_delete_page(project_id, code, user, approve_now=user["role"] == "admin")
+                approve_now = can_review_user(user)
+                ok = request_delete_page(project_id, code, user, approve_now=approve_now)
                 if not ok:
                     self.send_json(404, {"ok": False, "error": "页面不存在"})
                     return
-                self.log_admin("delete_page" if user["role"] == "admin" else "request_delete_page", "page", code, code, f"project {project_id}")
+                self.log_admin("delete_page" if can_review_user(user) else "request_delete_page", "page", code, code, f"project {project_id}")
                 self.send_json(200, {"ok": True})
                 return
 

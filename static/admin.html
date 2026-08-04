@@ -49,7 +49,12 @@
             <input id="userDisplayName" placeholder="姓名" />
             <input id="userDepartment" placeholder="部门" />
             <input id="userPassword" placeholder="初始/重置密码" />
-            <button class="button primary" type="submit">保存老师</button>
+            <select id="userRole">
+              <option value="teacher">老师</option>
+              <option value="department_admin">系部管理员</option>
+              <option value="admin">管理员</option>
+            </select>
+            <button class="button primary" type="submit">保存账号</button>
           </form>
           <label class="stack">
             <span>CSV 导入 username,name,password,department,projects</span>
@@ -59,7 +64,7 @@
           <p id="userStatus" class="status-text"></p>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>账号</th><th>姓名</th><th>部门</th><th>门户</th><th>状态</th><th>操作</th></tr></thead>
+              <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>部门</th><th>门户</th><th>状态</th><th>操作</th></tr></thead>
               <tbody id="usersTable"></tbody>
             </table>
           </div>

@@ -241,10 +241,17 @@ const teacherViews = {
   account: ["个人设置", "查看个人资料并修改密码。"],
 };
 const teacherViewOrder = ["pages", "assets", "projects", "account"];
+const reviewerViewOrder = ["dashboard", "projects", "pages", "assets", "reviews", "account"];
 
 function isAdmin() { return state.user && state.user.role === "admin"; }
-function isTeacherPortal() { return !isAdmin(); }
+function isDepartmentAdmin() { return state.user && state.user.role === "department_admin"; }
+function canReview() { return isAdmin() || isDepartmentAdmin(); }
+function isTeacherPortal() { return !canReview(); }
+function roleLabel(role) { return { admin: "管理员", department_admin: "系部管理员", teacher: "老师" }[role] || "老师"; }
 function appBasePath() { return isTeacherPortal() ? "/teacher" : "/admin"; }
+function allowedViewOrder() {
+  return isAdmin() ? ["dashboard", "users", "projects", "pages", "assets", "reviews", "deploy", "logs", "account"] : canReview() ? reviewerViewOrder : teacherViewOrder;
+}
 function viewMeta(view) { return isTeacherPortal() && teacherViews[view] ? teacherViews[view] : views[view]; }
 function escapeHtml(value) {
   return String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
@@ -2803,29 +2810,31 @@ function buildQrUrl(projectId, code) {
 
 function setupNav() {
   document.body.classList.toggle("teacher-portal", isTeacherPortal());
-  const order = isAdmin() ? ["dashboard", "users", "projects", "pages", "assets", "reviews", "deploy", "logs", "account"] : teacherViewOrder;
+  const order = allowedViewOrder();
   $("nav").innerHTML = order.map((view) => `<button type="button" data-view="${view}">${viewMeta(view)[0]}</button>`).join("");
   $("nav").querySelectorAll("button").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
   document.querySelectorAll(".admin-only").forEach((node) => { node.hidden = !isAdmin(); });
-  $("brandTitle").textContent = isAdmin() ? "数字门户后台" : "门户资料工作台";
-  $("consoleEyebrow").textContent = isAdmin() ? "Portal Exhibition Console" : "Portal Submission";
-  document.title = isAdmin() ? "数字门户后台" : "门户资料工作台";
-  $("roleBadge").textContent = isAdmin() ? "管理员" : "老师工作台";
-  $("projectsHeading").textContent = isAdmin() ? "门户管理" : "我的门户";
-  $("projectsIntro").textContent = isAdmin() ? "统一维护学校门户、系部门户和专题门户，并分配归属老师。" : "查看自己负责的门户，必要时提交基础信息修改。";
-  $("projectFormTitle").textContent = isAdmin() ? "门户配置" : "门户信息编辑";
-  $("projectSubmitButton").textContent = isAdmin() ? "保存/提交审核" : "提交门户信息修改";
-  $("pagesHeading").textContent = isAdmin() ? "板块资料" : "上传板块资料";
-  setText($("pagesPanelIntro"), isAdmin() ? "按门户维护基本情况、专业设置、实训基地、产教融合、教学成果等板块资料。" : "维护自己门户下的板块资料，提交后由管理员审核发布。");
-  $("newPage").textContent = isAdmin() ? "新建板块资料" : "上传板块资料";
-  $("pageFormTitle").textContent = isAdmin() ? "板块资料编辑" : "板块资料编辑";
-  $("pageSubmitButton").textContent = isAdmin() ? "保存/提交审核" : "提交审核";
-  $("assetsHeading").textContent = isAdmin() ? "素材库" : "素材库";
-  $("assetsIntro").textContent = isAdmin() ? "上传、复用和删除门户展示素材及归档附件；老师只能管理自己上传的素材。" : "上传板块资料所需图片、视频和附件，只能查看和管理自己上传的素材。";
+  $("reviewsView").hidden = !canReview();
+  $("brandTitle").textContent = canReview() ? "数字门户后台" : "门户资料工作台";
+  $("consoleEyebrow").textContent = canReview() ? "Portal Exhibition Console" : "Portal Submission";
+  document.title = canReview() ? "数字门户后台" : "门户资料工作台";
+  $("roleBadge").textContent = roleLabel(state.user && state.user.role);
+  $("projectsHeading").textContent = canReview() ? "门户管理" : "我的门户";
+  $("projectsIntro").textContent = canReview() ? "维护权限范围内的学校门户、系部门户和专题门户。" : "查看自己负责的门户，必要时提交基础信息修改。";
+  $("projectFormTitle").textContent = canReview() ? "门户配置" : "门户信息编辑";
+  $("projectSubmitButton").textContent = canReview() ? "保存/提交审核" : "提交门户信息修改";
+  $("pagesHeading").textContent = canReview() ? "板块资料" : "上传板块资料";
+  setText($("pagesPanelIntro"), canReview() ? "按门户维护基本情况、专业设置、实训基地、产教融合、教学成果等板块资料。" : "维护自己门户下的板块资料，提交后由管理员审核发布。");
+  $("newPage").textContent = canReview() ? "新建板块资料" : "上传板块资料";
+  $("pageFormTitle").textContent = "板块资料编辑";
+  $("pageSubmitButton").textContent = canReview() ? "保存/提交审核" : "提交审核";
+  $("assetsHeading").textContent = "素材库";
+  $("assetsIntro").textContent = canReview() ? "上传、复用和删除权限范围内的门户展示素材及归档附件。" : "上传板块资料所需图片、视频和附件，只能查看和管理自己上传的素材。";
 }
 function showView(view) {
-  if (isTeacherPortal() && !teacherViews[view]) view = "pages";
-  if (!views[view]) view = isAdmin() ? "dashboard" : "pages";
+  const allowed = allowedViewOrder();
+  if (!allowed.includes(view)) view = allowed[0] || "pages";
+  if (!views[view]) view = allowed[0] || "pages";
   state.activeView = view;
   document.querySelectorAll(".view").forEach((node) => node.classList.toggle("active", node.id === `${view}View`));
   $("nav").querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
@@ -2841,10 +2850,10 @@ async function loadSession() {
   state.csrfToken = data.csrfToken || "";
   if (!state.user) location.href = "/login";
   $("accountName").textContent = `${state.user.displayName} (${state.user.username})`;
-  $("roleBadge").textContent = state.user.role === "admin" ? "管理员" : "老师";
+  $("roleBadge").textContent = roleLabel(state.user.role);
   $("profileBox").innerHTML = `
     <strong>${escapeHtml(state.user.displayName)}</strong>
-    <p>账号：${escapeHtml(state.user.username)}　角色：${state.user.role === "admin" ? "管理员" : "老师"}　部门：${escapeHtml(state.user.department || "-")}</p>
+    <p>账号：${escapeHtml(state.user.username)}　角色：${roleLabel(state.user.role)}　部门：${escapeHtml(state.user.department || "-")}</p>
   `;
 }
 async function loadProjects(preferredId) {
@@ -3104,7 +3113,7 @@ async function renderDashboard() {
         <article><span>数据库</span><strong>${checks.database && checks.database.ok ? "正常" : "异常"}</strong><small>${escapeHtml((checks.database && checks.database.backend) || "-")}</small></article>
         <article><span>资源存储</span><strong>${checks.storage && checks.storage.ok ? "正常" : "异常"}</strong><small>${escapeHtml((checks.storage && checks.storage.backend) || "-")}</small></article>
         <article><span>运行模式</span><strong>${checks.runtime && checks.runtime.onlineMode ? "线上" : "本地"}</strong><small>${escapeHtml((checks.runtime && checks.runtime.publicBaseUrl) || checks.runtime && checks.runtime.host || "-")}</small></article>
-        <article><span>资源数</span><strong>${ops.assets ? ops.assets.count : 0}</strong><small>${isAdmin() ? "全部资源" : "我的资源"}</small></article>
+        <article><span>资源数</span><strong>${ops.assets ? ops.assets.count : 0}</strong><small>${canReview() ? "权限范围" : "我的资源"}</small></article>
       </div>
     </section>
     <section class="panel ops-panel">
@@ -3133,23 +3142,23 @@ async function renderDashboard() {
 function renderUsers() {
   $("usersTable").innerHTML = state.users.length ? state.users.map((u) => `
     <tr>
-      <td>${escapeHtml(u.username)}</td><td>${escapeHtml(u.displayName)}</td><td>${escapeHtml(u.department || "-")}</td>
+      <td>${escapeHtml(u.username)}</td><td>${escapeHtml(u.displayName)}</td><td>${escapeHtml(roleLabel(u.role))}</td><td>${escapeHtml(u.department || "-")}</td>
       <td>${u.projectCount || 0}</td><td>${u.enabled ? badge("approved") : badge("deleted")}</td>
       <td><div class="actions">
         <button class="button small" data-user-edit="${u.username}">编辑</button>
         <button class="button small" data-user-reset="${u.username}">重置密码</button>
         <button class="button small ${u.enabled ? "danger" : ""}" data-user-toggle="${u.username}" data-enabled="${u.enabled ? "0" : "1"}">${u.enabled ? "禁用" : "启用"}</button>
       </div></td>
-    </tr>`).join("") : `<tr><td colspan="6" class="empty">暂无老师</td></tr>`;
+    </tr>`).join("") : `<tr><td colspan="7" class="empty">暂无账号</td></tr>`;
 }
 function renderProjects() {
-  const pagesLabel = isAdmin() ? "板块资料" : "资料";
-  const configLabel = isAdmin() ? "门户配置" : "门户信息";
+  const pagesLabel = canReview() ? "板块资料" : "资料";
+  const configLabel = canReview() ? "门户配置" : "门户信息";
   const typeFilter = $("projectTypeFilter") ? $("projectTypeFilter").value : "";
   const visibleProjects = typeFilter ? state.projects.filter((project) => normalizePortalType(project.portalType) === typeFilter) : state.projects;
   const emptyText = typeFilter
     ? `暂无${portalTypeLabel(typeFilter)}`
-    : isAdmin() ? "暂无门户" : "暂无分配的门户";
+    : canReview() ? "暂无门户" : "暂无分配的门户";
   $("projectsTable").innerHTML = visibleProjects.length ? visibleProjects.map((p) => `
     <tr>
       <td><strong>${escapeHtml(p.name)}</strong><div class="portal-route-line">${escapeHtml(portalRouteLabel(p))}</div><div class="muted">ID ${p.id}</div></td>
@@ -3209,8 +3218,8 @@ async function loadPages(projectId = $("projectSelect").value) {
 function renderPages() {
   const filter = $("pageStatusFilter").value;
   const list = filter ? state.pages.filter((p) => p.reviewStatus === filter) : state.pages;
-  const editLabel = isAdmin() ? "编辑" : "编辑资料";
-  const deleteLabel = isAdmin() ? "删除" : "申请删除";
+  const editLabel = canReview() ? "编辑" : "编辑资料";
+  const deleteLabel = canReview() ? "删除" : "申请删除";
   const emptyText = isAdmin() ? "暂无板块资料" : "暂无板块资料";
   renderModuleLibrary();
   renderContentQuality();
@@ -3266,7 +3275,7 @@ function renderContentItems(filter = $("pageStatusFilter").value) {
       <div class="actions">
         <button class="button small primary" data-content-edit="${item.id}">编辑</button>
         ${qr}
-        <button class="button small danger" data-content-delete="${item.id}">${isAdmin() ? "删除" : "申请删除"}</button>
+        <button class="button small danger" data-content-delete="${item.id}">${canReview() ? "删除" : "申请删除"}</button>
       </div>
     </article>`;
   }).join("") : `<div class="empty">暂无结构化资料</div>`;
@@ -3651,7 +3660,7 @@ function fillProject(project) {
   renderQualityModuleOptions(normalizePortalType(project.portalType || "department"));
   renderModuleQualityRuleList();
   syncModuleQualityEditor();
-  $("projectFormHint").textContent = isAdmin() ? "管理员保存后立即生效。" : "修改展览基础信息后提交管理员审核。";
+  $("projectFormHint").textContent = canReview() ? "管理员保存后立即生效。" : "修改展览基础信息后提交管理员审核。";
   $("projectForm").hidden = false;
 }
 function projectPayload() {
@@ -3697,7 +3706,7 @@ function fillContentItem(item = {}) {
   $("contentAssetUrl").value = "";
   $("contentAssetCaption").value = "";
   $("contentAssetRole").value = state.contentAssetDrafts.length ? "gallery" : "cover";
-  $("contentItemFormHint").textContent = isAdmin()
+  $("contentItemFormHint").textContent = canReview()
     ? "管理员保存后立即通过，并同步生成扫码详情页。"
     : "保存后提交管理员审核，通过后同步进入展示。";
   $("contentItemForm").hidden = false;
@@ -3756,7 +3765,7 @@ function fillPage(page) {
   $("pageAccent").value = page.accent || "#f59a13";
   $("pageImageUrl").value = page.imageUrl || "";
   $("pageImageFile").value = "";
-  $("pageFormHint").textContent = isAdmin() ? "管理员保存后立即通过。" : "资料保存后会提交管理员审核，通过后进入展示。";
+  $("pageFormHint").textContent = canReview() ? "管理员保存后立即通过。" : "资料保存后会提交管理员审核，通过后进入展示。";
   $("pageForm").hidden = false;
   $("lowcodeRecordForm").hidden = true;
   $("lowcodeTemplateForm").hidden = true;
@@ -3859,8 +3868,8 @@ document.querySelectorAll("[data-insert]").forEach((button) => {
 $("userForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    await jsonApi("/api/users", body({ username: $("userUsername").value, displayName: $("userDisplayName").value, department: $("userDepartment").value, password: $("userPassword").value, role: "teacher", enabled: true }));
-    setStatus($("userStatus"), "老师已保存", "success");
+    await jsonApi("/api/users", body({ username: $("userUsername").value, displayName: $("userDisplayName").value, department: $("userDepartment").value, password: $("userPassword").value, role: $("userRole").value || "teacher", enabled: true }));
+    setStatus($("userStatus"), "账号已保存", "success");
     event.target.reset();
     await refreshView("users");
   } catch (err) { setStatus($("userStatus"), err.message, "error"); }
@@ -3880,6 +3889,7 @@ $("usersTable").addEventListener("click", async (event) => {
     if (edit) {
       const u = state.users.find((item) => item.username === edit.dataset.userEdit);
       $("userUsername").value = u.username; $("userDisplayName").value = u.displayName; $("userDepartment").value = u.department || ""; $("userPassword").value = "";
+      $("userRole").value = u.role || "teacher";
     }
     if (reset) {
       const password = prompt("输入新密码", "");
@@ -3923,7 +3933,7 @@ $("projectForm").addEventListener("submit", async (event) => {
     const url = id ? `/api/projects/${id}` : "/api/projects";
     const method = id ? putBody(projectPayload()) : body(projectPayload());
     await jsonApi(url, method);
-    setStatus($("projectStatus"), isAdmin() ? "门户已保存" : "门户信息已提交审核", "success");
+    setStatus($("projectStatus"), canReview() ? "门户已保存" : "门户信息已提交审核", "success");
     await loadProjects(id);
     renderProjects();
   } catch (err) { setStatus($("projectStatus"), err.message, "error"); }
@@ -4151,7 +4161,7 @@ $("lowcodeRecordForm").addEventListener("submit", async (event) => {
     const payload = lowcodeRecordPayload();
     if (state.activeLowcodeDraftId) payload.draftRecordId = state.activeLowcodeDraftId;
     const result = await jsonApi(`/api/projects/${projectId}/lowcode/forms/${form.id}/records`, body(payload));
-    setStatus($("lowcodeRecordStatus"), isAdmin() ? "资料已按模板生成并同步展示页" : "资料已按模板提交审核", "success");
+    setStatus($("lowcodeRecordStatus"), canReview() ? "资料已按模板生成并同步展示页" : "资料已按模板提交审核", "success");
     state.activeLowcodeDraftId = "";
     state.editingContentItemId = result.item && result.item.id ? result.item.id : "";
     await loadPages();
@@ -4261,7 +4271,7 @@ $("contentItemForm").addEventListener("submit", async (event) => {
     const method = id ? putBody(contentItemPayload()) : body(contentItemPayload());
     const data = await jsonApi(url, method);
     state.editingContentItemId = data.item.id;
-    setStatus($("contentItemStatus"), isAdmin() ? "结构化资料已保存并同步展示页" : "结构化资料已提交审核", "success");
+    setStatus($("contentItemStatus"), canReview() ? "结构化资料已保存并同步展示页" : "结构化资料已提交审核", "success");
     await loadPages();
   } catch (err) { setStatus($("contentItemStatus"), err.message, "error"); }
 });
@@ -4335,7 +4345,7 @@ $("pageForm").addEventListener("submit", async (event) => {
     const fileUrl = await uploadImage($("pageImageFile").files[0], $("pageStatus"));
     if (fileUrl) $("pageImageUrl").value = fileUrl;
     await jsonApi(`/api/projects/${$("projectSelect").value}/pages/${encodeURIComponent($("pageCode").value.trim())}`, putBody(pagePayload()));
-    setStatus($("pageStatus"), isAdmin() ? "板块资料已保存并通过" : "板块资料已提交审核", "success");
+    setStatus($("pageStatus"), canReview() ? "板块资料已保存并通过" : "板块资料已提交审核", "success");
     await loadPages();
   } catch (err) { setStatus($("pageStatus"), err.message, "error"); }
 });
@@ -4347,7 +4357,7 @@ $("contentItemsGrid").addEventListener("click", async (event) => {
     const item = state.contentItems.find((entry) => String(entry.id) === String(edit.dataset.contentEdit));
     if (item) fillContentItem(item);
   }
-  if (del && confirm(isAdmin() ? "确定删除该结构化资料？" : "确定提交删除该结构化资料的审核申请？")) {
+  if (del && confirm(canReview() ? "确定删除该结构化资料？" : "确定提交删除该结构化资料的审核申请？")) {
     await api(`/api/projects/${$("projectSelect").value}/content-items/${del.dataset.contentDelete}`, { method: "DELETE" });
     await loadPages();
   }
@@ -4358,7 +4368,7 @@ $("pagesTable").addEventListener("click", async (event) => {
   const del = event.target.closest("[data-page-delete]");
   if (edit) fillPage(state.pages.find((p) => p.code === edit.dataset.pageEdit));
   if (historyButton) await showPageHistory(historyButton.dataset.pageHistory);
-  if (del && confirm(isAdmin() ? "确定删除该板块资料？" : "确定提交删除该板块资料的审核申请？")) { await api(`/api/projects/${$("projectSelect").value}/pages/${encodeURIComponent(del.dataset.pageDelete)}`, { method: "DELETE" }); await loadPages(); }
+  if (del && confirm(canReview() ? "确定删除该板块资料？" : "确定提交删除该板块资料的审核申请？")) { await api(`/api/projects/${$("projectSelect").value}/pages/${encodeURIComponent(del.dataset.pageDelete)}`, { method: "DELETE" }); await loadPages(); }
 });
 $("closePageHistory").addEventListener("click", () => { $("pageHistoryPanel").hidden = true; });
 
@@ -4379,7 +4389,7 @@ $("uploadAsset").addEventListener("click", async () => {
   } catch (err) { setStatus($("assetStatus"), err.message, "error"); }
 });
 $("cancelAssetPick").addEventListener("click", () => {
-  const returnView = state.assetReturnView || (isAdmin() ? "projects" : "pages");
+  const returnView = state.assetReturnView || (canReview() ? "projects" : "pages");
   state.assetTargetInput = "";
   state.assetReturnView = "";
   showView(returnView);
@@ -4473,7 +4483,7 @@ $("passwordForm").addEventListener("submit", async (event) => {
     setupNav();
     await loadUsers();
     await loadProjects();
-    const preferred = new URLSearchParams(location.search).get("view") || (isAdmin() ? "dashboard" : "pages");
+    const preferred = new URLSearchParams(location.search).get("view") || (canReview() ? "dashboard" : "pages");
     showView(preferred);
   } catch (err) {
     console.error(err);
