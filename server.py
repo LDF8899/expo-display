@@ -505,7 +505,7 @@ def content_templates_payload():
     }
 
 
-def lowcode_field(key, label, field_type="text", required=False, mapping="", placeholder="", options=None):
+def lowcode_field(key, label, field_type="text", required=False, mapping="", placeholder="", options=None, default_value=""):
     field = {
         "key": key,
         "label": label,
@@ -513,6 +513,7 @@ def lowcode_field(key, label, field_type="text", required=False, mapping="", pla
         "required": bool(required),
         "mapping": mapping,
         "placeholder": placeholder,
+        "defaultValue": default_value,
     }
     if options:
         field["options"] = options
@@ -2109,7 +2110,7 @@ def seed_lowcode_forms(conn):
             conn.execute(
                 """
                 UPDATE lowcode_form_versions
-                SET schema_json = ?, status = 'active'
+                SET schema_json = ?
                 WHERE id = ?
                 """,
                 (json_text(form["schema"], {}), version["id"]),
@@ -3474,6 +3475,7 @@ def normalize_lowcode_schema(schema, form):
             "required": bool_value(field.get("required")),
             "mapping": str(field.get("mapping") or "").strip()[:160],
             "placeholder": str(field.get("placeholder") or "").strip()[:512],
+            "defaultValue": str(field.get("defaultValue") if "defaultValue" in field else field.get("default_value") or "").strip()[:1024],
             "sortOrder": int_value(field.get("sortOrder"), index),
         }
         options = field.get("options")
@@ -3647,6 +3649,8 @@ def lowcode_record_payload(form, submitted):
         if not key:
             continue
         value = submitted.get(key)
+        if (value is None or str(value).strip() == "") and field.get("defaultValue") not in (None, ""):
+            value = field.get("defaultValue")
         if field.get("required") and (value is None or str(value).strip() == ""):
             errors.append(f"{field.get('label') or key}不能为空")
             continue

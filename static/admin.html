@@ -163,7 +163,10 @@
                 <strong>资料采集模板</strong>
                 <span>按模板填写资料，系统自动生成结构化资料并进入现有审核/展示流程。</span>
               </div>
-              <span id="lowcodeFormsSummary" class="badge">0 个模板</span>
+              <div class="lowcode-template-toolbar">
+                <span id="lowcodeFormsSummary" class="badge">0 个模板</span>
+                <button id="newLowcodeTemplate" class="button small" type="button">新建模板</button>
+              </div>
             </div>
             <div id="lowcodeFormsGrid" class="lowcode-forms-grid"></div>
           </section>
@@ -229,6 +232,49 @@
           </section>
           <button id="lowcodeRecordSubmitButton" class="button primary" type="submit">按模板提交资料</button>
           <p id="lowcodeRecordStatus" class="status-text"></p>
+        </form>
+        <form id="lowcodeTemplateForm" class="panel editor-panel" hidden>
+          <div class="panel-head">
+            <div><h2 id="lowcodeTemplateTitle">资料采集模板配置</h2><p>管理员配置字段、必填项和映射关系；老师端只看到填写表单。</p></div>
+            <button id="closeLowcodeTemplateForm" class="button ghost" type="button">关闭</button>
+          </div>
+          <div class="form-grid three">
+            <input id="lowcodeTemplateName" placeholder="模板名称" required />
+            <input id="lowcodeTemplateCode" placeholder="模板编码，如 LC-TOPIC-OVERVIEW" required />
+            <label class="check-inline"><input id="lowcodeTemplateEnabled" type="checkbox" checked /> 启用模板</label>
+          </div>
+          <textarea id="lowcodeTemplateDescription" rows="2" placeholder="模板说明"></textarea>
+          <div class="form-grid three">
+            <select id="lowcodeTemplatePortalType"></select>
+            <select id="lowcodeTemplateModule"></select>
+            <select id="lowcodeTemplateContentType"></select>
+          </div>
+          <datalist id="lowcodeMappingOptions">
+            <option value="content_item.title"></option>
+            <option value="content_item.subtitle"></option>
+            <option value="content_item.summary"></option>
+            <option value="content_item.body_text"></option>
+            <option value="content_item.sort_order"></option>
+            <option value="content_item.featured"></option>
+            <option value="content_item.assets.cover"></option>
+            <option value="content_item.assets.portrait"></option>
+            <option value="content_item.assets.certificate"></option>
+            <option value="content_item.assets.gallery"></option>
+            <option value="content_item.assets.video"></option>
+            <option value="content_item.meta_json.自定义字段"></option>
+          </datalist>
+          <section class="lowcode-field-editor" aria-label="模板字段配置">
+            <div class="field-head">
+              <span>字段配置</span>
+              <small>建议保留标题、摘要等核心字段；上下移动控制老师端展示顺序。</small>
+            </div>
+            <div id="lowcodeFieldEditorList" class="lowcode-field-editor-list"></div>
+            <div class="actions">
+              <button id="addLowcodeField" class="button ghost" type="button">添加字段</button>
+            </div>
+          </section>
+          <button id="lowcodeTemplateSubmitButton" class="button primary" type="submit">保存模板配置</button>
+          <p id="lowcodeTemplateStatus" class="status-text"></p>
         </form>
         <form id="contentItemForm" class="panel editor-panel" hidden>
           <div class="panel-head">
