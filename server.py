@@ -504,6 +504,118 @@ def content_templates_payload():
         "contentTypes": [content_type_public_payload(item) for item in CONTENT_TYPES],
     }
 
+
+def lowcode_field(key, label, field_type="text", required=False, mapping="", placeholder="", options=None):
+    field = {
+        "key": key,
+        "label": label,
+        "type": field_type,
+        "required": bool(required),
+        "mapping": mapping,
+        "placeholder": placeholder,
+    }
+    if options:
+        field["options"] = options
+    return field
+
+
+LOWCODE_META_FIELDS = {
+    "person": [
+        lowcode_field("personName", "姓名", "text", False, "content_item.meta_json.姓名", "人物姓名"),
+        lowcode_field("identity", "身份/职务", "text", False, "content_item.meta_json.身份", "教师职务、校友岗位或学生班级"),
+        lowcode_field("tags", "荣誉标签", "text", False, "content_item.meta_json.标签", "技能能手、优秀毕业生等"),
+        lowcode_field("story", "主要事迹", "textarea", False, "content_item.body_text", "成长经历、代表成果和可展示亮点"),
+    ],
+    "activity": [
+        lowcode_field("eventDate", "时间", "text", False, "content_item.meta_json.时间", "活动或比赛时间"),
+        lowcode_field("location", "地点", "text", False, "content_item.meta_json.地点", "举办地点或实践场景"),
+        lowcode_field("units", "参与单位", "text", False, "content_item.meta_json.参与单位", "主办、承办或合作单位"),
+        lowcode_field("outcome", "活动成效", "textarea", False, "content_item.body_text", "活动过程、学生参与和成果"),
+    ],
+    "honor": [
+        lowcode_field("honorName", "荣誉名称", "text", False, "content_item.meta_json.荣誉名称", "奖项、资质或认定名称"),
+        lowcode_field("level", "级别", "text", False, "content_item.meta_json.级别", "国家级、省级、市级、校级等"),
+        lowcode_field("year", "年份", "text", False, "content_item.meta_json.年份", "获评或获奖年份"),
+        lowcode_field("recipient", "获奖单位/个人", "text", False, "content_item.meta_json.获奖单位或个人", "对应团队或人员"),
+        lowcode_field("value", "展示说明", "textarea", False, "content_item.body_text", "荣誉对专业建设或人才培养的价值"),
+    ],
+    "achievement": [
+        lowcode_field("achievementName", "成果名称", "text", False, "content_item.meta_json.成果名称", "项目、课程、案例或建设成果"),
+        lowcode_field("period", "建设周期", "text", False, "content_item.meta_json.建设周期", "起止时间或阶段"),
+        lowcode_field("team", "参与团队", "text", False, "content_item.meta_json.参与团队", "教师、学生或合作单位"),
+        lowcode_field("metrics", "关键指标", "textarea", False, "content_item.meta_json.关键指标", "获奖、立项、服务人数等数据"),
+        lowcode_field("value", "成果价值", "textarea", False, "content_item.body_text", "成果如何支撑人才培养、专业建设或服务地方"),
+    ],
+    "scene": [
+        lowcode_field("sceneName", "场景名称", "text", False, "content_item.meta_json.场景名称", "实训室、基地或设备名称"),
+        lowcode_field("positioning", "功能定位", "text", False, "content_item.meta_json.功能定位", "服务课程、训练项目和开放对象"),
+        lowcode_field("equipment", "设备条件", "textarea", False, "content_item.meta_json.设备条件", "关键设备、软件平台或工位数量"),
+        lowcode_field("application", "教学应用", "textarea", False, "content_item.body_text", "支撑课程教学、技能训练或社会培训的方式"),
+    ],
+    "video": [
+        lowcode_field("duration", "视频时长", "text", False, "content_item.meta_json.视频时长", "如 02:30"),
+        lowcode_field("videoUrl", "视频地址", "text", False, "content_item.assets.video", "视频文件地址或外部链接"),
+        lowcode_field("scenario", "适用场景", "text", False, "content_item.meta_json.适用场景", "宣传片、访谈、课堂展示或纪实片"),
+        lowcode_field("intro", "内容简介", "textarea", False, "content_item.body_text", "概括视频重点"),
+    ],
+    "article": [
+        lowcode_field("bodyText", "正文内容", "textarea", False, "content_item.body_text", "按短段落填写，一段一行或空行分隔"),
+    ],
+}
+
+
+def lowcode_schema_for_module(portal_type, module):
+    content_type = default_content_type_for_module(module["key"])
+    fields = [
+        lowcode_field("title", "资料标题", "text", True, "content_item.title", f"{module['label']}标题"),
+        lowcode_field("subtitle", "副标题/身份信息", "text", False, "content_item.subtitle", module.get("description", "")),
+        lowcode_field("summary", "卡片摘要", "textarea", True, "content_item.summary", "用于门户卡片和抽屉开头，建议 40 到 100 字"),
+    ]
+    fields.extend(LOWCODE_META_FIELDS.get(content_type, LOWCODE_META_FIELDS["article"]))
+    fields.extend(
+        [
+            lowcode_field("sortOrder", "排序", "number", False, "content_item.sort_order", "数字越小越靠前"),
+            lowcode_field("featured", "重点展示", "checkbox", False, "content_item.featured", ""),
+            lowcode_field("assets", "图片/视频素材", "asset_list", False, "content_item.assets.gallery", "可上传、从素材库选择，或一行一个素材地址"),
+        ]
+    )
+    return {
+        "portalType": normalize_portal_type(portal_type),
+        "moduleKey": module["key"],
+        "moduleLabel": module["label"],
+        "contentType": content_type,
+        "contentTypeLabel": content_type_label(content_type),
+        "fields": fields,
+        "mapping": {
+            "target": "content_items",
+            "moduleKey": module["key"],
+            "contentType": content_type,
+        },
+    }
+
+
+def builtin_lowcode_forms():
+    forms = []
+    for portal_type, modules in MODULE_SETS.items():
+        for module in modules:
+            content_type = default_content_type_for_module(module["key"])
+            portal_label = PORTAL_TYPES.get(portal_type, "门户")
+            code = f"LC-{portal_type.upper()}-{module['key'].upper()}"
+            forms.append(
+                {
+                    "name": f"{module['label']}采集表",
+                    "code": code,
+                    "description": f"{portal_label} · {module['description']}。按模板填写后自动生成结构化资料。",
+                    "targetType": "content_item",
+                    "targetPortalType": portal_type,
+                    "targetContentType": content_type,
+                    "targetModuleKey": module["key"],
+                    "schema": lowcode_schema_for_module(portal_type, module),
+                }
+            )
+    return forms
+
+
 DEFAULT_DISPLAY_CONFIG = {
     "logoImageUrl": "",
     "schoolName": DEFAULT_PROJECT_NAME,
@@ -912,6 +1024,7 @@ def init_db():
         migrate_logs_table(conn)
         migrate_assets_table(conn)
         migrate_content_tables(conn)
+        migrate_lowcode_tables(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at)")
         project_id = deployed_content_project_id(conn)
         existing = conn.execute(
@@ -937,6 +1050,7 @@ def init_db():
             )
         upsert_admin_credentials(conn)
         ensure_default_user(conn)
+        seed_lowcode_forms(conn)
         ensure_legacy_versions(conn)
 
 
@@ -945,8 +1059,10 @@ def init_mysql_db():
         execute_mysql_schema(conn, MYSQL_SCHEMA_PATH)
         ensure_page_extra_columns(conn)
         migrate_content_tables(conn)
+        migrate_lowcode_tables(conn)
         upsert_admin_credentials(conn)
         ensure_default_user(conn)
+        seed_lowcode_forms(conn)
         ensure_default_project(conn)
         ensure_blueprint_portal_projects(conn)
         ensure_blueprint_pages(conn)
@@ -1726,6 +1842,288 @@ def migrate_content_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_content_item_assets_item ON content_item_assets(content_item_id, sort_order)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_content_item_versions_status ON content_item_versions(status, submitted_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_content_item_versions_project ON content_item_versions(project_id, submitted_at)")
+
+
+def migrate_lowcode_tables(conn):
+    if DATABASE_BACKEND == "mysql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lowcode_forms (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              name VARCHAR(255) NOT NULL,
+              code VARCHAR(120) NOT NULL,
+              description VARCHAR(1024) NOT NULL DEFAULT '',
+              target_type VARCHAR(40) NOT NULL DEFAULT 'content_item',
+              target_portal_type VARCHAR(40) NOT NULL DEFAULT 'department',
+              target_content_type VARCHAR(32) NOT NULL DEFAULT 'article',
+              target_module_key VARCHAR(80) NOT NULL DEFAULT '',
+              enabled TINYINT(1) NOT NULL DEFAULT 1,
+              created_by VARCHAR(64) NOT NULL DEFAULT 'system',
+              created_at VARCHAR(40) NOT NULL,
+              updated_at VARCHAR(40) NOT NULL,
+              UNIQUE KEY uq_lowcode_forms_code (code),
+              INDEX idx_lowcode_forms_target (target_portal_type, target_module_key, enabled)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lowcode_form_versions (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              form_id BIGINT NOT NULL,
+              version_no INT NOT NULL DEFAULT 1,
+              schema_json JSON NOT NULL,
+              status VARCHAR(32) NOT NULL DEFAULT 'active',
+              created_by VARCHAR(64) NOT NULL DEFAULT 'system',
+              created_at VARCHAR(40) NOT NULL,
+              UNIQUE KEY uq_lowcode_form_versions_form_version (form_id, version_no),
+              INDEX idx_lowcode_form_versions_form_status (form_id, status),
+              CONSTRAINT fk_lowcode_form_versions_form
+                FOREIGN KEY (form_id) REFERENCES lowcode_forms(id)
+                ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lowcode_records (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              form_id BIGINT NOT NULL,
+              form_version_id BIGINT NOT NULL,
+              project_id BIGINT NOT NULL,
+              content_item_id BIGINT NULL,
+              status VARCHAR(32) NOT NULL DEFAULT 'pending',
+              data_json JSON NOT NULL,
+              submitted_by VARCHAR(64) NOT NULL DEFAULT '',
+              submitted_at VARCHAR(40) NOT NULL,
+              reviewed_by VARCHAR(64) NOT NULL DEFAULT '',
+              reviewed_at VARCHAR(40) NOT NULL DEFAULT '',
+              review_note VARCHAR(1024) NOT NULL DEFAULT '',
+              created_at VARCHAR(40) NOT NULL,
+              updated_at VARCHAR(40) NOT NULL,
+              INDEX idx_lowcode_records_project (project_id, submitted_at),
+              INDEX idx_lowcode_records_form (form_id, submitted_at),
+              INDEX idx_lowcode_records_content_item (content_item_id),
+              CONSTRAINT fk_lowcode_records_form
+                FOREIGN KEY (form_id) REFERENCES lowcode_forms(id)
+                ON DELETE RESTRICT,
+              CONSTRAINT fk_lowcode_records_version
+                FOREIGN KEY (form_version_id) REFERENCES lowcode_form_versions(id)
+                ON DELETE RESTRICT,
+              CONSTRAINT fk_lowcode_records_project
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_lowcode_records_content_item
+                FOREIGN KEY (content_item_id) REFERENCES content_items(id)
+                ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lowcode_record_assets (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              record_id BIGINT NOT NULL,
+              asset_id BIGINT NULL,
+              role VARCHAR(40) NOT NULL DEFAULT 'gallery',
+              title VARCHAR(255) NOT NULL DEFAULT '',
+              caption VARCHAR(512) NOT NULL DEFAULT '',
+              url VARCHAR(2048) NOT NULL DEFAULT '',
+              sort_order INT NOT NULL DEFAULT 0,
+              created_at VARCHAR(40) NOT NULL,
+              INDEX idx_lowcode_record_assets_record (record_id, sort_order),
+              CONSTRAINT fk_lowcode_record_assets_record
+                FOREIGN KEY (record_id) REFERENCES lowcode_records(id)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_lowcode_record_assets_asset
+                FOREIGN KEY (asset_id) REFERENCES assets(id)
+                ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lowcode_forms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            code TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT '',
+            target_type TEXT NOT NULL DEFAULT 'content_item',
+            target_portal_type TEXT NOT NULL DEFAULT 'department',
+            target_content_type TEXT NOT NULL DEFAULT 'article',
+            target_module_key TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_by TEXT NOT NULL DEFAULT 'system',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lowcode_form_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            form_id INTEGER NOT NULL,
+            version_no INTEGER NOT NULL DEFAULT 1,
+            schema_json TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_by TEXT NOT NULL DEFAULT 'system',
+            created_at TEXT NOT NULL,
+            UNIQUE(form_id, version_no)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lowcode_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            form_id INTEGER NOT NULL,
+            form_version_id INTEGER NOT NULL,
+            project_id INTEGER NOT NULL,
+            content_item_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'pending',
+            data_json TEXT NOT NULL,
+            submitted_by TEXT NOT NULL DEFAULT '',
+            submitted_at TEXT NOT NULL,
+            reviewed_by TEXT NOT NULL DEFAULT '',
+            reviewed_at TEXT NOT NULL DEFAULT '',
+            review_note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lowcode_record_assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            record_id INTEGER NOT NULL,
+            asset_id INTEGER,
+            role TEXT NOT NULL DEFAULT 'gallery',
+            title TEXT NOT NULL DEFAULT '',
+            caption TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_forms_target ON lowcode_forms(target_portal_type, target_module_key, enabled)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_form_versions_form_status ON lowcode_form_versions(form_id, status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_records_project ON lowcode_records(project_id, submitted_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_records_form ON lowcode_records(form_id, submitted_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_records_content_item ON lowcode_records(content_item_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_record_assets_record ON lowcode_record_assets(record_id, sort_order)")
+
+
+def seed_lowcode_forms(conn):
+    now = now_iso()
+    for form in builtin_lowcode_forms():
+        existing = conn.execute("SELECT id FROM lowcode_forms WHERE code = ?", (form["code"],)).fetchone()
+        if DATABASE_BACKEND == "mysql":
+            conn.execute(
+                """
+                INSERT INTO lowcode_forms (
+                    name, code, description, target_type, target_portal_type,
+                    target_content_type, target_module_key, enabled, created_by,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'system', ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    description = VALUES(description),
+                    target_type = VALUES(target_type),
+                    target_portal_type = VALUES(target_portal_type),
+                    target_content_type = VALUES(target_content_type),
+                    target_module_key = VALUES(target_module_key),
+                    enabled = 1,
+                    updated_at = VALUES(updated_at)
+                """,
+                (
+                    form["name"],
+                    form["code"],
+                    form["description"],
+                    form["targetType"],
+                    form["targetPortalType"],
+                    form["targetContentType"],
+                    form["targetModuleKey"],
+                    now,
+                    now,
+                ),
+            )
+            row = conn.execute("SELECT id FROM lowcode_forms WHERE code = ?", (form["code"],)).fetchone()
+            form_id = row["id"] if row else None
+        elif existing:
+            form_id = existing["id"]
+            conn.execute(
+                """
+                UPDATE lowcode_forms SET
+                    name = ?, description = ?, target_type = ?, target_portal_type = ?,
+                    target_content_type = ?, target_module_key = ?, enabled = 1,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    form["name"],
+                    form["description"],
+                    form["targetType"],
+                    form["targetPortalType"],
+                    form["targetContentType"],
+                    form["targetModuleKey"],
+                    now,
+                    form_id,
+                ),
+            )
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO lowcode_forms (
+                    name, code, description, target_type, target_portal_type,
+                    target_content_type, target_module_key, enabled, created_by,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'system', ?, ?)
+                """,
+                (
+                    form["name"],
+                    form["code"],
+                    form["description"],
+                    form["targetType"],
+                    form["targetPortalType"],
+                    form["targetContentType"],
+                    form["targetModuleKey"],
+                    now,
+                    now,
+                ),
+            )
+            form_id = cursor.lastrowid
+        if not form_id:
+            continue
+        version = conn.execute(
+            "SELECT id FROM lowcode_form_versions WHERE form_id = ? AND version_no = 1",
+            (form_id,),
+        ).fetchone()
+        if version:
+            conn.execute(
+                """
+                UPDATE lowcode_form_versions
+                SET schema_json = ?, status = 'active'
+                WHERE id = ?
+                """,
+                (json_text(form["schema"], {}), version["id"]),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO lowcode_form_versions (
+                    form_id, version_no, schema_json, status, created_by, created_at
+                )
+                VALUES (?, 1, ?, 'active', 'system', ?)
+                """,
+                (form_id, json_text(form["schema"], {}), now),
+            )
 
 
 def ensure_default_user(conn):
@@ -2972,6 +3370,439 @@ def list_content_items(project_id, filters=None):
         ).fetchall()
         asset_map = {row["id"]: content_item_asset_rows(conn, row["id"]) for row in rows}
     return [row_to_content_item(row, asset_map.get(row["id"], [])) for row in rows]
+
+
+def row_to_lowcode_form(row, version_row=None):
+    if not row:
+        return None
+    schema = json_value(version_row["schema_json"], {}) if version_row else {}
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "code": row["code"],
+        "description": row["description"],
+        "targetType": row["target_type"],
+        "targetPortalType": normalize_portal_type(row["target_portal_type"]),
+        "targetContentType": normalize_content_type(row["target_content_type"]),
+        "targetModuleKey": row["target_module_key"],
+        "enabled": bool(row["enabled"]),
+        "createdBy": row["created_by"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+        "version": {
+            "id": version_row["id"],
+            "versionNo": int(version_row["version_no"] or 1),
+            "status": version_row["status"],
+            "createdBy": version_row["created_by"],
+            "createdAt": version_row["created_at"],
+        } if version_row else None,
+        "schema": schema,
+    }
+
+
+def active_lowcode_form_version(conn, form_id):
+    return conn.execute(
+        """
+        SELECT * FROM lowcode_form_versions
+        WHERE form_id = ? AND status = 'active'
+        ORDER BY version_no DESC, id DESC
+        LIMIT 1
+        """,
+        (form_id,),
+    ).fetchone()
+
+
+def list_lowcode_forms(filters=None):
+    filters = filters or {}
+    where = []
+    params = []
+    if filters.get("portalType"):
+        where.append("target_portal_type = ?")
+        params.append(normalize_portal_type(filters["portalType"]))
+    if filters.get("moduleKey"):
+        where.append("target_module_key = ?")
+        params.append(str(filters["moduleKey"]))
+    if filters.get("enabled") in {"0", "1", 0, 1, False, True}:
+        where.append("enabled = ?")
+        params.append(1 if bool_value(filters.get("enabled")) else 0)
+    sql = f"WHERE {' AND '.join(where)}" if where else ""
+    with db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT * FROM lowcode_forms
+            {sql}
+            ORDER BY target_portal_type, id
+            """,
+            params,
+        ).fetchall()
+        versions = {row["id"]: active_lowcode_form_version(conn, row["id"]) for row in rows}
+    return [row_to_lowcode_form(row, versions.get(row["id"])) for row in rows]
+
+
+def get_lowcode_form(form_id):
+    with db_connect() as conn:
+        row = conn.execute("SELECT * FROM lowcode_forms WHERE id = ?", (form_id,)).fetchone()
+        version = active_lowcode_form_version(conn, form_id) if row else None
+    return row_to_lowcode_form(row, version)
+
+
+def latest_lowcode_version_no(conn, form_id):
+    row = conn.execute(
+        "SELECT MAX(version_no) AS value FROM lowcode_form_versions WHERE form_id = ?",
+        (form_id,),
+    ).fetchone()
+    return int(row["value"] or 0) if row else 0
+
+
+def normalize_lowcode_schema(schema, form):
+    schema = json_value(schema, {})
+    if not isinstance(schema, dict):
+        schema = {}
+    fields = schema.get("fields") if isinstance(schema.get("fields"), list) else []
+    normalized_fields = []
+    for index, field in enumerate(fields):
+        if not isinstance(field, dict):
+            continue
+        key = str(field.get("key") or "").strip()
+        label = str(field.get("label") or key).strip()
+        if not key or not label:
+            continue
+        normalized = {
+            "key": key[:80],
+            "label": label[:120],
+            "type": str(field.get("type") or "text").strip()[:40] or "text",
+            "required": bool_value(field.get("required")),
+            "mapping": str(field.get("mapping") or "").strip()[:160],
+            "placeholder": str(field.get("placeholder") or "").strip()[:512],
+            "sortOrder": int_value(field.get("sortOrder"), index),
+        }
+        options = field.get("options")
+        if isinstance(options, list):
+            normalized["options"] = [
+                {
+                    "label": str(item.get("label") if isinstance(item, dict) else item).strip(),
+                    "value": str(item.get("value") if isinstance(item, dict) else item).strip(),
+                }
+                for item in options
+                if str(item.get("value") if isinstance(item, dict) else item).strip()
+            ]
+        normalized_fields.append(normalized)
+    if not normalized_fields:
+        module = module_meta_for_key(form.get("targetModuleKey"), form.get("targetPortalType")) or {
+            "key": form.get("targetModuleKey") or "overview",
+            "label": form.get("name") or "资料",
+            "description": form.get("description") or "",
+        }
+        schema = lowcode_schema_for_module(form.get("targetPortalType", "department"), module)
+    else:
+        schema["fields"] = sorted(normalized_fields, key=lambda item: item.get("sortOrder", 0))
+    schema["moduleKey"] = form.get("targetModuleKey") or schema.get("moduleKey") or ""
+    schema["contentType"] = normalize_content_type(form.get("targetContentType") or schema.get("contentType"))
+    schema["portalType"] = normalize_portal_type(form.get("targetPortalType") or schema.get("portalType"))
+    schema["moduleLabel"] = schema.get("moduleLabel") or (module_meta_for_key(schema["moduleKey"], schema["portalType"]) or {}).get("label", schema["moduleKey"])
+    schema["contentTypeLabel"] = content_type_label(schema["contentType"])
+    schema["mapping"] = {
+        "target": "content_items",
+        "moduleKey": schema["moduleKey"],
+        "contentType": schema["contentType"],
+    }
+    return schema
+
+
+def save_lowcode_form(form_id, data, actor):
+    name = str(data.get("name") or "").strip()[:255]
+    if not name:
+        raise ValueError("模板名称不能为空")
+    code = re.sub(r"[^A-Za-z0-9_-]+", "-", str(data.get("code") or name).strip()).strip("-").upper()[:120]
+    if not code:
+        raise ValueError("模板编码不能为空")
+    target_portal_type = normalize_portal_type(data.get("targetPortalType") or data.get("portalType") or "department")
+    target_module_key = str(data.get("targetModuleKey") or data.get("moduleKey") or "").strip()
+    if not module_meta_for_key(target_module_key, target_portal_type):
+        raise ValueError("模板绑定板块无效")
+    target_content_type = normalize_content_type(data.get("targetContentType") or data.get("contentType") or default_content_type_for_module(target_module_key))
+    form_base = {
+        "name": name,
+        "code": code,
+        "description": str(data.get("description") or "").strip()[:1024],
+        "targetType": "content_item",
+        "targetPortalType": target_portal_type,
+        "targetContentType": target_content_type,
+        "targetModuleKey": target_module_key,
+    }
+    schema = normalize_lowcode_schema(data.get("schema") or data.get("schemaJson"), form_base)
+    enabled = bool_value(data.get("enabled"), True)
+    now = now_iso()
+    with db_connect() as conn:
+        if form_id:
+            current = conn.execute("SELECT * FROM lowcode_forms WHERE id = ?", (form_id,)).fetchone()
+            if not current:
+                raise ValueError("模板不存在")
+            conflict = conn.execute("SELECT id FROM lowcode_forms WHERE code = ? AND id != ? LIMIT 1", (code, form_id)).fetchone()
+            if conflict:
+                raise ValueError("模板编码已存在")
+            conn.execute(
+                """
+                UPDATE lowcode_forms SET
+                    name = ?, code = ?, description = ?, target_type = 'content_item',
+                    target_portal_type = ?, target_content_type = ?, target_module_key = ?,
+                    enabled = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (name, code, form_base["description"], target_portal_type, target_content_type, target_module_key, 1 if enabled else 0, now, form_id),
+            )
+        else:
+            conflict = conn.execute("SELECT id FROM lowcode_forms WHERE code = ? LIMIT 1", (code,)).fetchone()
+            if conflict:
+                raise ValueError("模板编码已存在")
+            cursor = conn.execute(
+                """
+                INSERT INTO lowcode_forms (
+                    name, code, description, target_type, target_portal_type,
+                    target_content_type, target_module_key, enabled, created_by,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, 'content_item', ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    name,
+                    code,
+                    form_base["description"],
+                    target_portal_type,
+                    target_content_type,
+                    target_module_key,
+                    1 if enabled else 0,
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    now,
+                ),
+            )
+            form_id = cursor.lastrowid
+        conn.execute("UPDATE lowcode_form_versions SET status = 'archived' WHERE form_id = ? AND status = 'active'", (form_id,))
+        version_no = latest_lowcode_version_no(conn, form_id) + 1
+        conn.execute(
+            """
+            INSERT INTO lowcode_form_versions (
+                form_id, version_no, schema_json, status, created_by, created_at
+            )
+            VALUES (?, ?, ?, 'active', ?, ?)
+            """,
+            (form_id, version_no, json_text(schema, {}), actor.get("username", ADMIN_USERNAME), now),
+        )
+    return get_lowcode_form(form_id)
+
+
+def lowcode_assets_from_value(value, role="gallery"):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        assets = value
+    else:
+        assets = [
+            {"url": line.strip(), "role": role}
+            for line in re.split(r"[\r\n]+", str(value or ""))
+            if line.strip()
+        ]
+    normalized = []
+    for index, asset in enumerate(assets):
+        if isinstance(asset, str):
+            asset = {"url": asset, "role": role}
+        if not isinstance(asset, dict):
+            continue
+        normalized_asset = {
+            "assetId": int_value(asset.get("assetId") or asset.get("asset_id")) or None,
+            "role": str(asset.get("role") or role or "gallery").strip()[:40] or "gallery",
+            "title": str(asset.get("title") or "").strip()[:255],
+            "caption": str(asset.get("caption") or "").strip()[:512],
+            "url": str(asset.get("url") or "").strip()[:2048],
+            "sortOrder": int_value(asset.get("sortOrder"), index),
+        }
+        if normalized_asset["url"] or normalized_asset["assetId"]:
+            normalized.append(normalized_asset)
+    return normalized
+
+
+def lowcode_record_payload(form, submitted):
+    schema = form.get("schema") or {}
+    submitted = submitted if isinstance(submitted, dict) else {}
+    fields = schema.get("fields") if isinstance(schema.get("fields"), list) else []
+    payload = {
+        "moduleKey": form.get("targetModuleKey") or schema.get("moduleKey"),
+        "contentType": normalize_content_type(form.get("targetContentType") or schema.get("contentType")),
+        "title": "",
+        "subtitle": "",
+        "summary": "",
+        "bodyJson": [],
+        "metaJson": {},
+        "assets": [],
+        "sortOrder": 0,
+        "featured": False,
+        "enabled": True,
+    }
+    body_parts = []
+    errors = []
+    field_keys = {str(field.get("key") or "") for field in fields if isinstance(field, dict)}
+    for field in fields:
+        key = str(field.get("key") or "")
+        if not key:
+            continue
+        value = submitted.get(key)
+        if field.get("required") and (value is None or str(value).strip() == ""):
+            errors.append(f"{field.get('label') or key}不能为空")
+            continue
+        mapping = str(field.get("mapping") or "")
+        if mapping == "content_item.title":
+            payload["title"] = str(value or "").strip()
+        elif mapping == "content_item.subtitle":
+            payload["subtitle"] = str(value or "").strip()
+        elif mapping == "content_item.summary":
+            payload["summary"] = str(value or "").strip()
+        elif mapping == "content_item.body_text":
+            if str(value or "").strip():
+                body_parts.append(str(value or "").strip())
+        elif mapping == "content_item.sort_order":
+            payload["sortOrder"] = int_value(value)
+        elif mapping == "content_item.featured":
+            payload["featured"] = bool_value(value)
+        elif mapping.startswith("content_item.meta_json."):
+            meta_key = mapping.removeprefix("content_item.meta_json.").strip() or field.get("label") or key
+            if str(value or "").strip():
+                payload["metaJson"][meta_key] = str(value or "").strip()
+        elif mapping.startswith("content_item.assets."):
+            role = mapping.rsplit(".", 1)[-1] or "gallery"
+            payload["assets"].extend(lowcode_assets_from_value(value, role))
+    if "bodyText" not in field_keys and submitted.get("bodyText"):
+        body_parts.append(str(submitted.get("bodyText") or "").strip())
+    if "assets" not in field_keys:
+        payload["assets"].extend(lowcode_assets_from_value(submitted.get("assets"), "gallery"))
+    if errors:
+        raise ValueError("；".join(errors))
+    if body_parts:
+        payload["bodyJson"] = content_body_json_from_data("\n\n".join(body_parts))
+    if not payload["title"]:
+        payload["title"] = form.get("name") or "未命名资料"
+    if not payload["summary"]:
+        payload["summary"] = payload["subtitle"] or (body_parts[0][:120] if body_parts else form.get("description", ""))
+    return payload
+
+
+def row_to_lowcode_record(row):
+    if not row:
+        return None
+    return {
+        "id": row["id"],
+        "formId": row["form_id"],
+        "formVersionId": row["form_version_id"],
+        "projectId": row["project_id"],
+        "contentItemId": row["content_item_id"],
+        "status": row["status"],
+        "data": json_value(row["data_json"], {}),
+        "submittedBy": row["submitted_by"],
+        "submittedAt": row["submitted_at"],
+        "reviewedBy": row["reviewed_by"],
+        "reviewedAt": row["reviewed_at"],
+        "reviewNote": row["review_note"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def list_lowcode_records(project_id):
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM lowcode_records
+            WHERE project_id = ?
+            ORDER BY submitted_at DESC, id DESC
+            """,
+            (project_id,),
+        ).fetchall()
+    return [row_to_lowcode_record(row) for row in rows]
+
+
+def submit_lowcode_record(project_id, form_id, data, actor):
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("项目不存在")
+    form = get_lowcode_form(form_id)
+    if not form or not form.get("enabled"):
+        raise ValueError("资料采集模板不存在或已停用")
+    project_portal_type = normalize_portal_type(project.get("portalType"))
+    if normalize_portal_type(form.get("targetPortalType")) != project_portal_type:
+        raise ValueError("资料采集模板不适用于当前门户")
+    submitted = data.get("data") if isinstance(data.get("data"), dict) else data
+    submitted = dict(submitted or {})
+    if isinstance(data.get("assets"), list):
+        submitted["assets"] = data.get("assets")
+    payload = lowcode_record_payload(form, submitted)
+    validate_content_asset_access(payload.get("coverAssetId"), payload.get("assets", []), actor)
+    approve_now = actor.get("role") == "admin"
+    item = save_content_item(project_id, None, payload, actor, approve_now=approve_now)
+    now = now_iso()
+    status = "approved" if approve_now else "pending"
+    version_id = (form.get("version") or {}).get("id")
+    if not version_id:
+        raise ValueError("资料采集模板缺少有效版本")
+    with db_connect() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO lowcode_records (
+                form_id, form_version_id, project_id, content_item_id, status,
+                data_json, submitted_by, submitted_at, reviewed_by, reviewed_at,
+                review_note, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+            """,
+            (
+                form_id,
+                version_id,
+                project_id,
+                item["id"],
+                status,
+                json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+                actor.get("username", ADMIN_USERNAME),
+                now,
+                actor.get("username", ADMIN_USERNAME) if approve_now else "",
+                now if approve_now else "",
+                now,
+                now,
+            ),
+        )
+        record_id = cursor.lastrowid
+        for index, asset in enumerate(payload.get("assets", [])):
+            conn.execute(
+                """
+                INSERT INTO lowcode_record_assets (
+                    record_id, asset_id, role, title, caption, url, sort_order, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record_id,
+                    asset.get("assetId"),
+                    asset.get("role") or "gallery",
+                    asset.get("title") or "",
+                    asset.get("caption") or "",
+                    asset.get("url") or "",
+                    int_value(asset.get("sortOrder"), index),
+                    now,
+                ),
+            )
+    return {"record": row_to_lowcode_record({**{"id": record_id}, **{
+        "form_id": form_id,
+        "form_version_id": version_id,
+        "project_id": project_id,
+        "content_item_id": item["id"],
+        "status": status,
+        "data_json": json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+        "submitted_by": actor.get("username", ADMIN_USERNAME),
+        "submitted_at": now,
+        "reviewed_by": actor.get("username", ADMIN_USERNAME) if approve_now else "",
+        "reviewed_at": now if approve_now else "",
+        "review_note": "",
+        "created_at": now,
+        "updated_at": now,
+    }}), "item": item}
 
 
 def content_modules_payload(items, portal_type="department"):
@@ -6224,6 +7055,29 @@ class ExpoHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/lowcode/forms":
+            user = self.require_auth()
+            if not user:
+                return
+            filters = {key: values[0] for key, values in parse_qs(parsed.query).items() if values}
+            if user.get("role") != "admin":
+                filters["enabled"] = "1"
+            self.send_json(200, {"ok": True, "forms": list_lowcode_forms(filters)})
+            return
+
+        if path.startswith("/api/lowcode/forms/"):
+            user = self.require_auth()
+            if not user:
+                return
+            form_id_text = path.rsplit("/", 1)[-1]
+            form_id = int(form_id_text) if form_id_text.isdigit() else 0
+            form = get_lowcode_form(form_id)
+            if not form or (not form.get("enabled") and user.get("role") != "admin"):
+                self.send_json(404, {"ok": False, "error": "资料采集模板不存在"})
+                return
+            self.send_json(200, {"ok": True, "form": form})
+            return
+
         if path.startswith("/api/projects/"):
             user = self.require_auth()
             if not user:
@@ -6261,6 +7115,26 @@ class ExpoHandler(BaseHTTPRequestHandler):
                         "templates": content_templates_payload(),
                     },
                 )
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "forms":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                filters = {
+                    "portalType": project.get("portalType"),
+                    "enabled": "1",
+                }
+                self.send_json(200, {"ok": True, "project": project, "forms": list_lowcode_forms(filters)})
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "records":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "records": list_lowcode_records(project_id)})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
@@ -6500,6 +7374,19 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True, "user": user})
                 return
 
+        if path == "/api/lowcode/forms":
+            actor = self.require_admin()
+            if not actor:
+                return
+            try:
+                form = save_lowcode_form(None, self.read_json(), actor)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.log_admin("save_lowcode_form", "lowcode_form", form["id"], form["name"], "create form")
+            self.send_json(200, {"ok": True, "form": form})
+            return
+
         if path == "/api/deploy/content":
             actor = self.require_admin()
             if not actor:
@@ -6576,6 +7463,28 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     changes="structured-content",
                 )
                 self.send_json(200, {"ok": True, "item": item})
+                return
+            if len(parts) == 7 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "forms" and parts[6] == "records":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                form_id = int(parts[5]) if parts[5].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                try:
+                    result = submit_lowcode_record(project_id, form_id, self.read_json(), user)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self.log_admin(
+                    "submit_lowcode_record" if user["role"] != "admin" else "save_lowcode_record",
+                    "lowcode_record",
+                    result["record"]["id"],
+                    result["item"]["title"],
+                    f"project {project_id}",
+                    changes="lowcode-to-content-item",
+                )
+                self.send_json(200, {"ok": True, **result})
                 return
 
         if path.startswith("/api/content-items/") and path.endswith("/assets"):
@@ -6869,6 +7778,21 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 self.log_admin("save_page" if user["role"] == "admin" else "submit_page", "page", page["code"], page["title"], f"project {project_id}", changes="content")
                 self.send_json(200, {"ok": True, "page": page})
                 return
+
+        if path.startswith("/api/lowcode/forms/"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            form_id_text = path.rsplit("/", 1)[-1]
+            form_id = int(form_id_text) if form_id_text.isdigit() else 0
+            try:
+                form = save_lowcode_form(form_id, self.read_json(), actor)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.log_admin("update_lowcode_form", "lowcode_form", form["id"], form["name"], "update form")
+            self.send_json(200, {"ok": True, "form": form})
+            return
 
         if path.startswith("/api/pages/"):
             user = self.require_auth()

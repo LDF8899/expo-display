@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeAssetDrafts: [], activeLowcodeFormId: "", assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -431,6 +431,136 @@ function renderContentAssetCards() {
 }
 function appendContentAssetLine(url, caption = "", role = "gallery") {
   addContentAsset({ url, caption, role });
+}
+function currentLowcodeForm() {
+  return state.lowcodeForms.find((form) => String(form.id) === String(state.activeLowcodeFormId)) || null;
+}
+function setLowcodeAssetDrafts(assets = []) {
+  state.lowcodeAssetDrafts = orderedContentAssets(assets);
+  renderLowcodeAssetCards();
+}
+function addLowcodeAsset(asset) {
+  const next = normalizeContentAsset(asset, state.lowcodeAssetDrafts.length);
+  if (!next) return false;
+  setLowcodeAssetDrafts([...state.lowcodeAssetDrafts, next]);
+  return true;
+}
+function updateLowcodeAsset(index, field, value, options = {}) {
+  if (!state.lowcodeAssetDrafts[index] || !["url", "caption", "role"].includes(field)) return;
+  const next = [...state.lowcodeAssetDrafts];
+  next[index] = {
+    ...next[index],
+    [field]: field === "role" ? normalizeContentAssetRole(value, index) : String(value || "").trim(),
+  };
+  state.lowcodeAssetDrafts = orderedContentAssets(next);
+  if (!options.skipRender) renderLowcodeAssetCards();
+}
+function moveLowcodeAsset(index, direction) {
+  const target = index + direction;
+  if (target < 0 || target >= state.lowcodeAssetDrafts.length) return;
+  const next = [...state.lowcodeAssetDrafts];
+  [next[index], next[target]] = [next[target], next[index]];
+  setLowcodeAssetDrafts(next);
+}
+function removeLowcodeAsset(index) {
+  setLowcodeAssetDrafts(state.lowcodeAssetDrafts.filter((_, itemIndex) => itemIndex !== index));
+}
+function renderLowcodeAssetCards() {
+  const list = $("lowcodeAssetCards");
+  if (!list) return;
+  const assets = orderedContentAssets(state.lowcodeAssetDrafts);
+  list.innerHTML = assets.length ? assets.map((asset, index) => `
+    <article class="content-asset-card">
+      <figure class="content-asset-thumb">
+        ${looksLikeVideoAsset(asset) ? `<span>VIDEO</span>` : `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.caption || "asset")}" loading="lazy" />`}
+      </figure>
+      <div class="content-asset-fields">
+        <input data-lowcode-asset-index="${index}" data-lowcode-asset-field="url" value="${escapeHtml(asset.url)}" placeholder="素材地址" />
+        <input data-lowcode-asset-index="${index}" data-lowcode-asset-field="caption" value="${escapeHtml(asset.caption)}" placeholder="图片说明" />
+        <select data-lowcode-asset-index="${index}" data-lowcode-asset-field="role">
+          ${contentAssetRoles.map((role) => `<option value="${role.key}"${asset.role === role.key ? " selected" : ""}>${escapeHtml(role.label)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="content-asset-actions">
+        <button class="button small" type="button" data-lowcode-asset-up="${index}" ${index === 0 ? "disabled" : ""}>上移</button>
+        <button class="button small" type="button" data-lowcode-asset-down="${index}" ${index === assets.length - 1 ? "disabled" : ""}>下移</button>
+        <button class="button small danger" type="button" data-lowcode-asset-remove="${index}">删除</button>
+      </div>
+    </article>
+  `).join("") : `<div class="content-asset-empty">暂无素材。可上传图片、从素材库选择，或粘贴图片/视频地址。</div>`;
+}
+function lowcodeFieldInput(field) {
+  const key = escapeHtml(field.key);
+  const label = escapeHtml(field.label || field.key);
+  const placeholder = escapeHtml(field.placeholder || "");
+  const required = field.required ? " required" : "";
+  if (field.type === "textarea" || field.type === "richtext") {
+    return `<label class="lowcode-field wide"><span>${label}${field.required ? " *" : ""}</span><textarea data-lowcode-field="${key}" rows="4" placeholder="${placeholder}"${required}></textarea></label>`;
+  }
+  if (field.type === "checkbox" || field.type === "switch") {
+    return `<label class="lowcode-field lowcode-check"><input data-lowcode-field="${key}" type="checkbox" /> <span>${label}</span></label>`;
+  }
+  if (field.type === "select" && Array.isArray(field.options) && field.options.length) {
+    return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><select data-lowcode-field="${key}"${required}>${field.options.map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label || option.value)}</option>`).join("")}</select></label>`;
+  }
+  if (field.type === "asset_list" || field.type === "image_upload" || field.type === "video_upload") {
+    return "";
+  }
+  const type = field.type === "number" ? "number" : field.type === "date" ? "date" : "text";
+  return `<label class="lowcode-field"><span>${label}${field.required ? " *" : ""}</span><input data-lowcode-field="${key}" type="${type}" placeholder="${placeholder}"${required} /></label>`;
+}
+function renderLowcodeForms() {
+  const grid = $("lowcodeFormsGrid");
+  if (!grid) return;
+  const forms = state.lowcodeForms || [];
+  $("lowcodeFormsSummary").textContent = `${forms.length} 个模板`;
+  grid.innerHTML = forms.length ? forms.map((form) => {
+    const schema = form.schema || {};
+    const moduleLabel = schema.moduleLabel || (moduleMeta(form.targetModuleKey, form.targetPortalType) || {}).label || form.targetModuleKey || "-";
+    const contentType = form.targetContentType || schema.contentType || "article";
+    const fieldCount = (schema.fields || []).filter((field) => field.type !== "asset_list").length;
+    return `<article class="lowcode-form-card">
+      <header>
+        <div>
+          <strong>${escapeHtml(form.name)}</strong>
+          <span>${escapeHtml(moduleLabel)} · ${escapeHtml(contentTypeLabel(contentType))}</span>
+        </div>
+        <span class="badge">${fieldCount} 项</span>
+      </header>
+      <p>${escapeHtml(form.description || "按模板规范填写资料。")}</p>
+      <div class="actions">
+        <button class="button small primary" type="button" data-lowcode-start="${form.id}">按模板填写</button>
+      </div>
+    </article>`;
+  }).join("") : `<div class="empty">当前门户暂无资料采集模板</div>`;
+}
+function fillLowcodeRecordForm(form) {
+  if (!form) return;
+  state.activeLowcodeFormId = form.id;
+  setLowcodeAssetDrafts([]);
+  const schema = form.schema || {};
+  const fields = (schema.fields || []).filter((field) => field.type !== "asset_list" && field.type !== "image_upload" && field.type !== "video_upload");
+  $("lowcodeRecordTitle").textContent = form.name || "资料采集模板";
+  $("lowcodeRecordHint").textContent = form.description || "按模板填写后自动生成结构化资料。";
+  $("lowcodeDynamicFields").innerHTML = fields.map(lowcodeFieldInput).join("");
+  $("lowcodeAssetUrl").value = "";
+  $("lowcodeAssetCaption").value = "";
+  $("lowcodeAssetRole").value = "gallery";
+  $("lowcodeAssetFile").value = "";
+  $("lowcodeRecordForm").hidden = false;
+  $("contentItemForm").hidden = true;
+  $("pageForm").hidden = true;
+  setStatus($("lowcodeRecordStatus"), "", "");
+  $("lowcodeRecordForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function lowcodeRecordPayload() {
+  const data = {};
+  document.querySelectorAll("[data-lowcode-field]").forEach((field) => {
+    const key = field.dataset.lowcodeField;
+    data[key] = field.type === "checkbox" ? field.checked : field.value.trim();
+  });
+  data.assets = orderedContentAssets(state.lowcodeAssetDrafts);
+  return { data };
 }
 function topicRichTemplate(moduleKey) {
   const meta = moduleMeta(moduleKey, "topic") || topicModules[0];
@@ -1103,6 +1233,7 @@ async function loadPages(projectId = $("projectSelect").value) {
   if (!projectId) {
     state.pages = [];
     state.contentItems = [];
+    state.lowcodeForms = [];
     state.moduleCoverage = buildCoverageFromPages([]);
     renderCurrentPortalStrip();
     renderTemplateActions();
@@ -1110,12 +1241,14 @@ async function loadPages(projectId = $("projectSelect").value) {
     renderPages();
     return;
   }
-  const [data, contentData] = await Promise.all([
+  const [data, contentData, lowcodeData] = await Promise.all([
     jsonApi(`/api/projects/${projectId}/pages`),
     jsonApi(`/api/projects/${projectId}/content-items`),
+    jsonApi(`/api/projects/${projectId}/lowcode/forms`),
   ]);
   state.pages = data.pages || [];
   state.contentItems = contentData.items || [];
+  state.lowcodeForms = lowcodeData.forms || [];
   state.moduleCoverage = data.coverage || buildCoverageFromPages(state.pages);
   renderTemplateActions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentModuleOptions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
@@ -1130,6 +1263,7 @@ function renderPages() {
   const deleteLabel = isAdmin() ? "删除" : "申请删除";
   const emptyText = isAdmin() ? "暂无板块资料" : "暂无板块资料";
   renderModuleLibrary();
+  renderLowcodeForms();
   renderContentItems(filter);
   $("pagesTable").innerHTML = list.length ? list.map((p) => {
     const qr = p.qrAvailable ? `<a class="button small" target="_blank" href="/api/qr?data=${encodeURIComponent(buildQrUrl(p.projectId, p.code))}">二维码</a>` : `<span class="muted">审核后可用</span>`;
@@ -1396,6 +1530,15 @@ function useAsset(asset) {
     showView(returnView);
     return;
   }
+  if (state.assetTargetInput === "__lowcodeAssetManager") {
+    const role = state.lowcodeAssetDrafts.length ? "gallery" : "cover";
+    addLowcodeAsset({ url: asset.url, caption: asset.originalFilename || "", role });
+    const returnView = state.assetReturnView || "pages";
+    state.assetTargetInput = "";
+    state.assetReturnView = "";
+    showView(returnView);
+    return;
+  }
   const target = $(state.assetTargetInput);
   if (target) target.value = asset.url;
   const returnView = state.assetReturnView || "assets";
@@ -1504,6 +1647,7 @@ function fillContentItem(item = {}) {
     ? "管理员保存后立即通过，并同步生成扫码详情页。"
     : "保存后提交管理员审核，通过后同步进入展示。";
   $("contentItemForm").hidden = false;
+  $("lowcodeRecordForm").hidden = true;
   $("pageForm").hidden = true;
   updateContentPreview();
   $("contentItemForm").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1558,6 +1702,8 @@ function fillPage(page) {
   $("pageImageFile").value = "";
   $("pageFormHint").textContent = isAdmin() ? "管理员保存后立即通过。" : "资料保存后会提交管理员审核，通过后进入展示。";
   $("pageForm").hidden = false;
+  $("lowcodeRecordForm").hidden = true;
+  $("contentItemForm").hidden = true;
   updatePagePreview();
 }
 function pagePayload() {
@@ -1730,6 +1876,78 @@ $("moduleLibrary").addEventListener("click", (event) => {
   const button = event.target.closest("[data-module-create]");
   if (!button) return;
   startContentItemDraft(button.dataset.moduleCreate);
+});
+$("lowcodeFormsGrid").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-lowcode-start]");
+  if (!button) return;
+  fillLowcodeRecordForm(state.lowcodeForms.find((form) => String(form.id) === String(button.dataset.lowcodeStart)));
+});
+$("closeLowcodeRecordForm").addEventListener("click", () => { $("lowcodeRecordForm").hidden = true; });
+$("lowcodeRecordForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const projectId = $("projectSelect").value;
+  const form = currentLowcodeForm();
+  if (!projectId || !form) {
+    setStatus($("lowcodeRecordStatus"), "请先选择门户和资料采集模板", "error");
+    return;
+  }
+  try {
+    const result = await jsonApi(`/api/projects/${projectId}/lowcode/forms/${form.id}/records`, body(lowcodeRecordPayload()));
+    setStatus($("lowcodeRecordStatus"), isAdmin() ? "资料已按模板生成并同步展示页" : "资料已按模板提交审核", "success");
+    state.editingContentItemId = result.item && result.item.id ? result.item.id : "";
+    await loadPages();
+  } catch (err) { setStatus($("lowcodeRecordStatus"), err.message, "error"); }
+});
+$("uploadLowcodeAsset").addEventListener("click", async () => {
+  try {
+    const url = await uploadImage($("lowcodeAssetFile").files[0], $("lowcodeRecordStatus"));
+    if (!url) {
+      setStatus($("lowcodeRecordStatus"), "请选择图片", "error");
+      return;
+    }
+    addLowcodeAsset({
+      url,
+      caption: $("lowcodeAssetCaption").value.trim(),
+      role: $("lowcodeAssetRole").value,
+    });
+    $("lowcodeAssetFile").value = "";
+    setStatus($("lowcodeRecordStatus"), "素材已加入模板资料", "success");
+  } catch (err) { setStatus($("lowcodeRecordStatus"), err.message, "error"); }
+});
+$("addLowcodeAssetUrl").addEventListener("click", () => {
+  const url = $("lowcodeAssetUrl").value.trim();
+  if (!url) {
+    setStatus($("lowcodeRecordStatus"), "请先填写素材地址", "error");
+    return;
+  }
+  addLowcodeAsset({
+    url,
+    caption: $("lowcodeAssetCaption").value.trim(),
+    role: $("lowcodeAssetRole").value,
+  });
+  $("lowcodeAssetUrl").value = "";
+  $("lowcodeAssetCaption").value = "";
+  $("lowcodeAssetRole").value = state.lowcodeAssetDrafts.length ? "gallery" : "cover";
+  setStatus($("lowcodeRecordStatus"), "素材已加入模板资料", "success");
+});
+$("selectLowcodeAsset").addEventListener("click", () => openAssetPicker("__lowcodeAssetManager"));
+$("lowcodeAssetCards").addEventListener("input", (event) => {
+  const field = event.target.closest("[data-lowcode-asset-field]");
+  if (!field || field.tagName === "SELECT") return;
+  updateLowcodeAsset(Number(field.dataset.lowcodeAssetIndex), field.dataset.lowcodeAssetField, field.value, { skipRender: true });
+});
+$("lowcodeAssetCards").addEventListener("change", (event) => {
+  const field = event.target.closest("[data-lowcode-asset-field]");
+  if (!field) return;
+  updateLowcodeAsset(Number(field.dataset.lowcodeAssetIndex), field.dataset.lowcodeAssetField, field.value, { skipRender: field.tagName !== "SELECT" });
+});
+$("lowcodeAssetCards").addEventListener("click", (event) => {
+  const up = event.target.closest("[data-lowcode-asset-up]");
+  const down = event.target.closest("[data-lowcode-asset-down]");
+  const remove = event.target.closest("[data-lowcode-asset-remove]");
+  if (up) moveLowcodeAsset(Number(up.dataset.lowcodeAssetUp), -1);
+  if (down) moveLowcodeAsset(Number(down.dataset.lowcodeAssetDown), 1);
+  if (remove) removeLowcodeAsset(Number(remove.dataset.lowcodeAssetRemove));
 });
 $("closeContentItemForm").addEventListener("click", () => { $("contentItemForm").hidden = true; });
 $("contentItemForm").addEventListener("submit", async (event) => {

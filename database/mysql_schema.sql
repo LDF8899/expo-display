@@ -287,3 +287,86 @@ CREATE TABLE IF NOT EXISTS content_item_versions (
     FOREIGN KEY (content_item_id) REFERENCES content_items(id)
     ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS lowcode_forms (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL,
+  code VARCHAR(120) NOT NULL,
+  description VARCHAR(1024) NOT NULL DEFAULT '',
+  target_type VARCHAR(40) NOT NULL DEFAULT 'content_item',
+  target_portal_type VARCHAR(40) NOT NULL DEFAULT 'department',
+  target_content_type VARCHAR(32) NOT NULL DEFAULT 'article',
+  target_module_key VARCHAR(80) NOT NULL DEFAULT '',
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  created_by VARCHAR(64) NOT NULL DEFAULT 'system',
+  created_at VARCHAR(40) NOT NULL,
+  updated_at VARCHAR(40) NOT NULL,
+  UNIQUE KEY uq_lowcode_forms_code (code),
+  INDEX idx_lowcode_forms_target (target_portal_type, target_module_key, enabled)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS lowcode_form_versions (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  form_id BIGINT NOT NULL,
+  version_no INT NOT NULL DEFAULT 1,
+  schema_json JSON NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'active',
+  created_by VARCHAR(64) NOT NULL DEFAULT 'system',
+  created_at VARCHAR(40) NOT NULL,
+  UNIQUE KEY uq_lowcode_form_versions_form_version (form_id, version_no),
+  INDEX idx_lowcode_form_versions_form_status (form_id, status),
+  CONSTRAINT fk_lowcode_form_versions_form
+    FOREIGN KEY (form_id) REFERENCES lowcode_forms(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS lowcode_records (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  form_id BIGINT NOT NULL,
+  form_version_id BIGINT NOT NULL,
+  project_id BIGINT NOT NULL,
+  content_item_id BIGINT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'pending',
+  data_json JSON NOT NULL,
+  submitted_by VARCHAR(64) NOT NULL DEFAULT '',
+  submitted_at VARCHAR(40) NOT NULL,
+  reviewed_by VARCHAR(64) NOT NULL DEFAULT '',
+  reviewed_at VARCHAR(40) NOT NULL DEFAULT '',
+  review_note VARCHAR(1024) NOT NULL DEFAULT '',
+  created_at VARCHAR(40) NOT NULL,
+  updated_at VARCHAR(40) NOT NULL,
+  INDEX idx_lowcode_records_project (project_id, submitted_at),
+  INDEX idx_lowcode_records_form (form_id, submitted_at),
+  INDEX idx_lowcode_records_content_item (content_item_id),
+  CONSTRAINT fk_lowcode_records_form
+    FOREIGN KEY (form_id) REFERENCES lowcode_forms(id)
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_lowcode_records_version
+    FOREIGN KEY (form_version_id) REFERENCES lowcode_form_versions(id)
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_lowcode_records_project
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_lowcode_records_content_item
+    FOREIGN KEY (content_item_id) REFERENCES content_items(id)
+    ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS lowcode_record_assets (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  record_id BIGINT NOT NULL,
+  asset_id BIGINT NULL,
+  role VARCHAR(40) NOT NULL DEFAULT 'gallery',
+  title VARCHAR(255) NOT NULL DEFAULT '',
+  caption VARCHAR(512) NOT NULL DEFAULT '',
+  url VARCHAR(2048) NOT NULL DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at VARCHAR(40) NOT NULL,
+  INDEX idx_lowcode_record_assets_record (record_id, sort_order),
+  CONSTRAINT fk_lowcode_record_assets_record
+    FOREIGN KEY (record_id) REFERENCES lowcode_records(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_lowcode_record_assets_asset
+    FOREIGN KEY (asset_id) REFERENCES assets(id)
+    ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

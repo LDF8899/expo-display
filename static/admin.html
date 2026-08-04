@@ -157,6 +157,16 @@
             <div id="moduleLibrary" class="module-library"></div>
             <p class="module-coverage-hint">已通过资料会进入对应门户页；展厅发布用于控制扫码大屏展示范围。</p>
           </section>
+          <section class="lowcode-template-panel" aria-label="资料采集模板">
+            <div class="panel-subhead">
+              <div>
+                <strong>资料采集模板</strong>
+                <span>按模板填写资料，系统自动生成结构化资料并进入现有审核/展示流程。</span>
+              </div>
+              <span id="lowcodeFormsSummary" class="badge">0 个模板</span>
+            </div>
+            <div id="lowcodeFormsGrid" class="lowcode-forms-grid"></div>
+          </section>
           <section class="structured-panel" aria-label="结构化资料">
             <div class="panel-subhead">
               <div>
@@ -187,6 +197,39 @@
             <div id="pageHistory" class="history-list"></div>
           </section>
         </section>
+        <form id="lowcodeRecordForm" class="panel editor-panel" hidden>
+          <div class="panel-head">
+            <div><h2 id="lowcodeRecordTitle">资料采集模板</h2><p id="lowcodeRecordHint">按模板填写后自动生成结构化资料。</p></div>
+            <button id="closeLowcodeRecordForm" class="button ghost" type="button">关闭</button>
+          </div>
+          <div id="lowcodeDynamicFields" class="lowcode-dynamic-fields"></div>
+          <section class="content-asset-manager" aria-label="模板素材">
+            <div class="field-head">
+              <span>图片/视频素材</span>
+              <small>可上传、从素材库选择，或粘贴地址；前台仍按现有样式自动轮播展示。</small>
+            </div>
+            <div class="content-asset-entry">
+              <input id="lowcodeAssetUrl" placeholder="粘贴图片/视频地址" />
+              <input id="lowcodeAssetCaption" placeholder="素材说明" />
+              <select id="lowcodeAssetRole">
+                <option value="cover">封面</option>
+                <option value="portrait">人物照</option>
+                <option value="certificate">证书/荣誉</option>
+                <option value="gallery">图集</option>
+                <option value="video">视频</option>
+              </select>
+              <button id="addLowcodeAssetUrl" class="button ghost" type="button">加入</button>
+              <button id="selectLowcodeAsset" class="button ghost" type="button">素材库</button>
+            </div>
+            <div class="form-grid four">
+              <input id="lowcodeAssetFile" type="file" accept="image/*" />
+              <button id="uploadLowcodeAsset" class="button ghost" type="button">上传并加入图片组</button>
+            </div>
+            <div id="lowcodeAssetCards" class="content-asset-list"></div>
+          </section>
+          <button id="lowcodeRecordSubmitButton" class="button primary" type="submit">按模板提交资料</button>
+          <p id="lowcodeRecordStatus" class="status-text"></p>
+        </form>
         <form id="contentItemForm" class="panel editor-panel" hidden>
           <div class="panel-head">
             <div><h2 id="contentItemFormTitle">结构化资料编辑</h2><p id="contentItemFormHint">按资料类型规范录入，保存后自动同步扫码详情页。</p></div>
