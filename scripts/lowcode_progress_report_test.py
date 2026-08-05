@@ -194,6 +194,16 @@ def main():
             teacher = login(base_url, "reportteacher", "Report-Teacher-2026")
             assert_required_field_submit_rules(base_url, teacher, validation_project["id"])
             form, record = submit_lowcode_record(base_url, teacher, project["id"])
+            expect_status(
+                401,
+                f"{base_url}/api/projects/{project['id']}/lowcode/report",
+                headers={"Cookie": teacher["cookie"]},
+            )
+            expect_status(
+                401,
+                f"{base_url}/api/projects/{project['id']}/lowcode/template-quality",
+                headers={"Cookie": teacher["cookie"]},
+            )
 
             report_data, _ = json_request(
                 f"{base_url}/api/projects/{project['id']}/lowcode/report",

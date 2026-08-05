@@ -162,6 +162,13 @@ def main():
             other_project = create_project(base_url, admin, "otherteacher", "现代农业素材归档门户")
             create_content_item(base_url, admin, project["id"])
             submit_lowcode_record(base_url, admin, project["id"])
+            teacher = login(base_url, "archiveteacher", "Archive-Teacher-2026")
+
+            expect_status(
+                401,
+                f"{base_url}/api/projects/{project['id']}/asset-archive",
+                headers={"Cookie": teacher["cookie"]},
+            )
 
             archive_data, _ = json_request(
                 f"{base_url}/api/projects/{project['id']}/asset-archive",

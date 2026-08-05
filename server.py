@@ -8755,6 +8755,9 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
+                    return
                 filters = {key: values[0] for key, values in parse_qs(parsed.query).items() if values}
                 self.send_json(
                     200,
@@ -8772,6 +8775,9 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
+                    return
                 self.send_json(200, {"ok": True, "project": project, "report": content_quality_report(project_id)})
                 return
             if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "asset-archive":
@@ -8779,6 +8785,9 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 project = get_project(project_id)
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
                     return
                 self.send_json(200, {"ok": True, "project": project, "report": asset_archive_report(project_id, user)})
                 return
@@ -8809,6 +8818,9 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
+                    return
                 self.send_json(200, {"ok": True, "project": project, "report": lowcode_progress_report(project_id, user)})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "template-quality":
@@ -8816,6 +8828,9 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 project = get_project(project_id)
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
                     return
                 self.send_json(200, {"ok": True, "project": project, "report": lowcode_template_quality_report(project_id, user)})
                 return

@@ -131,6 +131,18 @@ def main():
             project = create_project(base_url, admin, "qualityteacher", "财经商贸质量报告门户")
             other_project = create_project(base_url, admin, "otherteacher", "现代农业质量报告门户")
             item = create_content_item(base_url, admin, project["id"])
+            teacher = login(base_url, "qualityteacher", "Quality-Teacher-2026")
+
+            expect_status(
+                401,
+                f"{base_url}/api/projects/{project['id']}/content-items",
+                headers={"Cookie": teacher["cookie"]},
+            )
+            expect_status(
+                401,
+                f"{base_url}/api/projects/{project['id']}/content-quality",
+                headers={"Cookie": teacher["cookie"]},
+            )
 
             report_data, _ = json_request(
                 f"{base_url}/api/projects/{project['id']}/content-quality",
