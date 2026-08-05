@@ -76,8 +76,8 @@ UPLOAD_DIR = env_path("UPLOAD_DIR", "uploads")
 DB_PATH = env_path("DB_PATH", "expo.db")
 UNITY_MODEL_DIR = UPLOAD_DIR / "unityceshi111"
 UNITY_MODEL_HOST = "127.0.0.1"
-UNITY_MODEL_PORT = 8080
-UNITY_MODEL_URL = f"http://localhost:{UNITY_MODEL_PORT}/"
+UNITY_MODEL_PORT = env_int("UNITY_MODEL_PORT", 8080)
+UNITY_MODEL_FALLBACK_PORTS = os.environ.get("UNITY_MODEL_FALLBACK_PORTS", "18080,18081,18082")
 DATABASE_BACKEND = database_backend()
 MYSQL_SCHEMA_PATH = env_path("MYSQL_SCHEMA_PATH", "database/mysql_schema.sql")
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -1012,6 +1012,8 @@ def init_db():
                 display_config TEXT NOT NULL DEFAULT '{}',
                 deployed INTEGER NOT NULL DEFAULT 0,
                 content_deployed INTEGER NOT NULL DEFAULT 0,
+                deployed_at TEXT NOT NULL DEFAULT '',
+                content_deployed_at TEXT NOT NULL DEFAULT '',
                 updated_at TEXT NOT NULL
             )
             """
@@ -1061,6 +1063,7 @@ def init_db():
         migrate_assets_table(conn)
         migrate_content_tables(conn)
         migrate_lowcode_tables(conn)
+        ensure_special_experience_links(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at)")
         project_id = deployed_content_project_id(conn)
         existing = conn.execute(
@@ -1093,6 +1096,7 @@ def init_db():
 def init_mysql_db():
     with db_connect() as conn:
         execute_mysql_schema(conn, MYSQL_SCHEMA_PATH)
+        migrate_projects_table(conn)
         ensure_page_extra_columns(conn)
         migrate_content_tables(conn)
         migrate_lowcode_tables(conn)
@@ -1102,6 +1106,7 @@ def init_mysql_db():
         ensure_default_project(conn)
         ensure_blueprint_portal_projects(conn)
         ensure_blueprint_pages(conn)
+        ensure_special_experience_links(conn)
         project_id = deployed_content_project_id(conn)
         existing = conn.execute(
             "SELECT code FROM pages WHERE code = ?",
@@ -1138,22 +1143,29 @@ def ensure_default_project(conn):
             first = conn.execute("SELECT id FROM projects WHERE portal_type = 'school' ORDER BY id LIMIT 1").fetchone()
             if not first:
                 first = conn.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()
-            conn.execute("UPDATE projects SET deployed = CASE WHEN id = ? THEN 1 ELSE 0 END", (first["id"],))
+            conn.execute(
+                "UPDATE projects SET deployed = CASE WHEN id = ? THEN 1 ELSE 0 END, deployed_at = CASE WHEN id = ? THEN COALESCE(NULLIF(deployed_at, ''), updated_at) ELSE deployed_at END",
+                (first["id"], first["id"]),
+            )
         if not conn.execute("SELECT id FROM projects WHERE content_deployed = 1 LIMIT 1").fetchone():
             first = conn.execute("SELECT id FROM projects WHERE deployed = 1 ORDER BY id LIMIT 1").fetchone()
             if not first:
                 first = conn.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()
-            conn.execute("UPDATE projects SET content_deployed = CASE WHEN id = ? THEN 1 ELSE 0 END", (first["id"],))
+            conn.execute(
+                "UPDATE projects SET content_deployed = CASE WHEN id = ? THEN 1 ELSE 0 END, content_deployed_at = CASE WHEN id = ? THEN COALESCE(NULLIF(content_deployed_at, ''), updated_at) ELSE content_deployed_at END",
+                (first["id"], first["id"]),
+            )
         return
 
+    now = now_iso()
     conn.execute(
         """
         INSERT INTO projects (
             name, portal_type, idle_kicker, idle_title, idle_copy, welcome_kicker,
             welcome_title, welcome_subtitle, default_image_url, accent, display_config,
-            deployed, content_deployed, updated_at
+            deployed, content_deployed, deployed_at, content_deployed_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)
         """,
         (
             DEFAULT_PROJECT_NAME,
@@ -1167,7 +1179,9 @@ def ensure_default_project(conn):
             "/static/expo-stage.png",
             "#f59a13",
             display_config_json(DEFAULT_DISPLAY_CONFIG),
-            now_iso(),
+            now,
+            now,
+            now,
         ),
     )
 
@@ -1198,6 +1212,13 @@ def migrate_projects_table(conn):
     if "content_deployed" not in columns:
         conn.execute("ALTER TABLE projects ADD COLUMN content_deployed INTEGER NOT NULL DEFAULT 0")
         conn.execute("UPDATE projects SET content_deployed = deployed")
+    columns = set(table_columns(conn, "projects"))
+    if "deployed_at" not in columns:
+        conn.execute("ALTER TABLE projects ADD COLUMN deployed_at VARCHAR(40) NOT NULL DEFAULT ''")
+        conn.execute("UPDATE projects SET deployed_at = COALESCE(NULLIF(updated_at, ''), '') WHERE deployed = 1 AND deployed_at = ''")
+    if "content_deployed_at" not in columns:
+        conn.execute("ALTER TABLE projects ADD COLUMN content_deployed_at VARCHAR(40) NOT NULL DEFAULT ''")
+        conn.execute("UPDATE projects SET content_deployed_at = COALESCE(NULLIF(updated_at, ''), '') WHERE content_deployed = 1 AND content_deployed_at = ''")
 
 
 def upgrade_legacy_default_project(conn):
@@ -1458,6 +1479,142 @@ def ensure_blueprint_pages(conn):
                     "blueprint-sync",
                 ),
             )
+
+
+SPECIAL_EXPERIENCE_LINKS = [
+    {
+        "portalSlug": "digital-intelligence",
+        "moduleKey": "overview",
+        "code": "EXT-DIGITAL-INTELLIGENCE-HUB",
+        "title": "互动体验系统合集",
+        "summary": "汇聚人工智能、大模型交互和 AIGC 等互动体验系统入口。",
+        "links": [
+            {"label": "互动体验系统合集", "url": "http://sxjsxy.szzfhs.com/"},
+        ],
+    },
+    {
+        "portalSlug": "digital-intelligence",
+        "moduleKey": "training",
+        "code": "EXT-DIGITAL-INTELLIGENCE-AI",
+        "title": "人工智能互动体验入口",
+        "summary": "面向数智技术专题的人工智能应用、大模型自然语言交互与生成式 AI 体验。",
+        "links": [
+            {"label": "人工智能应用技术互动体验系统", "url": "http://sxjsxy.szzfhs.com/"},
+            {"label": "多模态大模型自然语言交互体验系统", "url": "http://sxjsxy.szzfhs.com/#/AigcApply"},
+            {"label": "生成式人工智能 AIGC 终端系统", "url": "http://110.41.133.77:8899/trainai2/#/media-design"},
+        ],
+    },
+    {
+        "portalSlug": "digital-tourism",
+        "moduleKey": "training",
+        "code": "EXT-DIGITAL-TOURISM-SIM",
+        "title": "文旅虚拟仿真体验入口",
+        "summary": "面向数字文旅实训场景，集中跳转毕节特色景点虚拟仿真资源。",
+        "links": [
+            {"label": "毕节特色景点虚拟仿真文旅数字资源", "url": "http://bjsz.szzfhs.com/bjlvh5"},
+        ],
+    },
+    {
+        "portalSlug": "digital-tourism",
+        "moduleKey": "achievements",
+        "code": "EXT-DIGITAL-TOURISM-CASELIB",
+        "title": "文化旅游系典型案例库",
+        "summary": "面向数字文旅专题成果，跳转文化旅游系典型案例库数字资源。",
+        "links": [
+            {"label": "文化旅游系典型案例库数字资源", "url": "http://bjsz.szzfhs.com/bjlvh5/#/pages/spotoverview/spotoverview"},
+        ],
+    },
+    {
+        "portalSlug": "finance-commerce",
+        "moduleKey": "training",
+        "code": "EXT-FINANCE-COMMERCE-AIGC",
+        "title": "AIGC 电商视觉设计终端",
+        "summary": "面向财经商贸数字营销、视觉设计和电商运营实训，提供生成式 AI 终端入口。",
+        "links": [
+            {"label": "生成式人工智能 AIGC 终端系统", "url": "http://110.41.133.77:8899/trainai2/#/media-design"},
+        ],
+    },
+]
+
+
+def ensure_special_experience_links(conn):
+    now = now_iso()
+    actor = {"username": ADMIN_USERNAME}
+    for entry in SPECIAL_EXPERIENCE_LINKS:
+        project = conn.execute(
+            """
+            SELECT id, portal_type, portal_slug
+            FROM projects
+            WHERE portal_type = 'topic' AND portal_slug = ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            (entry["portalSlug"],),
+        ).fetchone()
+        if not project:
+            continue
+        existing = conn.execute(
+            "SELECT id FROM content_items WHERE project_id = ? AND code = ? LIMIT 1",
+            (project["id"], entry["code"]),
+        ).fetchone()
+        if existing:
+            continue
+        snapshot = {
+            "code": entry["code"],
+            "moduleKey": entry["moduleKey"],
+            "contentType": "article",
+            "title": entry["title"],
+            "subtitle": "",
+            "summary": entry["summary"],
+            "bodyJson": [{"type": "paragraph", "text": entry["summary"]}],
+            "metaJson": {"入口类型": "外部互动体验系统", "维护方式": "后台结构化资料素材区"},
+            "coverAssetId": None,
+            "sortOrder": 5,
+            "featured": True,
+            "enabled": True,
+            "assets": [
+                {
+                    "role": "external_link",
+                    "caption": item["label"],
+                    "title": item["label"],
+                    "url": item["url"],
+                    "sortOrder": index,
+                }
+                for index, item in enumerate(entry["links"])
+            ],
+        }
+        cursor = conn.execute(
+            """
+            INSERT INTO content_items (
+                project_id, code, module_key, content_type, title, subtitle,
+                summary, body_json, meta_json, cover_asset_id, sort_order,
+                featured, enabled, review_status, submitted_by, reviewed_by,
+                review_note, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 1, 'approved', ?, ?, '', ?, ?)
+            """,
+            (
+                project["id"],
+                snapshot["code"],
+                snapshot["moduleKey"],
+                snapshot["contentType"],
+                snapshot["title"],
+                snapshot["subtitle"],
+                snapshot["summary"],
+                json_text(snapshot["bodyJson"], []),
+                json_text(snapshot["metaJson"], {}),
+                int_value(snapshot.get("sortOrder")),
+                1 if snapshot.get("featured") else 0,
+                actor["username"],
+                actor["username"],
+                now,
+                now,
+            ),
+        )
+        content_item_id = cursor.lastrowid
+        replace_content_item_assets(conn, content_item_id, snapshot["assets"])
+        version_id = write_content_item_version(conn, project["id"], content_item_id, snapshot, actor, "approved", "upsert")
+        conn.execute("UPDATE content_item_versions SET content_item_id = ? WHERE id = ?", (content_item_id, version_id))
 
 
 def deployed_project_id(conn=None):
@@ -2665,6 +2822,8 @@ def row_to_project(row):
     owner_enabled = row["owner_enabled"] if "owner_enabled" in row.keys() else 1
     portal_type = normalize_portal_type(row["portal_type"] if "portal_type" in row.keys() else "department")
     portal_slug = normalize_portal_slug(row["portal_slug"] if "portal_slug" in row.keys() else "")
+    deployed_at = row["deployed_at"] if "deployed_at" in row.keys() else ""
+    content_deployed_at = row["content_deployed_at"] if "content_deployed_at" in row.keys() else ""
     return {
         "id": row["id"],
         "name": row["name"],
@@ -2687,6 +2846,8 @@ def row_to_project(row):
         "displayConfig": normalize_display_config(display_config),
         "deployed": bool(row["deployed"]),
         "contentDeployed": bool(content_deployed),
+        "deployedAt": deployed_at or "",
+        "contentDeployedAt": content_deployed_at or "",
         "configStatus": row["config_status"] if "config_status" in row.keys() else "approved",
         "pendingConfigVersionId": row["pending_config_version_id"] if "pending_config_version_id" in row.keys() else None,
         "pageCount": int(page_count or 0),
@@ -3331,8 +3492,10 @@ def operations_summary(user=None):
             SELECT
                 MAX(CASE WHEN deployed = 1 THEN id ELSE 0 END) AS welcome_id,
                 MAX(CASE WHEN deployed = 1 THEN name ELSE '' END) AS welcome_name,
+                MAX(CASE WHEN deployed = 1 THEN deployed_at ELSE '' END) AS welcome_at,
                 MAX(CASE WHEN content_deployed = 1 THEN id ELSE 0 END) AS content_id,
-                MAX(CASE WHEN content_deployed = 1 THEN name ELSE '' END) AS content_name
+                MAX(CASE WHEN content_deployed = 1 THEN name ELSE '' END) AS content_name,
+                MAX(CASE WHEN content_deployed = 1 THEN content_deployed_at ELSE '' END) AS content_at
             FROM projects
             """
         ).fetchone()
@@ -3383,8 +3546,10 @@ def operations_summary(user=None):
         "deployed": {
             "welcomeProjectId": int(deployed["welcome_id"] or 0),
             "welcomeProjectName": deployed["welcome_name"] or "",
+            "welcomeDeployedAt": deployed["welcome_at"] or "",
             "contentProjectId": int(deployed["content_id"] or 0),
             "contentProjectName": deployed["content_name"] or "",
+            "contentDeployedAt": deployed["content_at"] or "",
         },
         "pending": {
             "pages": int(pending_pages or 0),
@@ -4703,10 +4868,8 @@ def lowcode_record_payload(form, submitted, validate_required=True):
         raise ValueError("；".join(errors))
     if body_parts:
         payload["bodyJson"] = content_body_json_from_data("\n\n".join(body_parts))
-    if not payload["title"]:
-        payload["title"] = form.get("name") or "未命名资料"
     if not payload["summary"]:
-        payload["summary"] = payload["subtitle"] or (body_parts[0][:120] if body_parts else form.get("description", ""))
+        payload["summary"] = payload["subtitle"] or (body_parts[0][:120] if body_parts else "")
     return payload
 
 
@@ -5267,7 +5430,7 @@ def submit_lowcode_record(project_id, form_id, data, actor):
         with db_connect() as conn:
             existing_record = assert_lowcode_record_editable(conn, draft_record_id, project_id, form_id, actor, ("draft", "rejected"))
             content_item_id = existing_record["content_item_id"]
-    payload = lowcode_record_payload(form, submitted)
+    payload = lowcode_record_payload(form, submitted, validate_required=not can_review_user(actor))
     validate_content_asset_access(payload.get("coverAssetId"), payload.get("assets", []), actor)
     approve_now = can_review_user(actor)
     item = save_content_item(project_id, content_item_id, payload, actor, approve_now=approve_now)
@@ -5402,7 +5565,7 @@ def content_item_payload_from_data(data, current=None, project=None):
     content_type = normalize_content_type(
         data.get("contentType") or current.get("contentType") or default_content_type_for_module(module_key)
     )
-    title = field("title", "未命名资料") or "未命名资料"
+    title = field("title")
     body_json = content_body_json_from_data(
         data.get("bodyJson") if "bodyJson" in data else current.get("bodyJson"),
         data.get("body") or current.get("body") or "",
@@ -5470,7 +5633,12 @@ def content_item_body_html(snapshot, assets):
             continue
         caption = asset.get("caption") or asset.get("title") or snapshot.get("title", "")
         role = str(asset.get("role") or "").lower()
-        if role == "video" or re.search(r"\.(mp4|webm|ogg)(\?|#|$)", url, flags=re.I):
+        if role == "external_link":
+            html += (
+                f'<p class="external-link-entry"><strong>{html_attr(asset.get("title") or "跳转入口")}</strong>：'
+                f'<a href="{html_attr(url)}">{html_attr(caption or "打开入口")}</a></p>'
+            )
+        elif role == "video" or re.search(r"\.(mp4|webm|ogg)(\?|#|$)", url, flags=re.I):
             poster = asset.get("poster") or ""
             html += (
                 f'<figure><img src="{html_attr(poster)}" alt="{html_attr(caption)}">'
@@ -5501,6 +5669,8 @@ def content_item_cover_url(conn, snapshot, assets):
         if asset.get("role") in preferred_roles and asset.get("url"):
             return asset["url"]
     for asset in assets or []:
+        if asset.get("role") == "external_link":
+            continue
         if asset.get("url") and not re.search(r"\.(mp4|webm|ogg|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip)(\?|#|$)", asset["url"], flags=re.I):
             return asset["url"]
     return ""
@@ -6567,8 +6737,16 @@ def deploy_project(project_id):
     check = deploy_project_check(project_id)
     if not check["ok"]:
         raise ValueError("; ".join(check["errors"]))
+    now = now_iso()
     with db_connect() as conn:
-        conn.execute("UPDATE projects SET deployed = CASE WHEN id = ? THEN 1 ELSE 0 END", (project_id,))
+        conn.execute(
+            """
+            UPDATE projects
+            SET deployed = CASE WHEN id = ? THEN 1 ELSE 0 END,
+                deployed_at = CASE WHEN id = ? THEN ? ELSE deployed_at END
+            """,
+            (project_id, project_id, now),
+        )
     return get_project(project_id)
 
 
@@ -6719,6 +6897,7 @@ def deploy_content_project(project_id, page_ids=None):
     check = deploy_content_check(project_id, page_ids)
     if not check["ok"]:
         raise ValueError("; ".join(check["errors"]))
+    now = now_iso()
     with db_connect() as conn:
         exists = conn.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
         if not exists:
@@ -6730,7 +6909,14 @@ def deploy_content_project(project_id, page_ids=None):
             ).fetchall()
             page_ids = [row["id"] for row in rows]
         page_ids = [int(page_id) for page_id in page_ids if str(page_id).isdigit()]
-        conn.execute("UPDATE projects SET content_deployed = CASE WHEN id = ? THEN 1 ELSE 0 END", (project_id,))
+        conn.execute(
+            """
+            UPDATE projects
+            SET content_deployed = CASE WHEN id = ? THEN 1 ELSE 0 END,
+                content_deployed_at = CASE WHEN id = ? THEN ? ELSE content_deployed_at END
+            """,
+            (project_id, project_id, now),
+        )
         conn.execute("DELETE FROM deployed_pages")
         for page_id in page_ids:
             row = conn.execute(
@@ -6743,7 +6929,7 @@ def deploy_content_project(project_id, page_ids=None):
             if row:
                 conn.execute(
                     "INSERT OR IGNORE INTO deployed_pages (project_id, page_id, updated_at) VALUES (?, ?, ?)",
-                    (project_id, page_id, now_iso()),
+                    (project_id, page_id, now),
                 )
     return get_project(project_id)
 
@@ -7032,7 +7218,7 @@ def upsert_page(project_id, code, data):
         "category": field("category", DEFAULT_PAGE_CATEGORY) or DEFAULT_PAGE_CATEGORY,
         "source": field("source", DEFAULT_PAGE_SOURCE) or DEFAULT_PAGE_SOURCE,
         "published_at": field("publishedAt", field("published_at")),
-        "title": field("title", "未命名展示页") or "未命名展示页",
+        "title": field("title"),
         "subtitle": field("subtitle"),
         "body": sanitize_rich_html(field("body")),
         "image_url": field("imageUrl"),
@@ -7113,7 +7299,7 @@ def page_payload_from_data(data, current=None):
         "category": category,
         "source": field("source", DEFAULT_PAGE_SOURCE) or DEFAULT_PAGE_SOURCE,
         "publishedAt": field("publishedAt", current.get("publishedAt", "")),
-        "title": field("title", "Untitled page") or "Untitled page",
+        "title": field("title"),
         "subtitle": field("subtitle"),
         "body": sanitize_rich_html(field("body")),
         "imageUrl": field("imageUrl"),
@@ -7748,6 +7934,20 @@ def deployed_page_ids(project_id):
     return [row["page_id"] for row in rows]
 
 
+def deployed_page_records(project_id):
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT page_id, updated_at
+            FROM deployed_pages
+            WHERE project_id = ?
+            ORDER BY updated_at DESC, page_id
+            """,
+            (project_id,),
+        ).fetchall()
+    return [{"pageId": row["page_id"], "updatedAt": row["updated_at"]} for row in rows]
+
+
 def extract_code(value):
     text = str(value or "").strip()
     if not text:
@@ -8072,52 +8272,124 @@ def tcp_port_open(host, port, timeout=0.35):
         return False
 
 
+def tcp_port_available(host, port):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind((host, port))
+            return True
+    except OSError:
+        return False
+
+
+def unity_model_url(port):
+    return f"http://{UNITY_MODEL_HOST}:{port}/"
+
+
+def unity_model_candidate_ports():
+    ports = [UNITY_MODEL_PORT]
+    for item in str(UNITY_MODEL_FALLBACK_PORTS or "").split(","):
+        try:
+            port = int(item.strip())
+        except (TypeError, ValueError):
+            continue
+        if port > 0:
+            ports.append(port)
+    result = []
+    for port in ports:
+        if port not in result:
+            result.append(port)
+    return result
+
+
+def unity_model_http_ready(port, timeout=0.6):
+    try:
+        with socket.create_connection((UNITY_MODEL_HOST, port), timeout=timeout) as conn:
+            conn.settimeout(timeout)
+            request = f"GET / HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: close\r\n\r\n"
+            conn.sendall(request.encode("ascii"))
+            chunks = []
+            started = time.time()
+            while time.time() - started < timeout:
+                chunk = conn.recv(8192)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                if b"unity-canvas" in chunk or b"TemplateData" in chunk or b"Build/" in chunk:
+                    break
+    except OSError:
+        return False
+    data = b"".join(chunks)
+    header, _, body = data.partition(b"\r\n\r\n")
+    if b" 200 " not in header[:64]:
+        return False
+    text = body.decode("utf-8", errors="ignore").lower()
+    return "unity" in text or "templateData".lower() in text or "unity-canvas" in text or "build/" in text
+
+
+def wait_for_unity_model(port, process):
+    for _ in range(20):
+        if unity_model_http_ready(port, timeout=0.2):
+            return {"ok": True, "url": unity_model_url(port), "started": True, "port": port}
+        if process.poll() is not None:
+            return {"ok": False, "error": "Unity 模型服务启动后立即退出", "url": unity_model_url(port), "port": port}
+        time.sleep(0.05)
+    return {"ok": False, "error": "Unity 模型服务启动超时", "url": unity_model_url(port), "port": port}
+
+
 def start_unity_model_server():
     global UNITY_MODEL_PROCESS
     model_dir = UNITY_MODEL_DIR.resolve()
     if not model_dir.exists() or not (model_dir / "index.html").exists():
-        return {"ok": False, "error": "Unity 模型目录不存在或缺少 index.html", "url": UNITY_MODEL_URL}
+        return {"ok": False, "error": "Unity 模型目录不存在或缺少 index.html", "url": unity_model_url(UNITY_MODEL_PORT)}
 
-    if tcp_port_open(UNITY_MODEL_HOST, UNITY_MODEL_PORT):
-        return {"ok": True, "url": UNITY_MODEL_URL, "alreadyRunning": True}
+    for port in unity_model_candidate_ports():
+        if unity_model_http_ready(port):
+            return {"ok": True, "url": unity_model_url(port), "alreadyRunning": True, "port": port}
 
     with UNITY_MODEL_LOCK:
-        if UNITY_MODEL_PROCESS and UNITY_MODEL_PROCESS.poll() is None:
-            return {"ok": True, "url": UNITY_MODEL_URL, "alreadyRunning": True}
-        if tcp_port_open(UNITY_MODEL_HOST, UNITY_MODEL_PORT):
-            return {"ok": True, "url": UNITY_MODEL_URL, "alreadyRunning": True}
-
-        commands = [
-            ["py", "-m", "http.server", str(UNITY_MODEL_PORT), "--bind", UNITY_MODEL_HOST],
-            [sys.executable, "-m", "http.server", str(UNITY_MODEL_PORT), "--bind", UNITY_MODEL_HOST],
-        ]
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        if UNITY_MODEL_PROCESS and UNITY_MODEL_PROCESS.poll() is None:
+            for port in unity_model_candidate_ports():
+                if unity_model_http_ready(port):
+                    return {"ok": True, "url": unity_model_url(port), "alreadyRunning": True, "port": port}
+
+        blocked_ports = []
         last_error = ""
-        for command in commands:
-            try:
-                UNITY_MODEL_PROCESS = subprocess.Popen(
-                    command,
-                    cwd=str(model_dir),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=creationflags,
-                )
-                break
-            except OSError as exc:
-                UNITY_MODEL_PROCESS = None
-                last_error = str(exc)
+        for port in unity_model_candidate_ports():
+            if unity_model_http_ready(port):
+                return {"ok": True, "url": unity_model_url(port), "alreadyRunning": True, "port": port}
+            if not tcp_port_available(UNITY_MODEL_HOST, port):
+                blocked_ports.append(port)
+                continue
 
-        if not UNITY_MODEL_PROCESS:
-            return {"ok": False, "error": f"启动 Unity 模型服务失败：{last_error}", "url": UNITY_MODEL_URL}
+            commands = [
+                [sys.executable, "-m", "http.server", str(port), "--bind", UNITY_MODEL_HOST],
+                ["py", "-m", "http.server", str(port), "--bind", UNITY_MODEL_HOST],
+            ]
+            for command in commands:
+                try:
+                    UNITY_MODEL_PROCESS = subprocess.Popen(
+                        command,
+                        cwd=str(model_dir),
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        creationflags=creationflags,
+                    )
+                    result = wait_for_unity_model(port, UNITY_MODEL_PROCESS)
+                    if result.get("ok"):
+                        if blocked_ports:
+                            result["fallbackFrom"] = blocked_ports[0]
+                        return result
+                    last_error = result.get("error", "")
+                    if UNITY_MODEL_PROCESS and UNITY_MODEL_PROCESS.poll() is None:
+                        UNITY_MODEL_PROCESS.terminate()
+                    UNITY_MODEL_PROCESS = None
+                except OSError as exc:
+                    UNITY_MODEL_PROCESS = None
+                    last_error = str(exc)
 
-        for _ in range(30):
-            if tcp_port_open(UNITY_MODEL_HOST, UNITY_MODEL_PORT, timeout=0.15):
-                return {"ok": True, "url": UNITY_MODEL_URL, "started": True}
-            if UNITY_MODEL_PROCESS.poll() is not None:
-                return {"ok": False, "error": "Unity 模型服务启动后立即退出", "url": UNITY_MODEL_URL}
-            time.sleep(0.1)
-
-        return {"ok": False, "error": "Unity 模型服务启动超时", "url": UNITY_MODEL_URL}
+        blocked_text = f"；端口被占用：{', '.join(str(port) for port in blocked_ports)}" if blocked_ports else ""
+        return {"ok": False, "error": f"启动 Unity 模型服务失败：{last_error or '没有可用端口'}{blocked_text}", "url": unity_model_url(UNITY_MODEL_PORT)}
 
 
 def content_type_for(path):
@@ -8654,7 +8926,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 return
             project_id_text = path.rsplit("/", 1)[-1]
             project_id = int(project_id_text) if project_id_text.isdigit() else 0
-            self.send_json(200, {"ok": True, "pageIds": deployed_page_ids(project_id)})
+            self.send_json(200, {"ok": True, "pageIds": deployed_page_ids(project_id), "records": deployed_page_records(project_id)})
             return
 
         if path.startswith("/api/deploy/check/"):
@@ -9143,7 +9415,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 self.send_json(404, {"ok": False, "error": "项目不存在"})
                 return
             self.log_admin("deploy_content", "project", project["id"], project["name"], "deploy selected pages", changes="pageIds")
-            self.send_json(200, {"ok": True, "project": project, "pageIds": deployed_page_ids(project_id)})
+            self.send_json(200, {"ok": True, "project": project, "pageIds": deployed_page_ids(project_id), "records": deployed_page_records(project_id)})
             return
 
         if path.startswith("/api/reviews/"):

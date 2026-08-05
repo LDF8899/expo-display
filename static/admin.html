@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>数字门户后台</title>
-    <link rel="stylesheet" href="/static/admin.css?v=portal-logic-20260805g" />
+    <link rel="stylesheet" href="/static/admin.css?v=nav-restore-20260805a" />
   </head>
   <body>
     <aside class="sidebar">
@@ -28,8 +28,8 @@
           <p id="viewIntro">正在加载</p>
         </div>
         <div class="topbar-actions">
-          <a class="button ghost" href="/departments" target="_blank" rel="noopener">学校门户</a>
-          <a class="button ghost" href="/display" target="_blank" rel="noopener">扫码大屏</a>
+          <a class="button ghost" href="/departments">学校门户</a>
+          <a class="button ghost" href="/display">扫码大屏</a>
           <button id="refreshData" class="button ghost" type="button">刷新</button>
         </div>
       </header>
@@ -62,12 +62,27 @@
           </label>
           <button id="importUsers" class="button ghost" type="button">导入 CSV</button>
           <p id="userStatus" class="status-text"></p>
+          <div class="list-controls">
+            <input id="userSearch" placeholder="搜索账号、姓名、部门" />
+            <select id="userRoleFilter">
+              <option value="">全部角色</option>
+              <option value="admin">管理员</option>
+              <option value="department_admin">系部管理员</option>
+              <option value="teacher">老师</option>
+            </select>
+            <select id="userEnabledFilter">
+              <option value="">全部状态</option>
+              <option value="1">启用</option>
+              <option value="0">禁用</option>
+            </select>
+          </div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>部门</th><th>门户</th><th>状态</th><th>操作</th></tr></thead>
               <tbody id="usersTable"></tbody>
             </table>
           </div>
+          <div id="usersPager" class="list-pager"></div>
         </section>
       </section>
 
@@ -79,11 +94,19 @@
                <p id="projectsIntro">统一维护学校门户、系部门户和专题门户，并分配归属老师。</p>
             </div>
             <div class="toolbar">
+              <input id="projectSearch" placeholder="搜索门户、归属、路由" />
               <select id="projectTypeFilter">
                 <option value="">全部门户</option>
                 <option value="school">学校门户</option>
                 <option value="department">系部门户</option>
                 <option value="topic">专题门户</option>
+              </select>
+              <select id="projectPublishFilter">
+                <option value="">全部发布状态</option>
+                <option value="welcome">欢迎页已发布</option>
+                <option value="content">资料已发布</option>
+                <option value="pending">配置待审核</option>
+                <option value="unpublished">未发布</option>
               </select>
               <button id="newProject" class="button primary admin-only" type="button">新建门户</button>
             </div>
@@ -94,6 +117,7 @@
               <tbody id="projectsTable"></tbody>
             </table>
           </div>
+          <div id="projectsPager" class="list-pager"></div>
           <section id="projectHistoryPanel" class="history-panel" hidden>
             <div class="panel-head">
               <div><h2 id="projectHistoryTitle">门户历史</h2><p>查看门户配置提交、审核结果和字段变化。</p></div>
@@ -174,12 +198,16 @@
             <div><h2 id="pagesHeading">板块资料</h2><p id="pagesPanelIntro">按门户维护基本情况、专业设置、实训基地、产教融合、教学成果等板块资料。</p></div>
             <div class="toolbar">
               <select id="projectSelect"></select>
+              <input id="pageSearch" placeholder="搜索编号、标题、板块" />
               <select id="pageStatusFilter">
                 <option value="">全部状态</option>
                 <option value="pending">待审核</option>
                 <option value="approved">已通过</option>
                 <option value="rejected">已驳回</option>
                 <option value="pending_delete">删除待审</option>
+              </select>
+              <select id="pageModuleFilter">
+                <option value="">全部板块</option>
               </select>
               <button id="newPage" class="button primary" type="button">新建结构化资料</button>
               <button id="newLegacyPage" class="button ghost" type="button">旧版富文本</button>
@@ -251,6 +279,7 @@
                 <span>追踪老师按模板提交的原始记录、模板版本和生成后的结构化资料。</span>
               </div>
               <div class="lowcode-record-toolbar">
+                <input id="lowcodeRecordSearch" placeholder="搜索标题、模板、填报人" />
                 <select id="lowcodeRecordStatusFilter" aria-label="筛选模板提交记录状态">
                   <option value="all">全部状态</option>
                   <option value="draft">草稿</option>
@@ -264,6 +293,7 @@
               </div>
             </div>
             <div id="lowcodeRecordsList" class="lowcode-record-list"></div>
+            <div id="lowcodeRecordsPager" class="list-pager"></div>
           </section>
           <section id="lowcodeRecordDetailPanel" class="panel editor-panel" hidden>
             <div class="panel-head">
@@ -279,11 +309,16 @@
                 <span>按资料类型录入，前端自动套用人物、活动、荣誉、成果、场景、视频或图文抽屉模板。</span>
               </div>
               <div class="content-item-toolbar">
+                <input id="contentItemSearch" placeholder="搜索标题、摘要、类型" />
+                <select id="contentItemModuleFilter">
+                  <option value="">全部板块</option>
+                </select>
                 <span id="contentItemsSummary" class="badge">0 条</span>
                 <button id="exportAssetArchive" class="button small" type="button">导出素材归档 CSV</button>
               </div>
             </div>
             <div id="contentItemsGrid" class="content-items-grid"></div>
+            <div id="contentItemsPager" class="list-pager"></div>
           </section>
           <div class="panel-subhead legacy-subhead">
             <div>
@@ -297,6 +332,7 @@
               <tbody id="pagesTable"></tbody>
             </table>
           </div>
+          <div id="pagesPager" class="list-pager"></div>
           <section id="pageHistoryPanel" class="history-panel" hidden>
             <div class="panel-head">
               <div><h2 id="pageHistoryTitle">板块资料历史</h2><p>查看资料草稿、删除申请、审核结果和字段变化。</p></div>
@@ -434,7 +470,7 @@
             <input id="contentSortOrder" type="number" min="0" step="1" placeholder="排序" />
           </div>
           <div class="form-grid two">
-            <input id="contentTitle" placeholder="资料标题" required />
+            <input id="contentTitle" placeholder="资料标题" />
             <input id="contentSubtitle" placeholder="副标题 / 身份 / 活动信息" />
           </div>
           <textarea id="contentSummary" rows="2" placeholder="摘要：卡片和抽屉开头优先展示"></textarea>
@@ -447,7 +483,7 @@
                 <small>统一管理顺序、说明、展示角色和归档附件</small>
               </div>
               <div class="content-asset-entry">
-                <input id="contentAssetUrl" placeholder="粘贴图片/视频地址" />
+                <input id="contentAssetUrl" placeholder="粘贴图片/视频/附件/跳转地址" />
                 <input id="contentAssetCaption" placeholder="素材说明" />
                 <select id="contentAssetRole">
                   <option value="cover">封面</option>
@@ -511,7 +547,7 @@
             <input id="pagePublishedAt" type="date" />
           </div>
           <input id="pageSource" placeholder="来源" />
-            <input id="pageTitle" placeholder="资料标题" required />
+            <input id="pageTitle" placeholder="资料标题" />
           <input id="pageSubtitle" placeholder="副标题" />
           <section class="rich-editor-section">
             <div class="field-head">
@@ -590,8 +626,18 @@
             <button id="uploadAsset" class="button primary" type="button">上传素材/附件</button>
             <button id="cancelAssetPick" class="button ghost" type="button" hidden>返回编辑</button>
           </div>
+          <div class="list-controls">
+            <input id="assetSearch" placeholder="搜索文件名、上传人、地址" />
+            <select id="assetTypeFilter">
+              <option value="">全部类型</option>
+              <option value="image">图片</option>
+              <option value="video">视频</option>
+              <option value="document">文档/附件</option>
+            </select>
+          </div>
           <p id="assetStatus" class="status-text"></p>
           <div id="assetsGrid" class="asset-grid"></div>
+          <div id="assetsPager" class="list-pager"></div>
         </section>
       </section>
 
@@ -605,10 +651,12 @@
                 <option value="approved">已通过/已发布</option>
                 <option value="rejected">已退回</option>
               </select>
+              <input id="reviewSearch" placeholder="搜索门户、标题、提交人" />
               <button id="batchApprove" class="button primary" type="button">批量通过</button>
             </div>
           </div>
           <div id="reviewsList" class="review-list"></div>
+          <div id="reviewsPager" class="list-pager"></div>
         </section>
       </section>
 
@@ -620,7 +668,14 @@
             <button id="deployWelcome" class="button ghost" type="button">发布欢迎页</button>
           </div>
           <div id="deployCheck" class="deploy-check"></div>
+          <div class="list-controls">
+            <input id="deployPageSearch" placeholder="搜索可发布资料编号、标题、板块" />
+            <select id="deployPageModuleFilter">
+              <option value="">全部板块</option>
+            </select>
+          </div>
           <div id="deployPages" class="check-list"></div>
+          <div id="deployPagesPager" class="list-pager"></div>
           <button id="deployContent" class="button primary" type="button">发布板块资料</button>
           <p id="deployStatus" class="status-text"></p>
         </section>
@@ -643,6 +698,7 @@
               <tbody id="logsTable"></tbody>
             </table>
           </div>
+          <div id="logsPager" class="list-pager"></div>
         </section>
       </section>
 
@@ -661,6 +717,6 @@
     </main>
 
     <template id="emptyTpl"><div class="empty">暂无数据</div></template>
-    <script src="/static/admin.js?v=portal-logic-20260805g"></script>
+    <script src="/static/admin.js?v=nav-restore-20260805a"></script>
   </body>
 </html>

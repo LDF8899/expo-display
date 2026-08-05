@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS projects (
   display_config JSON NOT NULL,
   deployed TINYINT(1) NOT NULL DEFAULT 0,
   content_deployed TINYINT(1) NOT NULL DEFAULT 0,
+  deployed_at VARCHAR(40) NOT NULL DEFAULT '',
+  content_deployed_at VARCHAR(40) NOT NULL DEFAULT '',
   owner_username VARCHAR(64) NOT NULL DEFAULT 'admin',
   config_status VARCHAR(32) NOT NULL DEFAULT 'approved',
   pending_config_version_id BIGINT NULL,

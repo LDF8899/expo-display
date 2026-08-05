@@ -1,5 +1,16 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", reviewStatusFilter: "pending", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "" };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", reviewStatusFilter: "pending", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "", deploySelectionProjectId: "", deploySelectedPageIds: [] };
+const listState = {
+  users: { page: 1, pageSize: 10 },
+  projects: { page: 1, pageSize: 10 },
+  pages: { page: 1, pageSize: 10 },
+  contentItems: { page: 1, pageSize: 9 },
+  lowcodeRecords: { page: 1, pageSize: 8 },
+  assets: { page: 1, pageSize: 12 },
+  reviews: { page: 1, pageSize: 8 },
+  deployPages: { page: 1, pageSize: 12 },
+  logs: { page: 1, pageSize: 15 },
+};
 const standardModules = [
   { key: "overview", label: "基本情况", description: "定位、沿革、师资、数据", code: "OVERVIEW" },
   { key: "majors", label: "专业设置", description: "专业群、课程、就业方向", code: "MAJORS" },
@@ -48,6 +59,7 @@ const contentAssetRoles = [
   { key: "gallery", label: "图集" },
   { key: "video", label: "视频" },
   { key: "attachment", label: "附件" },
+  { key: "external_link", label: "跳转按钮" },
 ];
 const contentAssetRoleLabels = Object.fromEntries(contentAssetRoles.map((item) => [item.key, item.label]));
 const lowcodeMappingPresets = [
@@ -64,6 +76,7 @@ const lowcodeMappingPresets = [
   { value: "content_item.assets.gallery", label: "图集" },
   { value: "content_item.assets.video", label: "视频" },
   { value: "content_item.assets.attachment", label: "附件" },
+  { value: "content_item.assets.external_link", label: "跳转按钮" },
   { value: "__meta_label__", label: "扩展字段" },
 ];
 const lowcodeFieldTypes = [
@@ -270,6 +283,63 @@ function setStatus(node, text, type = "") {
 function setText(node, text) {
   if (node) node.textContent = text || "";
 }
+function inputValue(id) {
+  const node = $(id);
+  return node ? String(node.value || "").trim() : "";
+}
+function searchText(value) {
+  return String(value ?? "").toLowerCase();
+}
+function includesQuery(values, query) {
+  const text = searchText(query);
+  if (!text) return true;
+  return values.some((value) => searchText(value).includes(text));
+}
+function resetListPage(key) {
+  if (listState[key]) listState[key].page = 1;
+}
+function pagedList(key, items) {
+  const cfg = listState[key] || { page: 1, pageSize: 10 };
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / cfg.pageSize));
+  cfg.page = Math.min(Math.max(1, Number(cfg.page || 1)), pages);
+  const start = (cfg.page - 1) * cfg.pageSize;
+  return { items: items.slice(start, start + cfg.pageSize), total, page: cfg.page, pages, pageSize: cfg.pageSize };
+}
+function renderPager(containerId, key, total, label = "条") {
+  const node = $(containerId);
+  if (!node) return;
+  const cfg = listState[key] || { page: 1, pageSize: 10 };
+  const pages = Math.max(1, Math.ceil(Number(total || 0) / cfg.pageSize));
+  cfg.page = Math.min(Math.max(1, Number(cfg.page || 1)), pages);
+  const disabledPrev = cfg.page <= 1 ? "disabled" : "";
+  const disabledNext = cfg.page >= pages ? "disabled" : "";
+  node.innerHTML = `
+    <span>共 ${Number(total || 0)} ${label} · 第 ${cfg.page}/${pages} 页</span>
+    <div class="actions">
+      <button class="button small" type="button" data-list-page="${key}" data-page="prev" ${disabledPrev}>上一页</button>
+      <button class="button small" type="button" data-list-page="${key}" data-page="next" ${disabledNext}>下一页</button>
+    </div>
+  `;
+}
+function setModuleFilterOptions(id, portalType = selectedPortalType()) {
+  const node = $(id);
+  if (!node) return;
+  const current = node.value || "";
+  const options = (moduleSets[normalizePortalType(portalType)] || standardModules).map((module) => `<option value="${escapeHtml(module.key)}">${escapeHtml(module.label)}</option>`).join("");
+  node.innerHTML = `<option value="">全部板块</option>${options}`;
+  node.value = Array.from(node.options).some((option) => option.value === current) ? current : "";
+}
+function itemModuleKey(item) {
+  return item.moduleKey || item.contentModuleKey || item.targetModuleKey || "";
+}
+function assetKind(asset) {
+  const mime = String(asset.mimeType || "").toLowerCase();
+  const name = String(asset.originalFilename || asset.url || "").toLowerCase();
+  if (mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name)) return "image";
+  if (mime.startsWith("video/") || /\.(mp4|webm|mov|avi|mkv)$/i.test(name)) return "video";
+  return "document";
+}
 function normalizePortalType(value) {
   return portalTypeLabels[value] ? value : "department";
 }
@@ -341,7 +411,7 @@ function renderCurrentPortalStrip() {
     <div class="current-portal-meta">
       <span>资料 ${state.pages.length}</span>
       <span>可发布 ${ready}/${total || 0}</span>
-      ${route ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(route)}">前台预览</a>` : ""}
+      ${route ? `<a class="button small" href="${escapeHtml(route)}">前台预览</a>` : ""}
     </div>
   `;
 }
@@ -553,7 +623,7 @@ function looksLikeImageAsset(asset) {
   return /^image\//i.test(asset.mimeType || "") || /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(asset.url);
 }
 function looksLikeAttachmentAsset(asset) {
-  return asset.role === "attachment" || (!looksLikeImageAsset(asset) && !looksLikeVideoAsset(asset));
+  return asset.role === "attachment" || (!looksLikeImageAsset(asset) && !looksLikeVideoAsset(asset) && asset.role !== "external_link");
 }
 function defaultRoleForFile(file, index = 0) {
   const mime = String(file?.type || "");
@@ -562,6 +632,7 @@ function defaultRoleForFile(file, index = 0) {
   return "attachment";
 }
 function assetKindLabel(asset) {
+  if (asset.role === "external_link") return "LINK";
   if (looksLikeVideoAsset(asset)) return "VIDEO";
   if (looksLikeAttachmentAsset(asset)) return "FILE";
   return "IMAGE";
@@ -794,7 +865,7 @@ function lowcodeFieldInput(field, submitted = {}) {
   const conditionAttrs = lowcodeFieldConditionAttrs(field);
   const rawValue = Object.prototype.hasOwnProperty.call(submitted, field.key) ? submitted[field.key] : field.defaultValue;
   const defaultValue = escapeHtml(rawValue == null ? "" : rawValue);
-  const required = field.required ? " required" : "";
+  const required = field.required ? "required" : "";
   const maxLength = Number(field.maxLength || 0) > 0 ? ` maxlength="${Number(field.maxLength)}"` : "";
   const lengthHint = Number(field.maxLength || 0) > 0 ? `<small class="lowcode-length" data-lowcode-counter-for="${key}" data-lowcode-counter-max="${Number(field.maxLength)}">0/${Number(field.maxLength)}</small>` : "";
   const pattern = field.pattern ? ` pattern="${escapeHtml(field.pattern)}"` : "";
@@ -812,7 +883,7 @@ function lowcodeFieldInput(field, submitted = {}) {
     return `<label class="lowcode-field"${conditionAttrs}><span>${label}${field.required ? " *" : ""}</span><select data-lowcode-field="${key}"${required}>${emptyOption}${optionsHtml}</select></label>`;
   }
   if (field.type === "radio" && options.length) {
-    return `<fieldset class="lowcode-choice-field"${conditionAttrs}><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option) => `<label><input data-lowcode-field="${key}" name="lowcode_${key}" type="radio" value="${escapeHtml(option.value)}" ${field.required ? "required" : ""} ${String(option.value) === String(rawValue || "") ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
+    return `<fieldset class="lowcode-choice-field"${conditionAttrs}><legend>${label}${field.required ? " *" : ""}</legend>${options.map((option) => `<label><input data-lowcode-field="${key}" name="lowcode_${key}" type="radio" value="${escapeHtml(option.value)}" ${required} ${String(option.value) === String(rawValue || "") ? "checked" : ""} /> ${escapeHtml(option.label || option.value)}</label>`).join("")}</fieldset>`;
   }
   if (field.type === "checkbox_group" && options.length) {
     const defaults = new Set((Array.isArray(rawValue) ? rawValue : String(rawValue || "").split(/[，,、]/)).map((item) => String(item).trim()).filter(Boolean));
@@ -1078,8 +1149,23 @@ function lowcodeRecordStatus(record) {
 }
 function filteredLowcodeRecords() {
   const filter = state.lowcodeRecordStatusFilter || "all";
+  const query = inputValue("lowcodeRecordSearch");
   const records = state.lowcodeRecords || [];
-  return filter === "all" ? records : records.filter((record) => lowcodeRecordStatus(record) === filter);
+  return records.filter((record) => {
+    if (filter !== "all" && lowcodeRecordStatus(record) !== filter) return false;
+    const fields = record.data && record.data.fields ? record.data.fields : {};
+    return includesQuery([
+      record.contentTitle,
+      fields.title,
+      fields.summary,
+      record.formName,
+      record.formCode,
+      lowcodeSubmitterLabel(record),
+      record.contentModuleLabel,
+      record.contentTypeLabel,
+      statusText(lowcodeRecordStatus(record)),
+    ], query);
+  });
 }
 function csvCell(value) {
   const text = String(value ?? "").replaceAll('"', '""');
@@ -1767,9 +1853,11 @@ function renderLowcodeRecords() {
   });
   const records = state.lowcodeRecords || [];
   const visibleRecords = filteredLowcodeRecords();
+  const page = pagedList("lowcodeRecords", visibleRecords);
   const approved = records.filter((record) => (record.effectiveStatus || record.status) === "approved").length;
   $("lowcodeRecordsSummary").textContent = `${approved}/${records.length || 0} 已通过 · 当前 ${visibleRecords.length}`;
-  listNode.innerHTML = visibleRecords.length ? visibleRecords.slice(0, 12).map((record) => {
+  renderPager("lowcodeRecordsPager", "lowcodeRecords", visibleRecords.length, "条记录");
+  listNode.innerHTML = page.items.length ? page.items.map((record) => {
     const status = lowcodeRecordStatus(record);
     const data = record.data && record.data.fields ? record.data.fields : {};
     const summary = data.summary || data.subtitle || record.contentTitle || "暂无摘要";
@@ -1794,7 +1882,7 @@ function renderLowcodeRecords() {
         ${status === "rejected" ? `<button class="button small primary" type="button" data-lowcode-record-resume="${record.id}">按意见修改</button>` : ""}
         ${status === "draft" ? `<button class="button small danger" type="button" data-lowcode-record-delete="${record.id}">删除草稿</button>` : ""}
         ${record.contentItemId && !teacherOnly ? `<button class="button small primary" type="button" data-lowcode-record-edit="${record.contentItemId}">编辑生成资料</button>` : ""}
-        ${record.previewUrl && status === "approved" ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(record.previewUrl)}">预览</a>` : ""}
+        ${record.previewUrl && status === "approved" ? `<a class="button small" href="${escapeHtml(record.previewUrl)}">预览</a>` : ""}
       </div>
     </article>`;
   }).join("") : `<div class="empty">当前筛选条件下暂无模板提交记录</div>`;
@@ -3172,7 +3260,7 @@ function renderPortalCompletionOverview(rows) {
         ${moduleList ? `<div class="portal-completion-modules">${moduleList}</div>` : ""}
         <div class="actions">
           <button class="button small primary" type="button" data-dashboard-pages="${project.id}">维护资料</button>
-          ${previewUrl ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(previewUrl)}">前台预览</a>` : ""}
+          ${previewUrl ? `<a class="button small" href="${escapeHtml(previewUrl)}">前台预览</a>` : ""}
         </div>
       </article>
     `;
@@ -3254,7 +3342,7 @@ function renderPortalPriorityTasks(rows) {
         </div>
         <div class="actions">
           <button class="button small primary" type="button" data-dashboard-pages="${task.project.id}"${moduleKey}>${escapeHtml(task.actionText)}</button>
-          ${previewUrl ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(previewUrl)}">预览</a>` : ""}
+          ${previewUrl ? `<a class="button small" href="${escapeHtml(previewUrl)}">预览</a>` : ""}
         </div>
       </article>
     `;
@@ -3441,6 +3529,151 @@ function renderDashboardRecentUpdates(dashboard) {
   `;
 }
 
+function dashboardNumber(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? Math.max(0, number) : 0;
+}
+
+function dashboardPercent(value, total) {
+  const safeTotal = dashboardNumber(total);
+  if (!safeTotal) return 0;
+  return Math.max(0, Math.min(100, Math.round((dashboardNumber(value) / safeTotal) * 100)));
+}
+
+function renderDashboardDonut(title, value, total, caption, color = "#1e6bb8") {
+  const percent = dashboardPercent(value, total);
+  return `
+    <article class="dashboard-chart-card dashboard-donut-card">
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(caption || "")}</span>
+      </div>
+      <div class="dashboard-donut" style="--value:${percent}%; --color:${escapeHtml(color)}" aria-label="${escapeHtml(title)} ${percent}%">
+        <span>${percent}<small>%</small></span>
+      </div>
+      <p>${dashboardNumber(value)} / ${dashboardNumber(total)}</p>
+    </article>
+  `;
+}
+
+function renderDashboardStackedChart(title, segments, caption) {
+  const total = segments.reduce((sum, item) => sum + dashboardNumber(item.value), 0);
+  const bars = segments.map((item) => {
+    const percent = dashboardPercent(item.value, total);
+    return `<i title="${escapeHtml(item.label)} ${item.value}" style="--width:${percent}%; --color:${escapeHtml(item.color)}"></i>`;
+  }).join("");
+  const legend = segments.map((item) => `
+    <span><b style="--color:${escapeHtml(item.color)}"></b>${escapeHtml(item.label)} ${dashboardNumber(item.value)}</span>
+  `).join("");
+  return `
+    <article class="dashboard-chart-card dashboard-stacked-card">
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(caption || "")}</span>
+      </div>
+      <div class="dashboard-stacked-bar" aria-label="${escapeHtml(title)}">${bars || "<i></i>"}</div>
+      <div class="dashboard-chart-legend">${legend}</div>
+    </article>
+  `;
+}
+
+function renderDashboardBarChart(title, items, caption) {
+  const visible = (items || []).filter((item) => dashboardNumber(item.value) > 0).slice(0, 8);
+  const max = Math.max(...visible.map((item) => dashboardNumber(item.value)), 1);
+  const rows = visible.map((item, index) => {
+    const percent = dashboardPercent(item.value, max);
+    return `
+      <div class="dashboard-bar-row">
+        <span>${escapeHtml(item.label)}</span>
+        <div class="dashboard-bar-track"><i style="--width:${percent}%; --color:${escapeHtml(item.color || "#1e6bb8")}"></i></div>
+        <strong>${dashboardNumber(item.value)}</strong>
+      </div>
+    `;
+  }).join("");
+  return `
+    <article class="dashboard-chart-card dashboard-bar-card">
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(caption || "")}</span>
+      </div>
+      <div class="dashboard-bar-list">${rows || `<div class="empty">暂无可视化数据</div>`}</div>
+    </article>
+  `;
+}
+
+function renderDashboardVisualization(dashboard, portalRows) {
+  const summary = dashboard.summary || {};
+  const categories = dashboard.categories || [];
+  const rows = portalRows || [];
+  const portalStatus = rows.reduce((acc, row) => {
+    const total = dashboardNumber(row.coverage && row.coverage.total);
+    const ready = dashboardNumber(row.coverage && row.coverage.publishReady);
+    const covered = dashboardNumber(row.coverage && row.coverage.covered);
+    if (total && ready === total) acc.ready += 1;
+    else if (total && covered === total) acc.review += 1;
+    else acc.missing += 1;
+    return acc;
+  }, { ready: 0, review: 0, missing: 0 });
+  const portalTypeCounts = rows.reduce((acc, row) => {
+    const key = normalizePortalType(row.project && row.project.portalType);
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const lowcode = rows.reduce((acc, row) => {
+    const stats = row.lowcodeStats || {};
+    ["draft", "pending", "approved", "rejected", "total"].forEach((key) => { acc[key] += dashboardNumber(stats[key]); });
+    return acc;
+  }, { draft: 0, pending: 0, approved: 0, rejected: 0, total: 0 });
+  const pageTotal = dashboardNumber(summary.pages);
+  const enabledPages = dashboardNumber(summary.enabledPages);
+  const pendingPages = dashboardNumber(summary.pendingPages);
+  const rejectedPages = dashboardNumber(summary.rejectedPages);
+  const otherPages = Math.max(0, pageTotal - enabledPages - pendingPages - rejectedPages);
+  const typeItems = ["school", "department", "topic"].map((key, index) => ({
+    label: portalTypeLabel(key),
+    value: portalTypeCounts[key] || 0,
+    color: ["#1e6bb8", "#14746f", "#8a5a16"][index],
+  }));
+  const categoryItems = categories.map((item, index) => ({
+    label: item.name || "未分类",
+    value: item.count || 0,
+    color: ["#1e6bb8", "#14746f", "#8a5a16", "#8b5cf6", "#c94848", "#0f766e", "#64748b", "#b45309"][index % 8],
+  }));
+  return `
+    <section class="panel dashboard-visual-panel">
+      <div class="panel-head">
+        <div>
+          <h2>数据可视化看板</h2>
+          <p>把门户建设、资料审核、分类分布和模板填报进度集中到一屏，便于快速判断当前后台状态。</p>
+        </div>
+        <div class="dashboard-visual-kpis">
+          <span>扫码 ${dashboardNumber(summary.scans)}</span>
+          <span>今日 ${dashboardNumber(summary.todayScans)}</span>
+          <span>在线 ${dashboardNumber(summary.clients)}</span>
+        </div>
+      </div>
+      <div class="dashboard-chart-grid">
+        ${renderDashboardDonut("资料发布率", enabledPages, pageTotal, "已通过并启用的板块资料", "#1e6bb8")}
+        ${renderDashboardDonut("门户就绪率", portalStatus.ready, rows.length, "标准板块全部通过的门户", "#14746f")}
+        ${renderDashboardStackedChart("板块审核状态", [
+          { label: "已发布", value: enabledPages, color: "#1e6bb8" },
+          { label: "待审核", value: pendingPages, color: "#d8a11f" },
+          { label: "已驳回", value: rejectedPages, color: "#c94848" },
+          { label: "其他", value: otherPages, color: "#94a3b8" },
+        ], "按当前权限范围统计")}
+        ${renderDashboardStackedChart("低代码填报", [
+          { label: "草稿", value: lowcode.draft, color: "#94a3b8" },
+          { label: "待审", value: lowcode.pending, color: "#d8a11f" },
+          { label: "通过", value: lowcode.approved, color: "#14746f" },
+          { label: "驳回", value: lowcode.rejected, color: "#c94848" },
+        ], `共 ${lowcode.total} 条模板记录`)}
+        ${renderDashboardBarChart("门户类型分布", typeItems, "学校、系部、专题门户数量")}
+        ${renderDashboardBarChart("资料分类 Top 8", categoryItems, "按板块资料分类统计")}
+      </div>
+    </section>
+  `;
+}
+
 async function renderDashboard() {
   if (!state.projects.length) await loadProjects();
   const [data, portalRows] = await Promise.all([
@@ -3451,6 +3684,7 @@ async function renderDashboard() {
   const portalPriorityHtml = renderPortalPriorityTasks(portalRows);
   const lowcodeTodoHtml = renderDashboardLowcodeTodos(portalRows);
   const recentUpdatesHtml = renderDashboardRecentUpdates(data.dashboard || {});
+  const visualizationHtml = renderDashboardVisualization(data.dashboard || {}, portalRows);
   const s = data.dashboard.summary || {};
   const ops = data.dashboard.operations || {};
   const ready = ops.ready || {};
@@ -3467,7 +3701,7 @@ async function renderDashboard() {
           <h2>展厅页面逻辑</h2>
           <p>先维护学校门户，再维护各系部门户，最后补充每个板块的资料和特色入口。</p>
         </div>
-        <a class="button ghost" href="/departments" target="_blank" rel="noopener">预览学校门户</a>
+        <a class="button ghost" href="/departments">预览学校门户</a>
       </div>
       <div class="portal-flow">
         <article><span>1</span><strong>学校门户</strong><p>/departments：学校总入口，负责进入各系部和创新育人专题。</p></article>
@@ -3486,6 +3720,7 @@ async function renderDashboard() {
       <article class="metric"><span>待审核</span><strong>${s.pendingPages || 0}</strong></article>
       <article class="metric"><span>已驳回</span><strong>${s.rejectedPages || 0}</strong></article>
     </div>
+    ${visualizationHtml}
     ${portalPriorityHtml}
     ${lowcodeTodoHtml}
     ${recentUpdatesHtml}
@@ -3514,8 +3749,8 @@ async function renderDashboard() {
     <section class="panel ops-panel">
       <div class="panel-head"><div><h2>部署状态</h2><p>当前大屏发布目标</p></div></div>
       <div class="ops-grid">
-        <article><span>欢迎页项目</span><strong>${escapeHtml(deployed.welcomeProjectName || s.welcomeDeployed || "未部署")}</strong><small>ID ${deployed.welcomeProjectId || "-"}</small></article>
-        <article><span>当前门户</span><strong>${escapeHtml(deployed.contentProjectName || s.contentDeployed || "未部署")}</strong><small>ID ${deployed.contentProjectId || "-"}</small></article>
+        <article><span>欢迎页项目</span><strong>${escapeHtml(deployed.welcomeProjectName || s.welcomeDeployed || "未部署")}</strong><small>ID ${deployed.welcomeProjectId || "-"} · ${formatTime(deployed.welcomeDeployedAt)}</small></article>
+        <article><span>当前门户</span><strong>${escapeHtml(deployed.contentProjectName || s.contentDeployed || "未部署")}</strong><small>ID ${deployed.contentProjectId || "-"} · ${formatTime(deployed.contentDeployedAt)}</small></article>
         <article><span>资料待审</span><strong>${pending.pages || 0}</strong><small>提交后需审核</small></article>
         <article><span>门户待审</span><strong>${pending.projects || 0}</strong><small>配置变更</small></article>
       </div>
@@ -3523,7 +3758,17 @@ async function renderDashboard() {
   `;
 }
 function renderUsers() {
-  $("usersTable").innerHTML = state.users.length ? state.users.map((u) => `
+  const query = inputValue("userSearch");
+  const role = inputValue("userRoleFilter");
+  const enabled = inputValue("userEnabledFilter");
+  const filtered = (state.users || []).filter((u) => {
+    if (role && u.role !== role) return false;
+    if (enabled && String(u.enabled ? "1" : "0") !== enabled) return false;
+    return includesQuery([u.username, u.displayName, roleLabel(u.role), u.department], query);
+  });
+  const page = pagedList("users", filtered);
+  renderPager("usersPager", "users", filtered.length, "个账号");
+  $("usersTable").innerHTML = page.items.length ? page.items.map((u) => `
     <tr>
       <td>${escapeHtml(u.username)}</td><td>${escapeHtml(u.displayName)}</td><td>${escapeHtml(roleLabel(u.role))}</td><td>${escapeHtml(u.department || "-")}</td>
       <td>${u.projectCount || 0}</td><td>${u.enabled ? badge("approved") : badge("deleted")}</td>
@@ -3532,24 +3777,33 @@ function renderUsers() {
         <button class="button small" data-user-reset="${u.username}">重置密码</button>
         <button class="button small ${u.enabled ? "danger" : ""}" data-user-toggle="${u.username}" data-enabled="${u.enabled ? "0" : "1"}">${u.enabled ? "禁用" : "启用"}</button>
       </div></td>
-    </tr>`).join("") : `<tr><td colspan="7" class="empty">暂无账号</td></tr>`;
+    </tr>`).join("") : `<tr><td colspan="7" class="empty">当前筛选条件下暂无账号</td></tr>`;
 }
 function renderProjects() {
   const pagesLabel = canReview() ? "板块资料" : "资料";
   const configLabel = canReview() ? "门户配置" : "门户信息";
   const typeFilter = $("projectTypeFilter") ? $("projectTypeFilter").value : "";
-  const visibleProjects = typeFilter ? state.projects.filter((project) => normalizePortalType(project.portalType) === typeFilter) : state.projects;
-  const emptyText = typeFilter
-    ? `暂无${portalTypeLabel(typeFilter)}`
-    : canReview() ? "暂无门户" : "暂无分配的门户";
-  $("projectsTable").innerHTML = visibleProjects.length ? visibleProjects.map((p) => `
+  const publishFilter = inputValue("projectPublishFilter");
+  const query = inputValue("projectSearch");
+  const visibleProjects = (state.projects || []).filter((project) => {
+    if (typeFilter && normalizePortalType(project.portalType) !== typeFilter) return false;
+    if (publishFilter === "welcome" && !project.deployed) return false;
+    if (publishFilter === "content" && !project.contentDeployed) return false;
+    if (publishFilter === "pending" && project.configStatus !== "pending") return false;
+    if (publishFilter === "unpublished" && (project.deployed || project.contentDeployed)) return false;
+    return includesQuery([project.name, portalTypeLabel(project.portalType), project.ownerDisplayName, project.ownerUsername, project.portalSlug, portalRouteLabel(project)], query);
+  });
+  const page = pagedList("projects", visibleProjects);
+  renderPager("projectsPager", "projects", visibleProjects.length, "个门户");
+  const emptyText = "当前筛选条件下暂无门户";
+  $("projectsTable").innerHTML = page.items.length ? page.items.map((p) => `
     <tr>
-      <td><strong>${escapeHtml(p.name)}</strong><div class="portal-route-line">${escapeHtml(portalRouteLabel(p))}</div><div class="muted">ID ${p.id}</div></td>
+      <td><strong>${escapeHtml(p.name)}</strong><div class="portal-route-line">${escapeHtml(portalRouteLabel(p))}</div><div class="muted">ID ${p.id} · 更新 ${formatTime(p.updatedAt)}</div></td>
       <td>${escapeHtml(p.ownerDisplayName || p.ownerUsername || "-")}</td>
-      <td><span class="badge">${escapeHtml(portalTypeLabel(p.portalType))}</span> ${badge(p.configStatus || "approved")} ${p.deployed ? '<span class="badge success">欢迎页已发布</span>' : ""} ${p.contentDeployed ? '<span class="badge success">资料已发布</span>' : ""}</td>
+      <td><span class="badge">${escapeHtml(portalTypeLabel(p.portalType))}</span> ${badge(p.configStatus || "approved")} ${p.deployed ? `<span class="badge success">欢迎页已发布</span><div class="muted">欢迎页发布时间：${formatTime(p.deployedAt)}</div>` : ""} ${p.contentDeployed ? `<span class="badge success">资料已发布</span><div class="muted">资料发布时间：${formatTime(p.contentDeployedAt)}</div>` : ""}</td>
       <td>${p.pageCount || 0} / 待审 ${p.pendingPageCount || 0}</td>
       <td><div class="actions">
-        ${portalPreviewUrl(p) ? `<a class="button small" target="_blank" rel="noopener" href="${escapeHtml(portalPreviewUrl(p))}">预览</a>` : ""}
+        ${portalPreviewUrl(p) ? `<a class="button small" href="${escapeHtml(portalPreviewUrl(p))}">预览</a>` : ""}
         <button class="button small primary" data-project-pages="${p.id}">${pagesLabel}</button>
         <button class="button small" data-project-edit="${p.id}">${configLabel}</button>
         <button class="button small" data-project-history="${p.id}">历史</button>
@@ -3625,23 +3879,33 @@ async function loadPages(projectId = $("projectSelect").value) {
   renderTemplateActions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentModuleOptions((state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderContentTypeOptions();
+  setModuleFilterOptions("pageModuleFilter", (state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
+  setModuleFilterOptions("contentItemModuleFilter", (state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderCurrentPortalStrip();
   renderPages();
 }
 function renderPages() {
   syncTeacherPagesLayout();
   const filter = $("pageStatusFilter").value;
-  const list = filter ? state.pages.filter((p) => p.reviewStatus === filter) : state.pages;
+  const query = inputValue("pageSearch");
+  const moduleFilter = inputValue("pageModuleFilter");
+  const list = (state.pages || []).filter((p) => {
+    if (filter && p.reviewStatus !== filter) return false;
+    if (moduleFilter && p.moduleKey !== moduleFilter) return false;
+    return includesQuery([p.code, p.title, p.subtitle, p.category, p.moduleLabel, p.contentTypeLabel, statusText(p.reviewStatus)], query);
+  });
+  const page = pagedList("pages", list);
+  renderPager("pagesPager", "pages", list.length, "条资料");
   const editLabel = canReview() ? "编辑" : "编辑资料";
   const deleteLabel = canReview() ? "删除" : "申请删除";
-  const emptyText = isAdmin() ? "暂无板块资料" : "暂无板块资料";
+  const emptyText = "当前筛选条件下暂无板块资料";
   renderModuleLibrary();
   renderContentQuality();
   renderLowcodeForms();
   renderLowcodeReports();
   renderLowcodeRecords();
   renderContentItems(filter);
-  $("pagesTable").innerHTML = list.length ? list.map((p) => {
+  $("pagesTable").innerHTML = page.items.length ? page.items.map((p) => {
     const qr = p.qrAvailable ? `<a class="button small" target="_blank" href="/api/qr?data=${encodeURIComponent(buildQrUrl(p.projectId, p.code))}">二维码</a>` : `<span class="muted">审核后可用</span>`;
     const moduleLabel = p.moduleLabel || (moduleMeta(p.moduleKey) || {}).label || "";
     const typeLine = `<div class="muted">资料类型：${escapeHtml(p.contentTypeLabel || contentTypeLabel(p.contentType))}</div>`;
@@ -3654,7 +3918,7 @@ function renderPages() {
       <td><div class="actions">
         <button class="button small primary" data-page-edit="${escapeHtml(p.code)}">${editLabel}</button>
         <button class="button small" data-page-history="${escapeHtml(p.code)}">历史</button>
-        ${p.qrAvailable ? `<a class="button small" target="_blank" href="${buildQrUrl(p.projectId, p.code)}">预览</a>` : ""}
+        ${p.qrAvailable ? `<a class="button small" href="${buildQrUrl(p.projectId, p.code)}">预览</a>` : ""}
         <button class="button small danger" data-page-delete="${escapeHtml(p.code)}">${deleteLabel}</button>
       </div></td>
     </tr>`;
@@ -3662,14 +3926,22 @@ function renderPages() {
 }
 function renderContentItems(filter = $("pageStatusFilter").value) {
   if (!$("contentItemsGrid")) return;
-  const list = filter ? state.contentItems.filter((item) => item.reviewStatus === filter) : state.contentItems;
+  const query = inputValue("contentItemSearch");
+  const moduleFilter = inputValue("contentItemModuleFilter");
+  const list = (state.contentItems || []).filter((item) => {
+    if (filter && item.reviewStatus !== filter) return false;
+    if (moduleFilter && itemModuleKey(item) !== moduleFilter) return false;
+    return includesQuery([item.title, item.subtitle, item.summary, item.moduleLabel, item.contentTypeLabel, item.code, statusText(item.reviewStatus)], query);
+  });
+  const page = pagedList("contentItems", list);
   const ready = state.contentItems.filter((item) => item.reviewStatus === "approved" && item.enabled).length;
-  $("contentItemsSummary").textContent = `${ready}/${state.contentItems.length || 0} 可展示`;
-  $("contentItemsGrid").innerHTML = list.length ? list.map((item) => {
+  $("contentItemsSummary").textContent = `${ready}/${state.contentItems.length || 0} 可展示 · 当前 ${list.length}`;
+  renderPager("contentItemsPager", "contentItems", list.length, "条结构化资料");
+  $("contentItemsGrid").innerHTML = page.items.length ? page.items.map((item) => {
     const moduleLabel = item.moduleLabel || (moduleMeta(item.moduleKey) || {}).label || item.moduleKey || "-";
     const assetCount = (item.assets || []).length;
     const qr = item.reviewStatus === "approved" && item.enabled
-      ? `<a class="button small" target="_blank" href="${buildQrUrl(item.projectId, item.code)}">预览</a>`
+      ? `<a class="button small" href="${buildQrUrl(item.projectId, item.code)}">预览</a>`
       : `<span class="muted">审核后可预览</span>`;
     return `<article class="content-item-card">
       <header>
@@ -3692,7 +3964,7 @@ function renderContentItems(filter = $("pageStatusFilter").value) {
         <button class="button small danger" data-content-delete="${item.id}">${canReview() ? "删除" : "申请删除"}</button>
       </div>
     </article>`;
-  }).join("") : `<div class="empty">暂无结构化资料</div>`;
+  }).join("") : `<div class="empty">当前筛选条件下暂无结构化资料</div>`;
 }
 function shortReviewValue(value) {
   const text = String(value || "");
@@ -3740,7 +4012,7 @@ function renderVersionHistory(containerId, versions, type) {
       ${item.reviewNote ? `<p class="muted">审核意见：${escapeHtml(item.reviewNote)}</p>` : ""}
       ${item.changes ? `<p>${escapeHtml(item.changes)}</p>` : ""}
       ${renderReviewDiffs(item)}
-      ${type === "page" && item.previewUrl ? `<div class="actions"><a class="button small" target="_blank" href="${escapeHtml(item.previewUrl)}">版本预览</a></div>` : ""}
+      ${type === "page" && item.previewUrl ? `<div class="actions"><a class="button small" href="${escapeHtml(item.previewUrl)}">版本预览</a></div>` : ""}
     </article>
   `).join("") : `<div class="empty">暂无版本历史</div>`;
 }
@@ -3780,8 +4052,18 @@ async function renderReviews() {
     ...projects.map((r) => ({ ...r, type: "projects", label: "门户配置" })),
     ...contentItems.map((r) => ({ ...r, type: "content-items", label: r.operation === "delete" ? "结构化资料删除" : "结构化资料" })),
     ...pages.map((r) => ({ ...r, type: "pages", label: r.operation === "delete" ? "删除申请" : "板块资料" })),
-  ];
-  $("reviewsList").innerHTML = items.length ? items.map((r) => `
+  ].filter((r) => includesQuery([
+    r.label,
+    r.projectName,
+    r.submittedBy,
+    r.code,
+    r.status,
+    r.changes,
+    r.snapshot && (r.snapshot.title || r.snapshot.name || r.snapshot.subtitle),
+  ], inputValue("reviewSearch")));
+  const page = pagedList("reviews", items);
+  renderPager("reviewsPager", "reviews", items.length, "条审核");
+  $("reviewsList").innerHTML = page.items.length ? page.items.map((r) => `
     <article class="review-item">
       <header>
         <label>${status === "pending" ? `<input type="checkbox" data-review-check="${r.type}:${r.id}" />` : ""} <strong>${r.label}</strong> ${escapeHtml(r.projectName || "")}</label>
@@ -3796,14 +4078,14 @@ async function renderReviews() {
         ${renderReviewDiffs(r)}
       </div>
       <div class="actions">
-        ${r.type === "pages" ? `<a class="button small" target="_blank" href="/display?project=${r.projectId}&code=${encodeURIComponent(r.code)}">当前发布版</a>` : ""}
-        ${r.type === "pages" && r.previewUrl ? `<a class="button small" target="_blank" href="${escapeHtml(r.previewUrl)}">草稿预览</a>` : ""}
-        ${r.type === "content-items" && r.snapshot && r.snapshot.code ? `<a class="button small" target="_blank" href="/display?project=${r.projectId}&code=${encodeURIComponent(r.snapshot.code)}">同步页预览</a>` : ""}
+        ${r.type === "pages" ? `<a class="button small" href="/display?project=${r.projectId}&code=${encodeURIComponent(r.code)}">当前发布版</a>` : ""}
+        ${r.type === "pages" && r.previewUrl ? `<a class="button small" href="${escapeHtml(r.previewUrl)}">草稿预览</a>` : ""}
+        ${r.type === "content-items" && r.snapshot && r.snapshot.code ? `<a class="button small" href="/display?project=${r.projectId}&code=${encodeURIComponent(r.snapshot.code)}">同步页预览</a>` : ""}
         ${r.lowcodeRecord && r.lowcodeRecord.recordId ? `<button class="button small" type="button" data-review-lowcode-record="${r.lowcodeRecord.recordId}">查看填报</button>` : ""}
         ${status === "pending" ? `<button class="button small primary" data-review-approve="${r.type}:${r.id}">通过</button>
         <button class="button small danger" data-review-reject="${r.type}:${r.id}">驳回</button>` : ""}
       </div>
-    </article>`).join("") : `<div class="empty">暂无${escapeHtml(statusText(status))}资料</div>`;
+    </article>`).join("") : `<div class="empty">当前筛选条件下暂无${escapeHtml(statusText(status))}资料</div>`;
 }
 async function renderDeploy() {
   const projectId = $("deployProject").value || (state.projects[0] && state.projects[0].id);
@@ -3813,12 +4095,29 @@ async function renderDeploy() {
   const pagesData = await jsonApi(`/api/projects/${projectId}/pages`);
   const deployed = await jsonApi(`/api/deploy/content/${projectId}`);
   const checkData = await jsonApi(`/api/deploy/check/${projectId}`);
-  const selected = new Set((deployed.pageIds || []).map(String));
-  const approved = (pagesData.pages || []).filter((p) => p.reviewStatus === "approved" && p.enabled);
+  const deployedTimes = Object.fromEntries((deployed.records || []).map((record) => [String(record.pageId), record.updatedAt || ""]));
+  const portalType = normalizePortalType(project && project.portalType);
+  setModuleFilterOptions("deployPageModuleFilter", portalType);
+  const query = inputValue("deployPageSearch");
+  const moduleFilter = inputValue("deployPageModuleFilter");
+  const allApproved = (pagesData.pages || []).filter((p) => p.reviewStatus === "approved" && p.enabled);
+  if (String(state.deploySelectionProjectId) !== String(projectId)) {
+    const deployedIds = (deployed.pageIds || []).map(String);
+    state.deploySelectionProjectId = String(projectId);
+    state.deploySelectedPageIds = deployedIds.length ? deployedIds : allApproved.map((p) => String(p.id));
+  }
+  const selected = new Set(state.deploySelectedPageIds.map(String));
+  const approved = allApproved.filter((p) => {
+    if (p.reviewStatus !== "approved" || !p.enabled) return false;
+    if (moduleFilter && p.moduleKey !== moduleFilter) return false;
+    return includesQuery([p.code, p.title, p.subtitle, p.category, p.moduleLabel, p.contentTypeLabel], query);
+  });
+  const page = pagedList("deployPages", approved);
   renderDeployCheck(checkData.check || {}, project);
-  $("deployPages").innerHTML = approved.length ? approved.map((p) => `
-    <label class="check-item"><input type="checkbox" value="${p.id}" ${selected.size ? (selected.has(String(p.id)) ? "checked" : "") : "checked"} /> ${escapeHtml(p.code)} - ${escapeHtml(p.title)}</label>
-  `).join("") : `<div class="empty">该门户暂无已通过板块资料</div>`;
+  renderPager("deployPagesPager", "deployPages", approved.length, "条可发布资料");
+  $("deployPages").innerHTML = page.items.length ? page.items.map((p) => `
+    <label class="check-item"><input type="checkbox" value="${p.id}" ${selected.has(String(p.id)) ? "checked" : ""} /> <span>${escapeHtml(p.code)} - ${escapeHtml(p.title)}${deployedTimes[String(p.id)] ? ` · 已发布于 ${formatTime(deployedTimes[String(p.id)])}` : ""}</span></label>
+  `).join("") : `<div class="empty">当前筛选条件下暂无已通过板块资料</div>`;
 }
 function renderDeployCheck(check, project = null) {
   const errors = check.errors || [];
@@ -3833,14 +4132,14 @@ function renderDeployCheck(check, project = null) {
       title: "欢迎页发布",
       badge: isSchoolPortal ? "可发布" : "仅学校门户",
       body: isSchoolPortal
-        ? "发布后影响 /display 欢迎页，适合放学校统一入口和官网二维码。"
+        ? `发布后影响 /display 欢迎页；当前发布时间：${formatTime(project && project.deployedAt)}。`
         : "当前门户不能发布为 /display 欢迎页；欢迎页只允许选择学校门户。"
     },
     {
       className: "info",
       title: "门户实时资料",
       badge: previewUrl || "门户预览",
-      body: "已通过且启用的资料会进入对应门户页；草稿、待审核、禁用资料不会出现在前台。"
+      body: `已通过且启用的资料会进入对应门户页；资料发布时间：${formatTime(project && project.contentDeployedAt)}。`
     },
     {
       className: "info",
@@ -3890,7 +4189,15 @@ function formatBytes(value) {
 }
 function renderAssets() {
   $("cancelAssetPick").hidden = !state.assetTargetInput;
-  $("assetsGrid").innerHTML = state.assets.length ? state.assets.map((asset) => `
+  const query = inputValue("assetSearch");
+  const typeFilter = inputValue("assetTypeFilter");
+  const filtered = (state.assets || []).filter((asset) => {
+    if (typeFilter && assetKind(asset) !== typeFilter) return false;
+    return includesQuery([asset.originalFilename, asset.storageKey, asset.url, asset.ownerUsername, asset.mimeType], query);
+  });
+  const page = pagedList("assets", filtered);
+  renderPager("assetsPager", "assets", filtered.length, "个资源");
+  $("assetsGrid").innerHTML = page.items.length ? page.items.map((asset) => `
     <article class="asset-card">
       <div class="asset-thumb">${assetThumbHtml(asset, asset.originalFilename || "asset")}</div>
       <div class="asset-meta">
@@ -3903,7 +4210,7 @@ function renderAssets() {
         <button class="button small danger" data-asset-delete="${asset.id}">删除</button>
       </div>
     </article>
-  `).join("") : `<div class="empty">暂无资源</div>`;
+  `).join("") : `<div class="empty">当前筛选条件下暂无资源</div>`;
 }
 async function openAssetPicker(inputId) {
   state.assetTargetInput = inputId;
@@ -3944,7 +4251,10 @@ async function renderLogs() {
   if ($("logFrom").value) params.set("from", $("logFrom").value);
   if ($("logTo").value) params.set("to", $("logTo").value);
   const data = await jsonApi(`/api/admin/logs?${params}`);
-  $("logsTable").innerHTML = (data.logs || []).length ? data.logs.map((l) => `
+  const logs = data.logs || [];
+  const page = pagedList("logs", logs);
+  renderPager("logsPager", "logs", logs.length, "条日志");
+  $("logsTable").innerHTML = page.items.length ? page.items.map((l) => `
     <tr><td>${formatTime(l.createdAt)}</td><td>${escapeHtml(l.username)}</td><td>${escapeHtml(l.action)}</td><td>${escapeHtml(l.targetLabel || l.targetId)}</td><td>${escapeHtml(l.changes || l.detail)}</td><td>${escapeHtml(l.ip)}</td></tr>
   `).join("") : `<tr><td colspan="6" class="empty">暂无日志</td></tr>`;
 }
@@ -4219,10 +4529,34 @@ function pagePayload() {
   };
 }
 
+function bindListFilters(ids, key, render) {
+  ids.forEach((id) => {
+    const node = $(id);
+    if (!node) return;
+    const eventName = node.tagName === "INPUT" ? "input" : "change";
+    node.addEventListener(eventName, () => {
+      resetListPage(key);
+      render();
+    });
+  });
+}
+
 $("logout").addEventListener("click", async () => { await api("/api/logout", { method: "POST" }); location.href = "/login"; });
 $("refreshData").addEventListener("click", () => refreshView());
-$("projectTypeFilter").addEventListener("change", renderProjects);
-$("projectSelect").addEventListener("change", () => loadPages());
+bindListFilters(["userSearch", "userRoleFilter", "userEnabledFilter"], "users", renderUsers);
+bindListFilters(["projectSearch", "projectTypeFilter", "projectPublishFilter"], "projects", renderProjects);
+bindListFilters(["pageSearch", "pageStatusFilter", "pageModuleFilter"], "pages", renderPages);
+bindListFilters(["contentItemSearch", "contentItemModuleFilter"], "contentItems", () => renderContentItems($("pageStatusFilter").value));
+bindListFilters(["lowcodeRecordSearch"], "lowcodeRecords", renderLowcodeRecords);
+bindListFilters(["assetSearch", "assetTypeFilter"], "assets", renderAssets);
+bindListFilters(["reviewSearch"], "reviews", renderReviews);
+bindListFilters(["deployPageSearch", "deployPageModuleFilter"], "deployPages", renderDeploy);
+$("projectSelect").addEventListener("change", () => {
+  resetListPage("pages");
+  resetListPage("contentItems");
+  resetListPage("lowcodeRecords");
+  loadPages();
+});
 $("projectPortalType").addEventListener("change", () => {
   syncProjectPortalSlugField();
   renderTemplateActions($("projectPortalType").value);
@@ -4233,17 +4567,54 @@ $("projectPortalType").addEventListener("change", () => {
 $("qualityModuleSelect").addEventListener("change", syncModuleQualityEditor);
 $("applyModuleQualityRule").addEventListener("click", applyModuleQualityRule);
 $("removeModuleQualityRule").addEventListener("click", removeModuleQualityRule);
-$("pageStatusFilter").addEventListener("change", renderPages);
 $("lowcodeRecordStatusFilter").addEventListener("change", (event) => {
   state.lowcodeRecordStatusFilter = event.target.value;
+  resetListPage("lowcodeRecords");
   renderLowcodeRecords();
 });
 $("exportLowcodeRecords").addEventListener("click", exportLowcodeRecordsCsv);
 $("exportLowcodeRecordDetails").addEventListener("click", exportLowcodeRecordDetailsCsv);
 $("exportLowcodeReport").addEventListener("click", exportLowcodeReportCsv);
 $("exportLowcodeReminderReport").addEventListener("click", exportLowcodeReminderReportCsv);
-$("deployProject").addEventListener("change", renderDeploy);
-$("filterLogs").addEventListener("click", renderLogs);
+$("deployProject").addEventListener("change", () => {
+  resetListPage("deployPages");
+  state.deploySelectionProjectId = "";
+  state.deploySelectedPageIds = [];
+  renderDeploy();
+});
+$("filterLogs").addEventListener("click", () => {
+  resetListPage("logs");
+  renderLogs();
+});
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-list-page]");
+  if (!button) return;
+  const key = button.dataset.listPage;
+  const cfg = listState[key];
+  if (!cfg) return;
+  const direction = button.dataset.page;
+  cfg.page += direction === "next" ? 1 : -1;
+  const renderers = {
+    users: renderUsers,
+    projects: renderProjects,
+    pages: renderPages,
+    contentItems: () => renderContentItems($("pageStatusFilter").value),
+    lowcodeRecords: renderLowcodeRecords,
+    assets: renderAssets,
+    reviews: renderReviews,
+    deployPages: renderDeploy,
+    logs: renderLogs,
+  };
+  if (renderers[key]) renderers[key]();
+});
+$("deployPages").addEventListener("change", (event) => {
+  const input = event.target.closest("input[type='checkbox']");
+  if (!input) return;
+  const selected = new Set((state.deploySelectedPageIds || []).map(String));
+  if (input.checked) selected.add(String(input.value));
+  else selected.delete(String(input.value));
+  state.deploySelectedPageIds = Array.from(selected);
+});
 $("exportLogs").addEventListener("click", () => {
   const params = new URLSearchParams();
   if ($("logUser").value) params.set("username", $("logUser").value);
@@ -4913,7 +5284,7 @@ $("deployWelcome").addEventListener("click", async () => {
 });
 $("deployContent").addEventListener("click", async () => {
   const projectId = $("deployProject").value;
-  const pageIds = Array.from($("deployPages").querySelectorAll("input:checked")).map((input) => Number(input.value));
+  const pageIds = (state.deploySelectedPageIds || []).map((value) => Number(value)).filter(Boolean);
   try {
     await jsonApi("/api/deploy/content", body({ projectId, pageIds }));
     setStatus($("deployStatus"), "板块资料已发布", "success");

@@ -273,6 +273,8 @@ async (page) => {{
   await page.waitForSelector("#homeDepartmentSwitch", {{ timeout: 10000 }});
   const unityTarget = await page.locator(".unity-test-link").getAttribute("target");
   if (unityTarget === "_blank") throw new Error("Unity test link should stay in the current page");
+  const unityHref = await page.locator(".unity-test-link").getAttribute("href");
+  if (!unityHref || unityHref.includes("localhost")) throw new Error(`Unity test link should avoid localhost IPv6 routing, got ${{unityHref}}`);
   const matrix = await page.evaluate(() => {{
     const cards = Array.from(document.querySelectorAll(".fusion-card"));
     const buckets = (values) => Array.from(new Set(values.map((value) => Math.round(value / 8) * 8))).sort((a, b) => a - b);

@@ -165,6 +165,14 @@ def assert_lowcode_template_config_forbidden(base_url, session, form_id, version
     )
 
 
+def assert_permissions(session, expected, forbidden=None):
+    permissions = set(session["session"].get("permissions") or [])
+    expected = set(expected)
+    forbidden = set(forbidden or [])
+    if not expected.issubset(permissions) or permissions.intersection(forbidden):
+        raise RuntimeError(f"permission boundary mismatch: expected={expected}, forbidden={forbidden}, session={session['session']}")
+
+
 def visible_review_project_ids(reviews):
     ids = set()
     for key in ("pages", "projects", "contentItems"):
@@ -211,6 +219,7 @@ def main():
         try:
             time.sleep(2)
             admin = login(base_url, "admin", "Admin-Department-Scope-2026")
+            assert_permissions(admin, {"admin", "review"})
             import_result = import_users_csv(
                 base_url,
                 admin,
@@ -231,6 +240,8 @@ def main():
 
             biz_teacher = login(base_url, "bizteacher", "Biz-Teacher-Password-2026")
             agri_teacher = login(base_url, "agriteacher", "Agri-Teacher-Password-2026")
+            assert_permissions(biz_teacher, {"teacher"}, {"admin", "review", "department_admin"})
+            expect_status(401, f"{base_url}/api/reviews?status=pending", headers={"Cookie": biz_teacher["cookie"]})
             submit_page(base_url, biz_teacher, biz_project["id"], "SCOPE-BIZ", "财经商贸待审")
             submit_page(base_url, agri_teacher, agri_project["id"], "SCOPE-AGRI", "现代农业待审")
             lowcode_record = submit_lowcode_record(base_url, biz_teacher, biz_project["id"])
@@ -239,6 +250,7 @@ def main():
             insert_asset(db_path, "agriteacher")
 
             dept_admin = login(base_url, "deptboss", "Dept-Boss-Password-2026")
+            assert_permissions(dept_admin, {"department_admin", "review"}, {"admin"})
             if "department_admin" not in dept_admin["session"].get("permissions", []):
                 raise RuntimeError(f"department admin permission missing: {dept_admin['session']}")
 

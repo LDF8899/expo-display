@@ -289,6 +289,79 @@
       section.backendPageCode = page.code || "";
       section.backendUpdatedAt = page.updatedAt || "";
     });
+    mergeExternalLinksFromContentItems(kind, data, sectionById, payload.contentItems || []);
+  }
+
+  function mergeExternalLinksFromContentItems(kind, data, sectionById, items) {
+    if (kind !== "topics") return;
+    (items || []).forEach(function (item, index) {
+      var links = externalLinksForContentItem(item);
+      if (!links.length) return;
+      var sectionId = sectionIdForPage(kind, {
+        id: item.id || index + 1,
+        code: item.code || "",
+        moduleKey: item.moduleKey || "",
+        category: item.moduleLabel || "",
+        title: item.title || ""
+      }, index);
+      var section = sectionById[sectionId];
+      if (!section) {
+        section = {
+          id: sectionId,
+          title: item.moduleLabel || item.title || sectionId,
+          blocks: itemToBlocks(item),
+          contentType: item.contentType || defaultContentTypeForSection(sectionId)
+        };
+        data.sections.push(section);
+        sectionById[sectionId] = section;
+      }
+      section.externalLinks = uniqueExternalLinks((section.externalLinks || []).concat(links));
+      if (item.updatedAt && (!section.backendUpdatedAt || item.updatedAt > section.backendUpdatedAt)) {
+        section.backendUpdatedAt = item.updatedAt;
+      }
+    });
+  }
+
+  function externalLinksForContentItem(item) {
+    var assets = Array.isArray(item && item.assets) ? item.assets : [];
+    return assets.filter(function (asset) {
+      return asset && String(asset.role || "").toLowerCase() === "external_link" && String(asset.url || "").trim();
+    }).map(function (asset) {
+      return {
+        label: asset.caption || asset.title || item.title || "打开体验系统",
+        href: String(asset.url || "").trim(),
+        description: item.summary || asset.title || "",
+        sourceTitle: item.title || ""
+      };
+    });
+  }
+
+  function uniqueExternalLinks(links) {
+    var seen = {};
+    return (links || []).filter(function (link) {
+      var href = String(link && link.href || "").trim();
+      var label = String(link && link.label || "").trim();
+      var key = href + "\n" + label;
+      if (!href || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+
+  function itemToBlocks(item) {
+    var blocks = [];
+    if (item && item.summary) blocks.push({ type: "text", content: item.summary });
+    var body = Array.isArray(item && item.bodyJson) ? item.bodyJson : [];
+    body.forEach(function (block) {
+      if (!block) return;
+      if (typeof block === "string") blocks.push({ type: "text", content: block });
+      else if (block.type === "paragraph" && block.text) blocks.push({ type: "text", content: block.text });
+      else if (block.type === "html" && block.html) blocks = blocks.concat(htmlToBlocks(block.html));
+      else if ((block.type === "text" || block.type === "heading") && (block.content || block.text)) {
+        blocks.push({ type: "text", content: block.content || block.text });
+      }
+    });
+    return uniqueMediaBlocks(blocks);
   }
 
   function sectionIdForPage(kind, page, index) {
@@ -451,7 +524,7 @@
       if (!link) return;
       event.preventDefault();
       var go = function (url) {
-        window.location.href = url;
+        window.location.assign(url);
       };
       fetch(link.dataset.unityStart, { cache: "no-store" })
         .then(function (response) { return response.ok ? response.json() : null; })
@@ -959,8 +1032,44 @@
       title: title,
       lead: rest[0] || first,
       points: rest.slice(1, 5),
-      media: mediaBlocks
+      media: mediaBlocks,
+      externalLinks: section.externalLinks || []
     };
+  }
+
+  function renderExperienceLinks(links, compact, inert) {
+    var list = (links || []).filter(function (link) { return link && link.href; });
+    if (!list.length) return "";
+    return '<div class="experience-links' + (compact ? " is-compact" : "") + '">' + list.map(function (link) {
+      return '<a class="experience-link" href="' + esc(link.href) + '"' + (inert ? ' tabindex="-1"' : "") + '>' +
+        '<span>' + esc(link.label || "打开体验系统") + '</span>' +
+        '<em>打开</em>' +
+        '</a>';
+    }).join("") + '</div>';
+  }
+
+  function topicExternalLinks(data) {
+    var links = [];
+    (data.sections || []).forEach(function (section) {
+      (section.externalLinks || []).forEach(function (link) {
+        links.push({
+          label: link.label,
+          href: link.href,
+          sourceTitle: link.sourceTitle || displaySectionTitle(section),
+          description: link.description || ""
+        });
+      });
+    });
+    return uniqueExternalLinks(links);
+  }
+
+  function renderTopicExperienceDock(data) {
+    var links = topicExternalLinks(data);
+    if (!links.length) return "";
+    return '<section class="topic-experience-dock" aria-label="外部体验系统入口">' +
+      '<div class="topic-experience-head"><span>External Systems</span><strong>体验入口</strong></div>' +
+      renderExperienceLinks(links, false, false) +
+      '</section>';
   }
 
   function renderTopicLoopPage(data) {
@@ -982,6 +1091,7 @@
       '<p>' + esc(data.summary || TOPIC_SUMMARY[data.id] || "围绕重点专业群、成果资源和展示素材组织专题内容。") + '</p></div>' +
       '<div class="topic-loop-stats">' + statHtml + '</div>' +
       '</header>' +
+      renderTopicExperienceDock(data) +
       '<div class="topic-loop-mask">' +
       '<div class="topic-loop-track">' +
       '<div class="topic-loop-sequence">' + sectionsHtml + '</div>' +
@@ -1085,6 +1195,7 @@
       '<span class="topic-display-code">编号 ' + esc(code) + '</span>' +
       '<h1>' + esc(section.backendPageTitle || displaySectionTitle(section)) + '</h1>' +
       (intro ? '<p class="topic-display-subtitle">' + esc(intro) + '</p>' : '') +
+      renderExperienceLinks(section.externalLinks || [], false, false) +
       '<div class="topic-display-body">' + renderTypedFullBlockSequence(blocks, displaySectionTitle(section), contentType) + '</div>' +
       '<footer class="topic-display-footer"><span>学校大屏展示内容</span><span>扫码进入子级展示页</span></footer>' +
       '</article>';
@@ -1779,6 +1890,7 @@
       if (moduleButton) { openDepartmentModule(moduleButton.dataset.module); return; }
       var rail = e.target.closest("[data-go-kind][data-go-id]");
       if (rail) { openDetail(rail.dataset.goKind, rail.dataset.goId, 0); return; }
+      if (e.target.closest(".experience-link")) return;
       var topicLoopCard = e.target.closest(".topic-loop-card[data-section-id]");
       if (topicLoopCard) { openTopicLoopSection(topicLoopCard.dataset.sectionId); return; }
       var frame = e.target.closest(".photo-frame[data-lightbox]");
@@ -1850,7 +1962,32 @@
         else if (r.id && (r.id !== state.id || r.kind !== state.kind)) openDetail(r.kind, r.id, r.section, { skipHistory: true });
         else if (r.id) goSection(r.section, { skipHistory: true });
       });
+      window.addEventListener("pagehide", function () {
+        stopTopicMediaCarousels();
+        stopDrawerMediaCarousels();
+        stopDrawerAutoLoop();
+      });
+      window.addEventListener("pageshow", function (event) {
+        if (!event.persisted) return;
+        restoreRouteFromCache();
+      });
     });
+  }
+
+  function restoreRouteFromCache() {
+    fitCanvas();
+    Promise.all([loadPortalContent(), loadPortalChrome()])
+      .catch(function () { /* keep cached data */ })
+      .then(function () {
+        applyPortalChrome();
+        var route = parsePath();
+        if (route.kind === "home") {
+          goHome({ skipHistory: true });
+          renderSchoolQr($("homeQr"));
+        } else if (route.id) {
+          openDetail(route.kind, route.id, route.section, { skipHistory: true });
+        }
+      });
   }
   boot();
 })();
