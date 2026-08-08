@@ -659,6 +659,43 @@
     @media (max-width: 2559px) { html { font-size: 10px; } }
     @media (max-width: 1999px) { html { font-size: 7.5px; } }
     @media (max-width: 1439px) { html { font-size: 5.35px; } }
+
+    /* Topic override: 数字文旅专题 */
+    :root {
+      --ink: #314b4c;
+      --green: #36666a;
+      --gold: #bb9051;
+      --rose: #c97d8f;
+    }
+
+    body { background: #eef0e8; }
+    .viewport { background: #e9eee9; }
+    .page { background-image: url("页面/digital-tourism-bg.png"); }
+    h1 { color: #335e60; }
+    .tagline { color: #5c7370; }
+    .seal { border-color: #356c70; }
+    .seal::before,
+    .panel-title .icon,
+    .partner-icons span::before,
+    .result-item::before {
+      background: linear-gradient(135deg, #4f8b8a, #c97d8f 54%, #c9a15c);
+    }
+    .round-link.green { background: #356c70; }
+    .round-link.gold { background: #bf9150; }
+    .dots span:first-child,
+    .arrow.next { background: #356c70; }
+    .play::before { border-left-color: #376f73; }
+    .video-copy strong { color: #335e60; }
+    .photo {
+      background-image: linear-gradient(180deg, rgba(255,255,255,0), rgba(31,76,80,0.14)), url("页面/digital-tourism-bg.png");
+    }
+    .video-box {
+      background-image:
+        linear-gradient(90deg, rgba(15, 43, 47, 0.24), rgba(15, 43, 47, 0.04)),
+        linear-gradient(0deg, rgba(8, 22, 26, 0.68), transparent 36%),
+        url("页面/digital-tourism-bg.png");
+    }
+    .film-chip { background-image: url("页面/digital-tourism-bg.png"); }
   </style>
 </head>
 <body>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>毕节职业技术学院数字文旅专题</title>
+  <title>毕节职业技术学院智慧能源专题</title>
   <style>
     :root {
       --ink: #314b4c;
@@ -659,11 +659,48 @@
     @media (max-width: 2559px) { html { font-size: 10px; } }
     @media (max-width: 1999px) { html { font-size: 7.5px; } }
     @media (max-width: 1439px) { html { font-size: 5.35px; } }
+
+    /* Topic override: 智慧能源专题 */
+    :root {
+      --ink: #3d4d43;
+      --green: #3f7858;
+      --gold: #c6a24a;
+      --rose: #83a857;
+    }
+
+    body { background: #eef0e7; }
+    .viewport { background: #e8eee4; }
+    .page { background-image: url("页面/smart-energy-bg.png"); }
+    h1 { color: #3d6b50; }
+    .tagline { color: #647568; }
+    .seal { border-color: #3d7858; }
+    .seal::before,
+    .panel-title .icon,
+    .partner-icons span::before,
+    .result-item::before {
+      background: linear-gradient(135deg, #4e9b68, #9ab65d 54%, #d0a94e);
+    }
+    .round-link.green { background: #3d7858; }
+    .round-link.gold { background: #c3a047; }
+    .dots span:first-child,
+    .arrow.next { background: #3d7858; }
+    .play::before { border-left-color: #3f7858; }
+    .video-copy strong { color: #3d6b50; }
+    .photo {
+      background-image: linear-gradient(180deg, rgba(255,255,255,0), rgba(31,76,80,0.14)), url("页面/smart-energy-bg.png");
+    }
+    .video-box {
+      background-image:
+        linear-gradient(90deg, rgba(15, 43, 47, 0.24), rgba(15, 43, 47, 0.04)),
+        linear-gradient(0deg, rgba(8, 22, 26, 0.68), transparent 36%),
+        url("页面/smart-energy-bg.png");
+    }
+    .film-chip { background-image: url("页面/smart-energy-bg.png"); }
   </style>
 </head>
 <body>
   <main class="viewport">
-    <section class="page" aria-label="毕节职业技术学院数字文旅专题展示页">
+    <section class="page" aria-label="毕节职业技术学院智慧能源专题展示页">
       <header class="header">
         <div class="brand">
           <div class="seal" aria-hidden="true"></div>
@@ -671,9 +708,9 @@
             <div class="title-row">
               <h1>毕节职业技术学院</h1>
               <div class="divider" aria-hidden="true"></div>
-              <div class="topic">数字文旅专题</div>
+              <div class="topic">智慧能源专题</div>
             </div>
-            <div class="tagline">山水人文 · 智慧导览 · 酒店运营 · 文旅服务</div>
+            <div class="tagline">绿色能源 · 智能开采 · 化工安全 · 低碳转型</div>
           </div>
         </div>
         <aside class="qr" aria-label="二维码区域">
@@ -689,19 +726,19 @@
           </div>
           <div class="basic-grid">
             <section class="mini-card">
-              <div class="card-title">文旅资源概况</div>
-              <div class="photo mountain" role="img" aria-label="毕节山水文旅资源"></div>
-              <p>依托百里杜鹃、织金洞、乌江源百里画廊与乌蒙山水资源，构建地方文化、生态旅游与智慧服务融合场景。</p>
+              <div class="card-title">能源产业概况</div>
+              <div class="photo mountain" role="img" aria-label="智慧能源产业场景"></div>
+              <p>面向绿色能源、智能开采、化工安全和低碳转型需求，构建服务地方能源产业升级的教学场景。</p>
             </section>
             <section class="mini-card">
               <div class="card-title">专业群建设</div>
-              <div class="photo greenhouse" role="img" aria-label="数字文旅专业群建设"></div>
-              <p>围绕旅游管理、酒店运营、数字媒体与景区服务，培养懂文化、会运营、能策划、善服务的复合型文旅人才。</p>
+              <div class="photo greenhouse" role="img" aria-label="智慧能源专业群建设"></div>
+              <p>围绕能源装备、化工安全、智能监测、绿色低碳等方向，培养懂工艺、会监测、守安全的技术人才。</p>
             </section>
             <section class="mini-card">
               <div class="card-title">实训基地</div>
-              <div class="photo base" role="img" aria-label="智慧景区与酒店服务实训基地"></div>
-              <p>建设智慧景区导览、酒店前厅客房、研学策划、数字内容制作等实训空间，强化真实服务流程训练。</p>
+              <div class="photo base" role="img" aria-label="智慧能源实训基地"></div>
+              <p>建设能源监测、化工安全、设备运维、传感器应用等实训模块，强化安全规范与产业流程对接。</p>
             </section>
           </div>
         </article>
@@ -716,22 +753,22 @@
               <div class="card-title">校企合作项目</div>
               <div class="photo team" role="img" aria-label="校企合作实践现场"></div>
               <div class="partner-icons">
-                <span>景区协同育人</span>
-                <span>酒店企业共建</span>
-                <span>研学基地实践</span>
-                <span>数字内容服务</span>
+                <span>能源企业合作</span>
+                <span>安全实训共建</span>
+                <span>设备运维实践</span>
+                <span>低碳项目服务</span>
               </div>
-              <p>与景区、酒店、旅行服务机构和数字文旅企业共建实践项目，开展课程共建、岗位实训与服务创新。</p>
+              <p>与能源企业、化工园区和设备服务单位共建实践项目，开展岗位训练、安全培训和技术服务。</p>
             </section>
             <section class="partner-card">
               <div class="card-title">产教融合成果</div>
               <div class="result-grid">
-                <div class="result-item">景区服务实训</div>
-                <div class="result-item">文旅内容策划</div>
-                <div class="result-item">智慧导览应用</div>
-                <div class="result-item">研学服务案例</div>
+                <div class="result-item">安全技能实训</div>
+                <div class="result-item">能源监测应用</div>
+                <div class="result-item">设备运维项目</div>
+                <div class="result-item">低碳服务案例</div>
               </div>
-              <p>学生参与导览服务、活动策划、酒店运营与数字内容制作，服务地方景区提升、文旅品牌传播与研学项目落地。</p>
+              <p>学生参与安全演练、能源数据监测、设备巡检和低碳服务项目，提升产业现场综合实践能力。</p>
             </section>
           </div>
         </article>
@@ -746,22 +783,22 @@
             <section class="story-card">
               <div class="photo course" role="img" aria-label="课程成果"></div>
               <strong>课程成果</strong>
-              <p>《智慧景区服务与运营》课程资源建设与应用</p>
+              <p>《智慧能源安全与运维》课程资源建设与应用</p>
             </section>
             <section class="story-card">
               <div class="photo student" role="img" aria-label="学生项目"></div>
               <strong>学生项目</strong>
-              <p>AR导览路线与游客服务小程序学生创新项目</p>
+              <p>能源监测与设备预警学生创新项目</p>
             </section>
             <section class="story-card">
               <div class="photo prize" role="img" aria-label="技能竞赛"></div>
               <strong>技能竞赛</strong>
-              <p>在旅游服务、数字媒体与创新创业赛事中获得奖项</p>
+              <p>在能源装备与安全技能赛事中获得奖项</p>
             </section>
             <section class="story-card">
-              <div class="photo service" role="img" aria-label="研学服务"></div>
-              <strong>研学服务</strong>
-              <p>师生团队参与地方研学路线设计与文旅志愿服务</p>
+              <div class="photo service" role="img" aria-label="低碳服务"></div>
+              <strong>低碳服务</strong>
+              <p>师生团队参与节能诊断、安全宣教与绿色发展服务</p>
             </section>
             <button class="arrow next" type="button" aria-label="下一张">›</button>
           </div>
@@ -773,7 +810,7 @@
             <div class="panel-title"><span class="icon" aria-hidden="true"></span>视频资源</div>
             <div class="panel-note">播放区</div>
           </div>
-          <div class="video-box" role="img" aria-label="毕节数字文旅宣传片">
+          <div class="video-box" role="img" aria-label="智慧能源专题宣传片">
             <button class="play" type="button" aria-label="播放视频"></button>
             <div class="film-chip" aria-hidden="true"></div>
             <div class="controls" aria-hidden="true">
@@ -785,8 +822,8 @@
             </div>
           </div>
           <div class="video-copy">
-            <strong>毕节数字文旅专题宣传片</strong>
-            <p>展示学院围绕智慧景区、酒店服务、数字导览与地方文化传播的教学成果和实践探索。</p>
+            <strong>智慧能源专题宣传片</strong>
+            <p>展示学院围绕绿色能源、智能开采、化工安全和低碳转型的教学成果与实践探索。</p>
           </div>
         </article>
       </section>

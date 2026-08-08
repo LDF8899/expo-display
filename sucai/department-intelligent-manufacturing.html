@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>毕节职业技术学院数字文旅专题</title>
+  <title>毕节职业技术学院智能制造专题</title>
   <style>
     :root {
       --ink: #314b4c;
@@ -659,11 +659,48 @@
     @media (max-width: 2559px) { html { font-size: 10px; } }
     @media (max-width: 1999px) { html { font-size: 7.5px; } }
     @media (max-width: 1439px) { html { font-size: 5.35px; } }
+
+    /* Topic override: 智能制造专题 */
+    :root {
+      --ink: #43484a;
+      --green: #56656b;
+      --gold: #c18445;
+      --rose: #d1743f;
+    }
+
+    body { background: #eeeeea; }
+    .viewport { background: #e8e9e6; }
+    .page { background-image: url("页面/intelligent-manufacturing-bg.png"); }
+    h1 { color: #46565c; }
+    .tagline { color: #667075; }
+    .seal { border-color: #596b72; }
+    .seal::before,
+    .panel-title .icon,
+    .partner-icons span::before,
+    .result-item::before {
+      background: linear-gradient(135deg, #6f7f83, #d1743f 58%, #c19658);
+    }
+    .round-link.green { background: #596b72; }
+    .round-link.gold { background: #c18445; }
+    .dots span:first-child,
+    .arrow.next { background: #596b72; }
+    .play::before { border-left-color: #5b6d73; }
+    .video-copy strong { color: #46565c; }
+    .photo {
+      background-image: linear-gradient(180deg, rgba(255,255,255,0), rgba(31,76,80,0.14)), url("页面/intelligent-manufacturing-bg.png");
+    }
+    .video-box {
+      background-image:
+        linear-gradient(90deg, rgba(15, 43, 47, 0.24), rgba(15, 43, 47, 0.04)),
+        linear-gradient(0deg, rgba(8, 22, 26, 0.68), transparent 36%),
+        url("页面/intelligent-manufacturing-bg.png");
+    }
+    .film-chip { background-image: url("页面/intelligent-manufacturing-bg.png"); }
   </style>
 </head>
 <body>
   <main class="viewport">
-    <section class="page" aria-label="毕节职业技术学院数字文旅专题展示页">
+    <section class="page" aria-label="毕节职业技术学院智能制造专题展示页">
       <header class="header">
         <div class="brand">
           <div class="seal" aria-hidden="true"></div>
@@ -671,9 +708,9 @@
             <div class="title-row">
               <h1>毕节职业技术学院</h1>
               <div class="divider" aria-hidden="true"></div>
-              <div class="topic">数字文旅专题</div>
+              <div class="topic">智能制造专题</div>
             </div>
-            <div class="tagline">山水人文 · 智慧导览 · 酒店运营 · 文旅服务</div>
+            <div class="tagline">智能装备 · 新能源汽车 · 无人机应用 · 数字工厂</div>
           </div>
         </div>
         <aside class="qr" aria-label="二维码区域">
@@ -689,19 +726,19 @@
           </div>
           <div class="basic-grid">
             <section class="mini-card">
-              <div class="card-title">文旅资源概况</div>
-              <div class="photo mountain" role="img" aria-label="毕节山水文旅资源"></div>
-              <p>依托百里杜鹃、织金洞、乌江源百里画廊与乌蒙山水资源，构建地方文化、生态旅游与智慧服务融合场景。</p>
+              <div class="card-title">制造产业概况</div>
+              <div class="photo mountain" role="img" aria-label="智能制造产业场景"></div>
+              <p>面向智能装备、新能源汽车、无人机应用和数字工厂需求，构建现代制造业技术技能培养场景。</p>
             </section>
             <section class="mini-card">
               <div class="card-title">专业群建设</div>
-              <div class="photo greenhouse" role="img" aria-label="数字文旅专业群建设"></div>
-              <p>围绕旅游管理、酒店运营、数字媒体与景区服务，培养懂文化、会运营、能策划、善服务的复合型文旅人才。</p>
+              <div class="photo greenhouse" role="img" aria-label="智能制造专业群建设"></div>
+              <p>围绕数控加工、工业机器人、汽车技术、无人机应用等方向，培养懂工艺、会操作、能维护的制造人才。</p>
             </section>
             <section class="mini-card">
               <div class="card-title">实训基地</div>
-              <div class="photo base" role="img" aria-label="智慧景区与酒店服务实训基地"></div>
-              <p>建设智慧景区导览、酒店前厅客房、研学策划、数字内容制作等实训空间，强化真实服务流程训练。</p>
+              <div class="photo base" role="img" aria-label="智能制造实训基地"></div>
+              <p>建设工业机器人、数控加工、汽车实训、无人机应用与质量检测等实训空间，强化产线任务训练。</p>
             </section>
           </div>
         </article>
@@ -716,22 +753,22 @@
               <div class="card-title">校企合作项目</div>
               <div class="photo team" role="img" aria-label="校企合作实践现场"></div>
               <div class="partner-icons">
-                <span>景区协同育人</span>
-                <span>酒店企业共建</span>
-                <span>研学基地实践</span>
-                <span>数字内容服务</span>
+                <span>制造企业合作</span>
+                <span>产线项目共建</span>
+                <span>设备运维实践</span>
+                <span>订单培养定制</span>
               </div>
-              <p>与景区、酒店、旅行服务机构和数字文旅企业共建实践项目，开展课程共建、岗位实训与服务创新。</p>
+              <p>与装备制造、汽车服务和工业技术企业共建实践项目，开展产线实训、项目教学和岗位能力培养。</p>
             </section>
             <section class="partner-card">
               <div class="card-title">产教融合成果</div>
               <div class="result-grid">
-                <div class="result-item">景区服务实训</div>
-                <div class="result-item">文旅内容策划</div>
-                <div class="result-item">智慧导览应用</div>
-                <div class="result-item">研学服务案例</div>
+                <div class="result-item">设备操作实训</div>
+                <div class="result-item">工艺优化项目</div>
+                <div class="result-item">技能竞赛成果</div>
+                <div class="result-item">企业服务案例</div>
               </div>
-              <p>学生参与导览服务、活动策划、酒店运营与数字内容制作，服务地方景区提升、文旅品牌传播与研学项目落地。</p>
+              <p>学生参与设备调试、工艺优化、检测维护和企业项目服务，提升面向智能制造现场的综合能力。</p>
             </section>
           </div>
         </article>
@@ -746,22 +783,22 @@
             <section class="story-card">
               <div class="photo course" role="img" aria-label="课程成果"></div>
               <strong>课程成果</strong>
-              <p>《智慧景区服务与运营》课程资源建设与应用</p>
+              <p>《智能制造产线运行》课程资源建设与应用</p>
             </section>
             <section class="story-card">
               <div class="photo student" role="img" aria-label="学生项目"></div>
               <strong>学生项目</strong>
-              <p>AR导览路线与游客服务小程序学生创新项目</p>
+              <p>无人机巡检与工业检测学生创新项目</p>
             </section>
             <section class="story-card">
               <div class="photo prize" role="img" aria-label="技能竞赛"></div>
               <strong>技能竞赛</strong>
-              <p>在旅游服务、数字媒体与创新创业赛事中获得奖项</p>
+              <p>在智能制造与装备技能赛事中获得奖项</p>
             </section>
             <section class="story-card">
-              <div class="photo service" role="img" aria-label="研学服务"></div>
-              <strong>研学服务</strong>
-              <p>师生团队参与地方研学路线设计与文旅志愿服务</p>
+              <div class="photo service" role="img" aria-label="企业服务"></div>
+              <strong>企业服务</strong>
+              <p>师生团队参与设备维护、工艺改进与技术服务</p>
             </section>
             <button class="arrow next" type="button" aria-label="下一张">›</button>
           </div>
@@ -773,7 +810,7 @@
             <div class="panel-title"><span class="icon" aria-hidden="true"></span>视频资源</div>
             <div class="panel-note">播放区</div>
           </div>
-          <div class="video-box" role="img" aria-label="毕节数字文旅宣传片">
+          <div class="video-box" role="img" aria-label="智能制造专题宣传片">
             <button class="play" type="button" aria-label="播放视频"></button>
             <div class="film-chip" aria-hidden="true"></div>
             <div class="controls" aria-hidden="true">
@@ -785,8 +822,8 @@
             </div>
           </div>
           <div class="video-copy">
-            <strong>毕节数字文旅专题宣传片</strong>
-            <p>展示学院围绕智慧景区、酒店服务、数字导览与地方文化传播的教学成果和实践探索。</p>
+            <strong>智能制造专题宣传片</strong>
+            <p>展示学院围绕智能装备、新能源汽车、无人机应用与数字工厂的教学成果和实践探索。</p>
           </div>
         </article>
       </section>
