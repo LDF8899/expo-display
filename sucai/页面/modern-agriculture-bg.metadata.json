@@ -1,0 +1,14 @@
+﻿{
+    "quality": "medium",
+    "createdAt": "2026-08-09T23:16:00",
+    "n": 1,
+    "model": "cogview-4",
+    "provider": "zhipu-bigmodel",
+    "originalSize": "1600x896",
+    "upscaledTo": "3840x2160",
+    "prompt": "一张写实摄影风格的现代农业专题横屏背景图，画面四周边缘有乌蒙山峦、层叠梯田、马铃薯植株、智慧农业大棚和田间农机，自然清新的色调，光线柔和，画面正中央区域保持干净留白用于叠加UI内容，写实照片风格，绝对不能出现任何文字、字母、数字、logo、图标、图表、按钮、卡片或界面元素。",
+    "saved": [
+        "sucai/页面/modern-agriculture-bg.png"
+    ],
+    "size": "3840x2160"
+}

@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>毕节职业技术学院现代农业专题</title>
+  <style>
+    :root {
+      --ink: #314b4c;
+      --green: #36666a;
+      --green-deep: #244c4f;
+      --green-soft: #6c8d8b;
+      --gold: #bb9051;
+      --rose: #c97d8f;
+      --paper: rgba(255, 253, 248, 0.88);
+      --paper-strong: rgba(255, 253, 248, 0.96);
+      --line: rgba(178, 157, 118, 0.32);
+      --shadow: 0 20px 44px rgba(55, 73, 69, 0.13);
+      --font: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background: #eef0e8;
+      font-family: var(--font);
+    }
+
+    button { font: inherit; }
+
+    .viewport {
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #e9eee9;
+    }
+
+    .page {
+      position: relative;
+      width: min(100vw, calc(100vh * 16 / 9));
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      background: url("digital-tourism-bg.png") center / cover no-repeat;
+      box-shadow: 0 22px 80px rgba(41, 64, 67, 0.18);
+    }
+
+    .page::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 44% 48%, rgba(255, 255, 255, 0.4), transparent 42%),
+        linear-gradient(180deg, rgba(250, 253, 249, 0.06), rgba(235, 242, 238, 0.16));
+    }
+
+    .header,
+    .content,
+    .side-actions,
+    .pager {
+      position: absolute;
+      z-index: 1;
+    }
+
+    .header {
+      left: 3.9%;
+      right: 3.4%;
+      top: 3.6%;
+      height: 10.5%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 7.8%;
+      gap: 2.2%;
+      align-items: center;
+    }
+
+    .brand {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 1.55rem;
+    }
+
+    .seal {
+      flex: 0 0 auto;
+      width: 6.8rem;
+      height: 6.8rem;
+      border-radius: 50%;
+      border: 0.38rem solid #527d7d;
+      background:
+        radial-gradient(circle at 50% 52%, #fff8e5 0 28%, transparent 29%),
+        conic-gradient(from 20deg, #315f62, #86a6a0, #315f62);
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 0 0 0.45rem #f8f2de, 0 8px 20px rgba(72, 93, 58, 0.16);
+    }
+
+    .seal::before {
+      content: "";
+      width: 3.7rem;
+      height: 2.7rem;
+      clip-path: polygon(5% 78%, 32% 38%, 47% 62%, 68% 20%, 96% 78%);
+      background: linear-gradient(135deg, #4f8b8a, #d2a05b 58%, #4a6b76);
+      border-radius: 0.25rem;
+    }
+
+    .school {
+      min-width: 0;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 2.4rem;
+      min-width: 0;
+    }
+
+    h1 {
+      margin: 0;
+      color: #335e60;
+      font-size: 4.15rem;
+      line-height: 1;
+      font-weight: 900;
+      white-space: nowrap;
+      letter-spacing: 0;
+      text-shadow: 0 3px 0 rgba(255, 255, 255, 0.54);
+    }
+
+    .divider {
+      width: 2px;
+      height: 4.7rem;
+      background: rgba(176, 143, 92, 0.44);
+    }
+
+    .topic {
+      color: var(--gold);
+      font-size: 2.35rem;
+      line-height: 1;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .tagline {
+      margin-top: 0.7rem;
+      color: #5c7370;
+      font-size: 1.08rem;
+      font-weight: 500;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .qr {
+      height: 100%;
+      border-radius: 1.5rem;
+      background: rgba(255, 252, 246, 0.7);
+      box-shadow: 0 12px 34px rgba(47, 74, 78, 0.12);
+      display: grid;
+      place-items: center;
+      padding: 0.85rem;
+    }
+
+    .qr-box {
+      width: 100%;
+      height: 100%;
+      border: 2px dashed rgba(143, 124, 83, 0.58);
+      border-radius: 0.8rem;
+      display: grid;
+      place-items: center;
+      color: #556d69;
+      text-align: center;
+      font-weight: 700;
+      line-height: 1.55;
+      background:
+        linear-gradient(90deg, transparent 30%, rgba(73, 111, 112, 0.24) 30% 38%, transparent 38% 62%, rgba(73, 111, 112, 0.24) 62% 70%, transparent 70%),
+        linear-gradient(0deg, transparent 30%, rgba(73, 111, 112, 0.18) 30% 38%, transparent 38% 62%, rgba(73, 111, 112, 0.18) 62% 70%, transparent 70%);
+      background-size: 1.35rem 1.35rem;
+    }
+
+    .content {
+      left: 4.35%;
+      right: 10%;
+      top: 15.7%;
+      bottom: 6.35%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 0.97fr 1.03fr;
+      gap: 1.34rem;
+    }
+
+    .panel {
+      min-width: 0;
+      min-height: 0;
+      border: 1px solid rgba(182, 163, 128, 0.36);
+      border-radius: 1.45rem;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      padding: 1.55rem 1.78rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(4px);
+    }
+
+    .panel-header {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.35rem;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      min-width: 0;
+      color: var(--green);
+      font-size: 1.78rem;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .panel-title .icon {
+      flex: 0 0 auto;
+      width: 1.65rem;
+      height: 1.65rem;
+      border-radius: 0.45rem;
+      background: linear-gradient(135deg, #4f8b8a, #c97d8f 54%, #c9a15c);
+      position: relative;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.34);
+    }
+
+    .panel-title .icon::after {
+      content: "";
+      position: absolute;
+      left: 0.38rem;
+      top: 0.35rem;
+      width: 0.85rem;
+      height: 0.85rem;
+      border: solid rgba(255, 255, 255, 0.88);
+      border-width: 0 0 3px 3px;
+      transform: rotate(-45deg);
+      border-radius: 0 0 0 0.2rem;
+    }
+
+    .panel-note {
+      color: #4a5d5b;
+      font-size: 1.06rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .basic-grid {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .mini-card,
+    .partner-card,
+    .story-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 0.9rem;
+      background: rgba(255, 253, 248, 0.8);
+      box-shadow: 0 10px 22px rgba(55, 73, 69, 0.09);
+      overflow: hidden;
+    }
+
+    .mini-card {
+      padding: 1.15rem 0.95rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.05rem;
+    }
+
+    .card-title {
+      color: var(--green);
+      font-size: 1.48rem;
+      line-height: 1.1;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .photo {
+      flex: 0 0 auto;
+      height: 18.4rem;
+      border-radius: 0.65rem;
+      overflow: hidden;
+      background-image: linear-gradient(180deg, rgba(255,255,255,0), rgba(31,76,80,0.14)), url("digital-tourism-bg.png");
+      background-size: cover;
+      box-shadow: inset 0 -28px 36px rgba(32, 72, 77, 0.13);
+    }
+
+    .photo.mountain { background-position: 72% 12%; }
+    .photo.greenhouse { background-position: 100% 18%; }
+    .photo.base { background-position: 2% 85%; }
+    .photo.team { background-position: 55% 8%; }
+    .photo.course { background-position: 82% 84%; }
+    .photo.student { background-position: 8% 88%; }
+    .photo.prize { background-position: 94% 90%; }
+    .photo.service { background-position: 18% 78%; }
+
+    .mini-card p,
+    .partner-card p,
+    .story-card p,
+    .video-copy p {
+      margin: 0;
+      color: #455958;
+      font-size: 1.18rem;
+      line-height: 1.62;
+      font-weight: 600;
+    }
+
+    .cooperation-body {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1.18fr 0.96fr;
+      gap: 1.35rem;
+    }
+
+    .partner-card {
+      padding: 1.2rem 1.15rem 1.05rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .partner-card .photo {
+      height: 13.4rem;
+    }
+
+    .partner-icons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.65rem;
+      color: #607674;
+      text-align: center;
+      font-size: 0.9rem;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .partner-icons span::before {
+      content: "";
+      display: block;
+      width: 1.85rem;
+      height: 1.85rem;
+      margin: 0 auto 0.32rem;
+      border-radius: 0.35rem;
+      background: linear-gradient(135deg, #c99758, #6f9b9a);
+      opacity: 0.78;
+    }
+
+    .result-grid {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-top: 1px solid rgba(205, 188, 157, 0.42);
+      border-left: 1px solid rgba(205, 188, 157, 0.42);
+      margin: 1rem 0 0;
+    }
+
+    .result-item {
+      display: grid;
+      place-items: center;
+      gap: 0.45rem;
+      padding: 0.65rem;
+      border-right: 1px solid rgba(205, 188, 157, 0.42);
+      border-bottom: 1px solid rgba(205, 188, 157, 0.42);
+      color: #455d5c;
+      text-align: center;
+      font-size: 1.02rem;
+      font-weight: 800;
+    }
+
+    .result-item::before {
+      content: "";
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #d1a25b, #7ca5a2);
+      opacity: 0.9;
+    }
+
+    .achievement {
+      padding-left: 1.45rem;
+      padding-right: 1.45rem;
+    }
+
+    .carousel {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1.2rem repeat(4, minmax(0, 1fr)) 1.2rem;
+      gap: 0.95rem;
+      align-items: center;
+    }
+
+    .arrow {
+      width: 2.45rem;
+      height: 2.45rem;
+      border: 0;
+      border-radius: 50%;
+      color: #344b4c;
+      background: rgba(255, 253, 248, 0.84);
+      box-shadow: 0 8px 18px rgba(55, 73, 69, 0.1);
+      font-size: 1.8rem;
+      line-height: 1;
+      cursor: default;
+      display: grid;
+      place-items: center;
+      justify-self: center;
+    }
+
+    .arrow.next {
+      color: white;
+      background: rgba(80, 132, 133, 0.78);
+    }
+
+    .story-card {
+      height: 100%;
+      padding: 0.92rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .story-card .photo {
+      height: 17rem;
+    }
+
+    .story-card strong {
+      color: var(--green);
+      font-size: 1.28rem;
+      line-height: 1.2;
+      font-weight: 900;
+    }
+
+    .dots {
+      display: flex;
+      justify-content: center;
+      gap: 0.6rem;
+      margin-top: 1.1rem;
+    }
+
+    .dots span {
+      width: 0.6rem;
+      height: 0.6rem;
+      border-radius: 999px;
+      background: rgba(184, 170, 142, 0.28);
+    }
+
+    .dots span:first-child {
+      width: 0.9rem;
+      background: #5f8d8a;
+    }
+
+    .video-box {
+      flex: 1;
+      min-height: 0;
+      border-radius: 0.65rem;
+      overflow: hidden;
+      position: relative;
+      background-image:
+        linear-gradient(90deg, rgba(15, 43, 47, 0.24), rgba(15, 43, 47, 0.04)),
+        linear-gradient(0deg, rgba(8, 22, 26, 0.68), transparent 36%),
+        url("digital-tourism-bg.png");
+      background-size: 100% 100%, 100% 100%, cover;
+      background-position: center, center, center;
+      box-shadow: inset 0 -70px 80px rgba(0, 0, 0, 0.32);
+    }
+
+    .play {
+      position: absolute;
+      left: 50%;
+      top: 51%;
+      width: 4.2rem;
+      height: 4.2rem;
+      border: 0;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 12px 24px rgba(25, 50, 54, 0.2);
+    }
+
+    .play::before {
+      content: "";
+      position: absolute;
+      left: 1.6rem;
+      top: 1.22rem;
+      border-left: 1.25rem solid #376f73;
+      border-top: 0.86rem solid transparent;
+      border-bottom: 0.86rem solid transparent;
+    }
+
+    .film-chip {
+      position: absolute;
+      right: 5.4%;
+      top: 18%;
+      width: 29%;
+      aspect-ratio: 1.6 / 1;
+      border: 0.16rem solid rgba(255, 255, 255, 0.74);
+      border-radius: 50%;
+      overflow: hidden;
+      background-image: url("digital-tourism-bg.png");
+      background-size: cover;
+      background-position: 94% 82%;
+      box-shadow: 0 12px 30px rgba(7, 20, 24, 0.28);
+    }
+
+    .controls {
+      position: absolute;
+      left: 2.2%;
+      right: 2.2%;
+      bottom: 4.6%;
+      height: 2.6rem;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      color: #fff;
+      font-size: 1.02rem;
+      font-weight: 800;
+    }
+
+    .tiny-play {
+      width: 0;
+      height: 0;
+      border-left: 0.75rem solid #fff;
+      border-top: 0.5rem solid transparent;
+      border-bottom: 0.5rem solid transparent;
+    }
+
+    .bar {
+      flex: 1;
+      height: 0.34rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.78);
+      position: relative;
+    }
+
+    .bar::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 7%;
+      border-radius: inherit;
+      background: #fff;
+    }
+
+    .video-copy {
+      margin-top: 0.9rem;
+    }
+
+    .video-copy strong {
+      display: block;
+      color: #223e40;
+      font-size: 1.42rem;
+      line-height: 1.2;
+      margin-bottom: 0.35rem;
+      font-weight: 900;
+    }
+
+    .side-actions {
+      right: 2.25%;
+      top: 59.2%;
+      width: 7.25%;
+      display: grid;
+      gap: 1.65rem;
+    }
+
+    .round-link {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 0;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      font-size: 1.22rem;
+      line-height: 1.32;
+      font-weight: 900;
+      box-shadow: 0 12px 26px rgba(43, 60, 58, 0.22), inset 0 0 0 0.16rem rgba(255, 255, 255, 0.22);
+    }
+
+    .round-link.green { background: #356c70; }
+    .round-link.gold { background: #bf9150; }
+
+    .round-link::before {
+      content: "";
+      width: 0.86rem;
+      height: 0.86rem;
+      border-radius: 0.2rem;
+      margin-bottom: 0.9rem;
+      background: #fff;
+      box-shadow: 1.2rem 0 #fff, 0 1.2rem #fff, 1.2rem 1.2rem #fff;
+      opacity: 0.96;
+    }
+
+    .round-link.gold::before {
+      width: 2.45rem;
+      height: 1.8rem;
+      border-radius: 0.2rem 0.2rem 0.8rem 0.8rem;
+      background:
+        linear-gradient(90deg, transparent 47%, #fff 47% 53%, transparent 53%),
+        linear-gradient(135deg, transparent 13%, #fff 14% 43%, transparent 44%),
+        linear-gradient(45deg, transparent 13%, #fff 14% 43%, transparent 44%);
+      box-shadow: none;
+    }
+
+    .pager {
+      left: 50%;
+      bottom: 1.7%;
+      transform: translateX(-50%);
+      height: 3.25rem;
+      min-width: 14.1rem;
+      padding: 0 1.15rem;
+      border-radius: 1.8rem;
+      background: rgba(255, 253, 248, 0.85);
+      box-shadow: 0 12px 24px rgba(55, 73, 69, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      color: #3e4339;
+      font-size: 1rem;
+      font-weight: 900;
+    }
+
+    .pager button {
+      border: 0;
+      background: transparent;
+      color: #35402f;
+      font-size: 1.5rem;
+      line-height: 1;
+      padding: 0.25rem 0.35rem;
+    }
+
+    .pager .refresh {
+      border-left: 1px solid rgba(175, 161, 132, 0.5);
+      padding-left: 1.05rem;
+      color: #7d7869;
+    }
+
+    html { font-size: 16px; }
+
+    @media (max-width: 3839px) { html { font-size: 15px; } }
+    @media (max-width: 3199px) { html { font-size: 12px; } }
+    @media (max-width: 2559px) { html { font-size: 10px; } }
+    @media (max-width: 1999px) { html { font-size: 7.5px; } }
+    @media (max-width: 1439px) { html { font-size: 5.35px; } }
+
+    /* Topic override: 现代农业专题 */
+    :root {
+      --ink: #40523b;
+      --green: #42643f;
+      --gold: #bc9440;
+      --rose: #8aa46c;
+    }
+
+    body { background: #f4eddf; }
+    .viewport { background: #ede2cf; }
+    .page { background-image: url("modern-agriculture-bg.png"); }
+    h1 { color: #3e5f3d; }
+    .tagline { color: #61705c; }
+    .seal { border-color: #365f35; }
+    .seal::before,
+    .panel-title .icon,
+    .partner-icons span::before,
+    .result-item::before {
+      background: linear-gradient(135deg, #5f7b4f, #c2a052);
+    }
+    .round-link.green { background: #365f35; }
+    .round-link.gold { background: #bc9641; }
+    .dots span:first-child,
+    .arrow.next { background: #365f35; }
+    .play::before { border-left-color: #436238; }
+    .video-copy strong { color: #3e5f3d; }
+    .photo {
+      background-image: linear-gradient(180deg, rgba(255,255,255,0), rgba(31,76,80,0.14)), url("modern-agriculture-bg.png");
+    }
+    .video-box {
+      background-image:
+        linear-gradient(90deg, rgba(15, 43, 47, 0.24), rgba(15, 43, 47, 0.04)),
+        linear-gradient(0deg, rgba(8, 22, 26, 0.68), transparent 36%),
+        url("modern-agriculture-bg.png");
+    }
+    .film-chip { background-image: url("modern-agriculture-bg.png"); }
+  </style>
+</head>
+<body>
+  <main class="viewport">
+    <section class="page" aria-label="毕节职业技术学院现代农业专题展示页">
+      <header class="header">
+        <div class="brand">
+          <div class="seal" aria-hidden="true"></div>
+          <div class="school">
+            <div class="title-row">
+              <h1>毕节职业技术学院</h1>
+              <div class="divider" aria-hidden="true"></div>
+              <div class="topic">现代农业专题</div>
+            </div>
+            <div class="tagline">山地特色 · 智慧农业 · 产教融合 · 乡村振兴</div>
+          </div>
+        </div>
+        <aside class="qr" aria-label="二维码区域">
+          <div class="qr-box">二维码<br>待放置</div>
+        </aside>
+      </header>
+
+      <section class="content">
+        <article class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span class="icon" aria-hidden="true"></span>基本情况</div>
+            <div class="panel-note">院系概览</div>
+          </div>
+          <div class="basic-grid">
+            <section class="mini-card">
+              <div class="card-title">山地农业概况</div>
+              <div class="photo mountain" role="img" aria-label="山地农业梯田"></div>
+              <p>立足乌蒙山地资源禀赋，聚焦马铃薯、天麻、茶叶、肉牛、食用菌等特色产业，服务乡村振兴战略。</p>
+            </section>
+            <section class="mini-card">
+              <div class="card-title">专业群建设</div>
+              <div class="photo greenhouse" role="img" aria-label="现代农业专业群建设"></div>
+              <p>构建现代农业技术、农产品加工、数字化生产服务等方向，培养山地特色高效农业技术技能人才。</p>
+            </section>
+            <section class="mini-card">
+              <div class="card-title">实训基地</div>
+              <div class="photo base" role="img" aria-label="智慧农业实训基地"></div>
+              <p>建设智慧温控、无人机植保、食用菌实训、农产品检测等实训基地，强化实践教学与真实生产对接。</p>
+            </section>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span class="icon" aria-hidden="true"></span>产教融合校企合作成果</div>
+            <div class="panel-note">合作展示</div>
+          </div>
+          <div class="cooperation-body">
+            <section class="partner-card">
+              <div class="card-title">校企合作项目</div>
+              <div class="photo team" role="img" aria-label="校企合作实践现场"></div>
+              <div class="partner-icons">
+                <span>农业企业合作</span>
+                <span>合作社共建</span>
+                <span>生产基地共建</span>
+                <span>订单培养定制</span>
+              </div>
+              <p>与农业龙头企业、合作社共建生产基地，开展订单培养、技术服务与协同创新，促进人才培养与产业需求精准融合。</p>
+            </section>
+            <section class="partner-card">
+              <div class="card-title">产教融合成果</div>
+              <div class="result-grid">
+                <div class="result-item">学业实践实训</div>
+                <div class="result-item">农产品品牌打造</div>
+                <div class="result-item">数字测控应用</div>
+                <div class="result-item">乡村服务案例</div>
+              </div>
+              <p>学生深度参与生产实践，助力农产品品牌建设、数字田间管理与电商营销，服务地方产业与乡村发展。</p>
+            </section>
+          </div>
+        </article>
+
+        <article class="panel achievement">
+          <div class="panel-header">
+            <div class="panel-title"><span class="icon" aria-hidden="true"></span>教学与创新成果</div>
+            <div class="panel-note">轮播图</div>
+          </div>
+          <div class="carousel">
+            <button class="arrow" type="button" aria-label="上一张">‹</button>
+            <section class="story-card">
+              <div class="photo course" role="img" aria-label="课程成果"></div>
+              <strong>课程成果</strong>
+              <p>《山地特色作物栽培》课程资源建设与应用</p>
+            </section>
+            <section class="story-card">
+              <div class="photo student" role="img" aria-label="学生项目"></div>
+              <strong>学生项目</strong>
+              <p>智慧温室环境调控系统学生创新项目</p>
+            </section>
+            <section class="story-card">
+              <div class="photo prize" role="img" aria-label="技能竞赛"></div>
+              <strong>技能竞赛</strong>
+              <p>在农业技能与创新创业赛事中获得奖项</p>
+            </section>
+            <section class="story-card">
+              <div class="photo service" role="img" aria-label="乡村服务"></div>
+              <strong>乡村服务</strong>
+              <p>师生团队深入村镇开展技术指导与产业帮扶</p>
+            </section>
+            <button class="arrow next" type="button" aria-label="下一张">›</button>
+          </div>
+          <div class="dots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span class="icon" aria-hidden="true"></span>视频资源</div>
+            <div class="panel-note">播放区</div>
+          </div>
+          <div class="video-box" role="img" aria-label="现代山地特色高效农业宣传片">
+            <button class="play" type="button" aria-label="播放视频"></button>
+            <div class="film-chip" aria-hidden="true"></div>
+            <div class="controls" aria-hidden="true">
+              <span class="tiny-play"></span>
+              <span>00:00 / 03:45</span>
+              <span class="bar"></span>
+              <span>⌕</span>
+              <span>▢</span>
+            </div>
+          </div>
+          <div class="video-copy">
+            <strong>现代山地特色高效农业宣传片</strong>
+            <p>展示学院在山地农业、实践教学与产教融合方面的办学成果与实践探索。</p>
+          </div>
+        </article>
+      </section>
+
+      <nav class="side-actions" aria-label="特色入口">
+        <button class="round-link green" type="button">特色系统<br>入口</button>
+        <button class="round-link gold" type="button">特色数字<br>资源</button>
+      </nav>
+
+      <div class="pager" aria-label="分页">
+        <button type="button" aria-label="上一页">‹</button>
+        <span>1&nbsp;&nbsp;/&nbsp;&nbsp;1</span>
+        <button type="button" aria-label="下一页">›</button>
+        <span class="refresh">刷新 ↻</span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
