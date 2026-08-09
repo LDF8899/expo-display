@@ -171,7 +171,7 @@ $saved
 ```
 
 如果使用用户级脚本：
-
+，qi'ta
 ```powershell
 & "$env:USERPROFILE\.codex\tools\generate_thinkai_image.ps1" `
   -Prompt "你的图片提示词" `

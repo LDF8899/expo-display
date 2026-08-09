@@ -187,16 +187,30 @@
     if (!list[id]) return { kind: "home" };
     var section = q.get("section");
     var sections = sectionsForPortal(kind, list[id]);
+    if (kind === "topics") {
+      if (!section) return { kind: kind, id: id, section: -1 };
+      var groups = groupTopicSections(sections);
+      var gi = groups.findIndex(function (g) {
+        return g.id === section || g.sections.some(function (s) { return s.id === section; });
+      });
+      return { kind: kind, id: id, section: gi >= 0 ? gi : -1 };
+    }
     var idx = section ? sections.findIndex(function (s) { return s.id === section; }) : 0;
     return { kind: kind, id: id, section: idx >= 0 ? idx : 0 };
   }
   function urlFor(kind, id, section) {
     var base = "/" + kind + "/" + id;
-    if (section != null) {
-      var data = (kind === "departments" ? DATA.departments : DATA.topics)[id];
-      var sec = sectionsForPortal(kind, data)[section];
-      if (sec) base += "?section=" + encodeURIComponent(sec.id);
+    if (section == null) return base;
+    var data = (kind === "departments" ? DATA.departments : DATA.topics)[id];
+    if (kind === "topics") {
+      if (section < 0) return base;
+      var groups = groupTopicSections(sectionsForPortal(kind, data));
+      var g = groups[section];
+      if (g) base += "?section=" + encodeURIComponent(g.id);
+      return base;
     }
+    var sec = sectionsForPortal(kind, data)[section];
+    if (sec) base += "?section=" + encodeURIComponent(sec.id);
     return base;
   }
 
@@ -661,6 +675,26 @@
     });
   }
 
+  var TOPIC_GROUP_ORDER = [
+    { id: "overview", title: "基本情况", members: ["overview", "majors", "training", "introduction", "base"] },
+    { id: "cooperation", title: "产教融合校企合作成果", members: ["cooperation", "masters", "students", "industry"] },
+    { id: "achievements", title: "教学与创新成果", members: ["achievements", "honors", "gallery", "awards"] },
+    { id: "media", title: "视频资源", members: ["media", "video", "videos"] }
+  ];
+
+  function groupTopicSections(sections) {
+    var groups = [];
+    TOPIC_GROUP_ORDER.forEach(function (g) {
+      var members = sections.filter(function (s) { return g.members.indexOf(s.id) >= 0; });
+      if (members.length) groups.push({ id: g.id, title: g.title, sections: members });
+    });
+    var rest = sections.filter(function (s) {
+      return !TOPIC_GROUP_ORDER.some(function (g) { return g.members.indexOf(s.id) >= 0; });
+    });
+    if (rest.length) groups.push({ id: "more", title: "更多内容", sections: rest });
+    return groups;
+  }
+
   function setPortalDocumentTitle(label) {
     document.title = "毕节职业技术学院 · " + (label || "数字门户展厅");
   }
@@ -855,6 +889,17 @@
   }
 
   /* ---------- 一级页 ---------- */
+  var TOPIC_PROTOTYPE_PAGE = {
+    "campus-culture": "department-campus-culture.html",
+    "digital-tourism": "department-digital-tourism.html",
+    "finance-commerce": "department-finance-commerce.html",
+    "smart-energy": "department-smart-energy.html",
+    "smart-healthcare": "department-smart-healthcare.html",
+    "digital-intelligence": "department-digital-tech.html",
+    "smart-manufacturing": "department-intelligent-manufacturing.html",
+    "modern-agriculture": "department-modern-agriculture.html"
+  };
+
   function renderHome() {
     setPortalDocumentTitle("学校门户");
     var grid = $("fusionGrid");
@@ -883,7 +928,11 @@
         '<div class="fusion-depts">' + chips + '</div>' +
         '</div>' +
         '<span class="fusion-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
-      var go = function () { openDetail("topics", id, 0); };
+      var go = function () {
+        var page = TOPIC_PROTOTYPE_PAGE[id];
+        if (page) location.href = "/static/pages/" + page;
+        else openDetail("topics", id, 0);
+      };
       card.addEventListener("click", function (e) {
         if (e.target.closest(".dept-chip")) return;
         go();
@@ -920,9 +969,17 @@
     if (!d) return;
     setPortalDocumentTitle((kind === "departments" ? "系部门户 · " : "专题门户 · ") + d.name);
     state.kind = kind; state.id = id; state.sections = sectionsForPortal(kind, d);
-    state.section = Math.max(0, Math.min(section, state.sections.length - 1));
+    if (kind === "topics") {
+      state.groups = groupTopicSections(state.sections);
+      state.view = section < 0 ? "home" : "list";
+      state.group = Math.max(0, Math.min(section, state.groups.length - 1));
+      state.section = state.group;
+    } else {
+      state.section = Math.max(0, Math.min(section, state.sections.length - 1));
+    }
     screenDetail.classList.toggle("department-showcase-mode", kind === "departments");
     screenDetail.classList.toggle("topic-loop-mode", kind === "topics");
+    screenDetail.classList.toggle("paper-mode", kind === "topics");
     setTopicLoopPaused(false);
     syncDepartmentSwitch(kind, id);
 
@@ -930,27 +987,61 @@
     $("backHomeText").textContent = "返回学校门户";
     var nav = $("chapterNav");
     nav.innerHTML = "";
-    state.sections.forEach(function (s, i) {
+    var tabs = kind === "topics" ? state.groups : state.sections;
+    tabs.forEach(function (s, i) {
       var btn = document.createElement("button");
-      btn.className = "chapter-tab" + (i === state.section ? " active" : "");
+      btn.className = "chapter-tab" + (kind === "topics"
+        ? (state.view === "list" && i === state.group ? " active" : "")
+        : (i === state.section ? " active" : ""));
       btn.textContent = displaySectionTitle(s);
       btn.tabIndex = 0;
       btn.addEventListener("click", function () { goSection(i); });
       nav.appendChild(btn);
     });
     if (!options.skipHistory) {
-      if (options.replaceHistory) history.replaceState(null, "", urlFor(kind, id, state.section));
-      else history.pushState(null, "", urlFor(kind, id, state.section));
+      if (options.replaceHistory) history.replaceState(null, "", urlFor(kind, id, kind === "topics" ? state.group : state.section));
+      else history.pushState(null, "", urlFor(kind, id, kind === "topics" ? state.group : state.section));
     }
     screenHome.hidden = true;
     screenDetail.hidden = false;
     if (kind === "departments") renderDepartmentDetail();
-    else renderChapter(false);
+    else if (state.view === "home") showTopicHome();
+    else showSectionNewsList();
     resetIdle();
   }
 
   function goSection(i, options) {
     options = options || {};
+    if (state.kind === "topics") {
+      if (i < 0) {
+        if (state.view === "home") return;
+        state.view = "home";
+        state.group = 0;
+        state.section = 0;
+        document.querySelectorAll(".chapter-tab").forEach(function (b) { b.classList.remove("active"); });
+        if (!options.skipHistory) {
+          if (options.replaceHistory) history.replaceState(null, "", urlFor(state.kind, state.id, -1));
+          else history.pushState(null, "", urlFor(state.kind, state.id, -1));
+        }
+        showTopicHome();
+        resetIdle();
+        return;
+      }
+      if (state.view === "list" && i === state.group) return;
+      state.view = "list";
+      state.group = i;
+      state.section = i;
+      document.querySelectorAll(".chapter-tab").forEach(function (b, k) {
+        b.classList.toggle("active", k === i);
+      });
+      if (!options.skipHistory) {
+        if (options.replaceHistory) history.replaceState(null, "", urlFor(state.kind, state.id, i));
+        else history.pushState(null, "", urlFor(state.kind, state.id, i));
+      }
+      showSectionNewsList();
+      resetIdle();
+      return;
+    }
     if (i === state.section) return;
     var backward = i < state.section;
     state.section = i;
@@ -1168,11 +1259,277 @@
       '</figure>';
   }
 
+  function sectionToNewsItems(section) {
+    var blocks = (section.blocks || []).map(function (sourceBlock) {
+      return normalizeTopicBlock(sourceBlock, section);
+    });
+    var items = [];
+    var current = null;
+    blocks.forEach(function (b) {
+      if (b.type === "image" || b.type === "video") {
+        current = {
+          kind: b.type,
+          cover: b.type === "video" ? (b.poster || b.src || "") : (b.src || ""),
+          title: b.caption || b.title || "",
+          summary: "",
+          blocks: [b]
+        };
+        items.push(current);
+        return;
+      }
+      if (b.type !== "text") return;
+      var text = String(b.content || "").trim();
+      if (!text) return;
+      if (text.length <= 40) {
+        // 短文本视为条目标题：当前条目无标题则补上，否则开新条目
+        if (current && !current.title) {
+          current.title = text;
+          current.blocks.push(b);
+        } else {
+          current = { kind: "text", cover: "", title: text, summary: "", blocks: [b] };
+          items.push(current);
+        }
+      } else {
+        // 长文本：无当前条目则开新条目，否则作为正文追加
+        if (current && !current.title) current.title = compactText(text, 36);
+        if (current) {
+          if (!current.summary) current.summary = compactText(text, 96);
+          current.blocks.push(b);
+        } else {
+          current = { kind: "text", cover: "", title: compactText(text, 36), summary: compactText(text, 96), blocks: [b] };
+          items.push(current);
+        }
+      }
+    });
+    if (!items.length) {
+      items.push({ kind: "text", cover: "", title: displaySectionTitle(section), summary: "", blocks: [] });
+    }
+    return items;
+  }
+
+  function groupNewsItems(group) {
+    var items = [];
+    (group.sections || []).forEach(function (sec) {
+      sectionToNewsItems(sec).forEach(function (it) {
+        it.sectionTitle = displaySectionTitle(sec);
+        items.push(it);
+      });
+    });
+    return items;
+  }
+
+  function renderSectionNewsList(group) {
+    var data = getData();
+    var items = groupNewsItems(group);
+    var total = String(items.length).padStart(2, "0");
+    var multi = (group.sections || []).length > 1;
+    var cards = items.map(function (item, index) {
+      var no = String(index + 1).padStart(2, "0");
+      var cover = item.cover
+        ? '<div class="news-card-cover"><img src="' + esc(item.cover) + '" alt="' + esc(item.title || "内容图片") + '" loading="lazy"></div>'
+        : '<div class="news-card-cover news-card-cover-empty"><span>' + esc(item.kind === "video" ? "VIDEO" : "TEXT") + '</span></div>';
+      return '<article class="news-card" data-news-index="' + index + '" tabindex="0" role="button" aria-label="查看' + esc(item.title || "内容") + '详情">' +
+        cover +
+        '<div class="news-card-body">' +
+        '<span class="news-card-no">' + no + ' / ' + total + '</span>' +
+        (multi ? '<span class="news-card-section">' + esc(item.sectionTitle) + '</span>' : '') +
+        '<h3>' + esc(item.title || "未命名内容") + '</h3>' +
+        (item.summary ? '<p>' + esc(item.summary) + '</p>' : '') +
+        '<em class="news-card-more">查看详情</em>' +
+        '</div></article>';
+    }).join("");
+    return '<section class="paper-page" data-news-list>' +
+      '<header class="paper-header">' +
+      '<div class="paper-brand">' +
+      '<div class="paper-seal" aria-hidden="true"></div>' +
+      '<div class="paper-school">' +
+      '<div class="paper-title-row">' +
+      '<h1 class="paper-school-name">毕节职业技术学院</h1>' +
+      '<span class="paper-divider" aria-hidden="true"></span>' +
+      '<span class="paper-section-title">' + esc(group.title) + '</span>' +
+      '</div>' +
+      '<p class="paper-tagline">' + esc(data.name || "专题门户") + ' · ' + items.length + ' 条事件与新闻</p>' +
+      '</div>' +
+      '</div>' +
+      '<aside class="paper-qr" aria-label="二维码区域"><div class="paper-qr-box">二维码<br>待放置</div></aside>' +
+      '</header>' +
+      '<div class="news-grid paper-news-grid">' + cards + '</div>' +
+      '</section>';
+  }
+
+  function renderNewsItemDetail(group, index) {
+    var data = getData();
+    var items = groupNewsItems(group);
+    var item = items[index] || items[0] || { kind: "text", cover: "", title: "", summary: "", blocks: [] };
+    var contentType = item.kind === "video" ? "video" : "article";
+    var blocks = (item.blocks || []).slice();
+    if (!blocks.length && item.cover) {
+      blocks.push({ type: "image", src: item.cover, caption: item.title });
+    }
+    return '<article class="topic-display-panel content-type-' + esc(contentType) + '">' +
+      '<div class="topic-display-meta">' +
+      '<p class="topic-display-category">' + esc(data.name || "专题门户") + ' · ' + esc(item.sectionTitle || group.title) + '</p>' +
+      '<div class="topic-display-source"><span>' + esc(String(index + 1).padStart(2, "0")) + ' / ' + esc(String(items.length).padStart(2, "0")) + '</span></div></div>' +
+      '<span class="topic-display-code">编号 ' + esc(String(index + 1).padStart(3, "0")) + '</span>' +
+      '<h1>' + esc(item.title || group.title) + '</h1>' +
+      (item.summary ? '<p class="topic-display-subtitle">' + esc(item.summary) + '</p>' : '') +
+      '<div class="topic-display-body">' + renderTypedFullBlockSequence(blocks, item.title || group.title, contentType) + '</div>' +
+      '<footer class="topic-display-footer"><span>学校大屏展示内容</span><span>栏目内容详情</span></footer>' +
+      '</article>';
+  }
+
+  function showSectionNewsList() {
+    var group = state.groups[state.group];
+    if (!group) return;
+    var page = $("chapterPage");
+    stopTopicMediaCarousels();
+    page.style.animation = "none";
+    void page.offsetWidth;
+    page.style.animation = "";
+    page.innerHTML = renderSectionNewsList(group);
+    $("chapterNav").style.display = "";
+    $("chapterProgress").style.display = "";
+    $("progressLabel").textContent =
+      String(state.group + 1).padStart(2, "0") + " / " +
+      String(state.groups.length).padStart(2, "0");
+    $("prevChapter").disabled = state.group === 0;
+    $("nextChapter").disabled = state.group === state.groups.length - 1;
+  }
+
+  function renderTopicHomePage(data, groups) {
+    function panelItems(g) {
+      var out = [];
+      (g && g.sections || []).forEach(function (sec) {
+        var its = sectionToNewsItems(sec);
+        if (its.length) out.push(its[0]);
+      });
+      return out;
+    }
+    function panelItemsAll(g, n) { return g ? groupNewsItems(g).slice(0, n) : []; }
+
+    // 面板1：基本情况 —— 每栏目一条 mini-card（最多 3）
+    var g0 = groups[0];
+    var p1items = panelItems(g0).slice(0, 3);
+    var panel1 = '<div class="paper-basic-grid">' + p1items.map(function (it) {
+      var cover = it.cover
+        ? '<div class="paper-mini-photo" style="background-image:url(\'' + esc(it.cover) + '\')"></div>'
+        : '<div class="paper-mini-photo paper-mini-photo-empty"><span>图文</span></div>';
+      return '<section class="paper-mini-card">' +
+        '<div class="paper-card-title">' + esc(it.sectionTitle || it.title) + '</div>' +
+        cover +
+        '<p>' + esc(compactText(it.title + "：" + (it.summary || ""), 64)) + '</p>' +
+        '</section>';
+    }).join("") + '</div>';
+
+    // 面板2：产教融合校企合作成果 —— 左卡（栏目图标行）+ 右卡（成果网格）
+    var g1 = groups[1];
+    var p2items = panelItems(g1).slice(0, 4);
+    var icons = (g1 ? g1.sections : []).slice(0, 4).map(function (s) {
+      return '<span>' + esc(displaySectionTitle(s)) + '</span>';
+    }).join("");
+    var grid = p2items.map(function (it) {
+      return '<div class="paper-result-item">' + esc(compactText(it.title, 10)) + '</div>';
+    }).join("") || '<div class="paper-result-item">暂无内容</div>';
+    var panel2 = '<div class="paper-cooperation-body">' +
+      '<section class="paper-partner-card"><div class="paper-card-title">校企合作项目</div>' +
+      '<div class="paper-partner-icons">' + (icons || '<span>合作方向</span>') + '</div>' +
+      '<p>' + esc((g1 && g1.sections[0] && (g1.sections[0].summary || "")) || "联动校内外资源开展校企合作、产教融合项目。") + '</p></section>' +
+      '<section class="paper-partner-card"><div class="paper-card-title">产教融合成果</div>' +
+      '<div class="paper-result-grid">' + grid + '</div>' +
+      '<p>点击进入查看该栏目全部事件与新闻。</p></section>' +
+      '</div>';
+
+    // 面板3：教学与创新成果 —— 4 卡网格（全量取前 4 条）
+    var g2 = groups[2];
+    var p3items = panelItemsAll(g2, 4);
+    var panel3 = '<div class="paper-story-grid">' + p3items.map(function (it) {
+      var cover = it.cover
+        ? '<div class="paper-story-photo" style="background-image:url(\'' + esc(it.cover) + '\')"></div>'
+        : '<div class="paper-story-photo paper-mini-photo-empty"><span>图文</span></div>';
+      return '<section class="paper-story-card">' + cover +
+        '<strong>' + esc(compactText(it.title, 12)) + '</strong>' +
+        '<p>' + esc(compactText(it.summary || it.title, 42)) + '</p></section>';
+    }).join("") + '</div>';
+
+    // 面板4：视频资源
+    var g3 = groups[3];
+    var p4items = panelItemsAll(g3, 1);
+    var video = p4items[0];
+    var panel4 = '<div class="paper-video-box">' +
+      (video && video.cover ? '<div class="paper-video-cover" style="background-image:url(\'' + esc(video.cover) + '\')"></div>' : '') +
+      '<span class="paper-play-mark" aria-hidden="true"></span>' +
+      '<div class="paper-video-controls"><span class="paper-tiny-play"></span><span>00:00 / 03:45</span><span class="paper-bar"></span></div>' +
+      '</div>' +
+      '<div class="paper-video-copy"><strong>' + esc(video ? video.title : "专题宣传视频") + '</strong>' +
+      '<p>' + esc(video ? video.summary || "" : "视频资源整理中，敬请期待。") + '</p></div>';
+
+    function panel(title, note, body, groupIndex) {
+      return '<article class="paper-panel"' + (groupIndex >= 0 ? ' data-group="' + groupIndex + '" tabindex="0" role="button" aria-label="进入' + esc(title) + '"' : '') + '>' +
+        '<div class="paper-panel-head">' +
+        '<span class="paper-panel-icon" aria-hidden="true"></span>' +
+        '<h3>' + esc(title) + '</h3>' +
+        (note ? '<span class="paper-panel-note">' + esc(note) + '</span>' : '') +
+        (groupIndex >= 0 ? '<em class="paper-panel-enter">进入 →</em>' : '') +
+        '</div>' +
+        '<div class="paper-panel-body">' + body + '</div>' +
+        '</article>';
+    }
+
+    var panelsHtml =
+      panel("基本情况", "院系概览", panel1, 0) +
+      panel("产教融合校企合作成果", "合作展示", panel2, 1) +
+      panel("教学与创新成果", "成果展示", panel3, 2) +
+      panel("视频资源", "播放区", panel4, g3 ? 3 : -1);
+
+    var links = topicExternalLinks(data);
+    var sysLink = links[0], resLink = links[1];
+    return '<section class="paper-home" data-paper-home>' +
+      '<header class="paper-header">' +
+      '<div class="paper-brand">' +
+      '<div class="paper-seal" aria-hidden="true"></div>' +
+      '<div class="paper-school">' +
+      '<div class="paper-title-row">' +
+      '<h1 class="paper-school-name">毕节职业技术学院</h1>' +
+      '<span class="paper-divider" aria-hidden="true"></span>' +
+      '<span class="paper-section-title">' + esc(data.name || "专题门户") + '</span>' +
+      '</div>' +
+      '<p class="paper-tagline">' + esc(data.summary || "围绕重点专业群、成果资源和展示素材组织专题内容。") + '</p>' +
+      '</div>' +
+      '</div>' +
+      '<aside class="paper-qr" aria-label="二维码区域"><div class="paper-qr-box">二维码<br>待放置</div></aside>' +
+      '</header>' +
+      '<div class="paper-home-layout">' +
+      '<div class="paper-home-grid">' + panelsHtml + '</div>' +
+      '<nav class="paper-side-actions" aria-label="特色入口">' +
+      '<a class="paper-round-link green"' + (sysLink ? ' href="' + esc(sysLink.href) + '" target="_blank" rel="noopener"' : '') + '>' + esc(sysLink ? sysLink.label : "特色系统") + '<br>入口</a>' +
+      '<a class="paper-round-link gold"' + (resLink ? ' href="' + esc(resLink.href) + '" target="_blank" rel="noopener"' : '') + '>' + esc(resLink ? resLink.label : "特色数字") + '<br>资源</a>' +
+      '</nav>' +
+      '</div>' +
+      '</section>';
+  }
+
+  function showTopicHome() {
+    var data = getData();
+    var page = $("chapterPage");
+    stopTopicMediaCarousels();
+    page.style.animation = "none";
+    void page.offsetWidth;
+    page.style.animation = "";
+    page.innerHTML = renderTopicHomePage(data, state.groups || []);
+    $("chapterNav").style.display = "none";
+    $("chapterProgress").style.display = "none";
+  }
+
   function openTopicLoopSection(sectionId) {
     if (state.kind !== "topics") return;
     var section = (state.sections || []).find(function (item) { return item.id === sectionId; });
     if (!section) return;
-    openDrawer(renderTopicFullSection(section));
+    var i = state.sections.indexOf(section);
+    if (i >= 0 && i !== state.section) {
+      goSection(i);
+    } else {
+      showSectionNewsList();
+    }
   }
 
   function renderTopicFullSection(section) {
@@ -1835,11 +2192,19 @@
       var kind = m[1], id = m[2];
       var list = kind === "departments" ? DATA.departments : DATA.topics;
       if (!list[id]) return;
-      var secIdx = 0;
+      var secIdx = -1;
       var sec = u.searchParams.get("section");
       if (sec) {
-        var idx = list[id].sections.findIndex(function (s) { return s.id === sec; });
-        if (idx >= 0) secIdx = idx;
+        if (kind === "topics") {
+          var groups = groupTopicSections(list[id].sections || []);
+          var gi = groups.findIndex(function (g) {
+            return g.id === sec || (g.sections || []).some(function (s) { return s.id === sec; });
+          });
+          secIdx = gi >= 0 ? gi : -1;
+        } else {
+          var idx = list[id].sections.findIndex(function (s) { return s.id === sec; });
+          if (idx >= 0) secIdx = idx;
+        }
       }
       // 已在该页且同章节则不做动作
       if (state.kind === kind && state.id === id && state.section === secIdx) return;
@@ -1893,6 +2258,13 @@
       if (e.target.closest(".experience-link")) return;
       var topicLoopCard = e.target.closest(".topic-loop-card[data-section-id]");
       if (topicLoopCard) { openTopicLoopSection(topicLoopCard.dataset.sectionId); return; }
+      var homePanel = e.target.closest(".paper-panel[data-group]");
+      if (homePanel) { goSection(Number(homePanel.dataset.group)); return; }
+      var newsCard = e.target.closest(".news-card[data-news-index]");
+      if (newsCard) {
+        openDrawer(renderNewsItemDetail(state.groups[state.group], Number(newsCard.dataset.newsIndex)));
+        return;
+      }
       var frame = e.target.closest(".photo-frame[data-lightbox]");
       if (frame) openLightbox(frame.dataset.lightbox, frame.dataset.caption);
     });
@@ -1900,6 +2272,16 @@
       if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("topic-loop-card")) {
         e.preventDefault();
         openTopicLoopSection(e.target.dataset.sectionId);
+        return;
+      }
+      if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("paper-panel")) {
+        e.preventDefault();
+        goSection(Number(e.target.dataset.group));
+        return;
+      }
+      if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("news-card")) {
+        e.preventDefault();
+        openDrawer(renderNewsItemDetail(state.groups[state.group], Number(e.target.dataset.newsIndex)));
         return;
       }
       if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("photo-frame")) {

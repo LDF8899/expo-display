@@ -1,0 +1,10 @@
+{
+  "provider": "zhipu-bigmodel",
+  "model": "cogview-4",
+  "size": "1920x1088",
+  "n": 1,
+  "saved": [
+    "static\\pages\\generated\\modern-agriculture-custom-bg-20260810-020145-1.png"
+  ],
+  "createdAt": "2026-08-10T02:01:47"
+}
