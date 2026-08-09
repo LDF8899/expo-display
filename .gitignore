@@ -39,7 +39,7 @@ sucai/view-source_*.htm
 static/blueprint/data.backup-*/
 
 # 大体积视频（未被页面引用，原始文件在 uploads/ 网盘）
-static/pages/generated/*.mp4
+static/pages/generated/**/*.mp4
 
 # 素材解析中间产物
 scripts/.docx_parsed/
