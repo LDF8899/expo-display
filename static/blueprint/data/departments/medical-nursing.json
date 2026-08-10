@@ -1,77 +1,9 @@
 {
-    "id":  "medical-nursing",
-    "type":  "department",
-    "name":  "医学护理系",
-    "summary":  "临床护理、康养服务与急救教育",
-    "cover":  "/uploads/blueprint/departments/medical-nursing/images/img01.webp",
-    "stats":  [
-                  {
-                      "label":  "建系时间",
-                      "value":  "2011 年"
-                  },
-                  {
-                      "label":  "专业",
-                      "value":  "3 个"
-                  },
-                  {
-                      "label":  "双师占比",
-                      "value":  "95% 以上"
-                  },
-                  {
-                      "label":  "实训场地",
-                      "value":  "35 个"
-                  },
-                  {
-                      "label":  "培养人才",
-                      "value":  "6000 余人"
-                  }
-              ],
-    "sections":  [
-                     {
-                         "id":  "overview",
-                         "title":  "基本情况",
-                         "blocks":  [
-                                        {
-                                            "type":  "text",
-                                            "content":  "系部简介：医学护理系"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "医学护理系始建于2011年，是毕节市内首批开设卫生健康类专业的高职院校，作为区域内医疗卫生与大健康服务领域高素质技术技能人才重点培养基地。"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "紧扣大健康产业发展需求设置专业，现开设护理、老年保健与管理、智慧健康养老服务与管理三大专业，精准对接临床护理、健康养老、基层社会服务核心岗位。师资队伍结构优良，双师型教师占比超95%。"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "现拥有国家级高技能人才培训基地（康养家政护理）、全国学校急救教育试点学校两大国家级平台；美国心脏协会心血管急救培训中心、贵州省红十字会救护员取证培训试点等省级平台。系部为全国智慧健康养老行业产教融合共同体第一届理事单位、铜仁市健康养老行业产教融合共同体副理事单位，联动省内外20余家优质单位共建校外实训基地，构建岗课训赛一体化育人体系。"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "校内建有标准化模拟医院、AHA急救培训中心等35个实训场地。办学至今累计培养优秀技能人才6000余人，学生护士执业资格考试通过率稳定在95%、专升本上线率达94%，师生累计斩获国家级、省级奖项180余项，乡村义诊服务群众超7万人次，人才质量获行业高度认可。"
-                                        },
-                                        {
-                                            "type":  "image",
-                                            "src":  "/uploads/blueprint/departments/medical-nursing/images/img01.webp",
-                                            "caption":  ""
-                                        },
-                                        {
-                                            "type":  "image",
-                                            "src":  "/uploads/blueprint/departments/medical-nursing/images/img02.webp",
-                                            "caption":  ""
-                                        },
-                                        {
-                                            "type":  "image",
-                                            "src":  "/uploads/blueprint/departments/medical-nursing/images/img03.webp",
-                                            "caption":  ""
-                                        },
-                                        {
-                                            "type":  "image",
-                                            "src":  "/uploads/blueprint/departments/medical-nursing/images/img04.webp",
-                                            "caption":  ""
-                                        }
-                                    ]
-                     }
-                 ]
+  "id": "medical-nursing",
+  "type": "department",
+  "name": "医学护理系",
+  "summary": "",
+  "cover": "",
+  "stats": [],
+  "sections": []
 }

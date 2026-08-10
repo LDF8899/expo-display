@@ -2,84 +2,8 @@
   "id": "digital-intelligence",
   "type": "topic",
   "name": "数智技术",
-  "summary": "聚焦人工智能、网络安全、数据应用与跨专业数字化改造，作为各系部数字能力的公共底座。",
-  "cover": "/uploads/blueprint/departments/information/images/img01.webp",
-  "stats": [
-    { "label": "整合系部", "value": "5 个" },
-    { "label": "核心方向", "value": "AI+数据" },
-    { "label": "支撑角色", "value": "公共底座" },
-    { "label": "展示重点", "value": "应用转化" }
-  ],
-  "sections": [
-    {
-      "id": "overview",
-      "title": "专题概况",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "数智技术专题以电子信息工程系为牵引，把人工智能、网络安全、数据应用、物联网和数字媒体能力延伸到能源、制造、文旅、康养、财经商贸等专业场景，形成学校跨专业数字化能力展示入口。"
-        },
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/information/images/img01.webp",
-          "caption": "电子信息工程系数智技术成果"
-        }
-      ]
-    },
-    {
-      "id": "majors",
-      "title": "专业群布局",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "关联系部：电子信息工程系承担技术底座；财政经济系承接数字商贸与财务数据应用；工矿建筑系承接智能设备与工程数字化；医学护理系承接智慧健康；旅游管理系承接数字文旅与服务管理。"
-        },
-        {
-          "type": "text",
-          "content": "该专题适合展示人工智能应用、网络安全实训、数据看板、数字资源平台、交互式展示系统和跨专业项目制学习成果。"
-        }
-      ]
-    },
-    {
-      "id": "cooperation",
-      "title": "产教协同",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "专题可对接信息技术企业、平台型企业和行业数字化项目，围绕真实需求共建课程、训练平台、认证项目和应用场景。"
-        },
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/information/images/img03.webp",
-          "caption": "数智技术竞赛与项目实践"
-        }
-      ]
-    },
-    {
-      "id": "achievements",
-      "title": "专题成果",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "成果展示可聚合技术竞赛、校企项目、平台建设、学生作品、数字化服务地方案例和跨专业应用成果。"
-        }
-      ]
-    },
-    {
-      "id": "gallery",
-      "title": "图文资料",
-      "blocks": [
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/information/images/img02.webp",
-          "caption": "数字技术服务场景"
-        },
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/finance/images/img01.webp",
-          "caption": "财经商贸数据应用场景"
-        }
-      ]
-    }
-  ]
+  "summary": "",
+  "cover": "",
+  "stats": [],
+  "sections": []
 }

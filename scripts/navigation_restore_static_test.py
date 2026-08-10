@@ -29,7 +29,7 @@ def main():
         "pageshow restore": 'window.addEventListener("pageshow"' in blueprint_js
         and "restoreRouteFromCache" in blueprint_js
         and "event.persisted" in blueprint_js,
-        "blueprint cache bust": "design-20260805e" in blueprint_html,
+        "blueprint cache bust": "design-20260811f" in blueprint_html,
         "admin cache bust": "nav-restore-20260805a" in admin_html,
         "no internal blank": not any(pattern in admin_html or pattern in admin_js for pattern in internal_blank_patterns),
     }

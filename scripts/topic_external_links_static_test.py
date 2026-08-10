@@ -27,12 +27,14 @@ def main():
         "server no cover": 'asset.get("role") == "external_link"' in server,
         "frontend merge": "mergeExternalLinksFromContentItems" in blueprint_js,
         "frontend extractor": "externalLinksForContentItem" in blueprint_js,
-        "frontend render": "renderExperienceLinks" in blueprint_js and "renderTopicExperienceDock" in blueprint_js and "experience-link" in blueprint_js,
+        "frontend render": "renderTopicExperienceActions" in blueprint_js and "renderTopicExperienceMenu" in blueprint_js and "topic-experience-trigger" in blueprint_js,
         "frontend aggregate": "topicExternalLinks(data)" in blueprint_js and "renderTopicExperienceDock(data)" in blueprint_js,
         "frontend label aware dedupe": 'href + "\\n" + label' in blueprint_js,
         "frontend click guard": 'e.target.closest(".experience-link")' in blueprint_js,
-        "frontend style": ".topic-experience-dock" in blueprint_css and ".experience-link:nth-child" in blueprint_css,
-        "cache bust": "design-20260805e" in blueprint_html,
+        "frontend style": ".topic-showcase-actions" in blueprint_css and ".topic-experience-menu" in blueprint_css,
+        "overview placement": "renderTopicExperienceActions(data)" in blueprint_js,
+        "subpage removal": "renderExperienceLinks(model.externalLinks" not in blueprint_js and "renderExperienceLinks(section.externalLinks" not in blueprint_js,
+        "cache bust": "design-20260811g" in blueprint_html,
         "provided urls": all(
             url in server
             for url in [

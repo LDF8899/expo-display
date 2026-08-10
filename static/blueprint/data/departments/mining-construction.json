@@ -1,62 +1,9 @@
 {
-    "id":  "mining-construction",
-    "type":  "department",
-    "name":  "工矿建筑系",
-    "summary":  "智慧矿山、智能制造与现代建造",
-    "cover":  "/uploads/blueprint/departments/mining-construction/images/img01.webp",
-    "stats":  [
-                  {
-                      "label":  "成立时间",
-                      "value":  "2008 年"
-                  },
-                  {
-                      "label":  "高职专业",
-                      "value":  "9 个"
-                  },
-                  {
-                      "label":  "教职工",
-                      "value":  "82 人"
-                  },
-                  {
-                      "label":  "实训室",
-                      "value":  "30 余间"
-                  },
-                  {
-                      "label":  "培养人才",
-                      "value":  "2 万余名"
-                  }
-              ],
-    "sections":  [
-                     {
-                         "id":  "overview",
-                         "title":  "基本情况",
-                         "blocks":  [
-                                        {
-                                            "type":  "image",
-                                            "src":  "/uploads/blueprint/departments/mining-construction/images/img01.webp",
-                                            "caption":  ""
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "系部简介："
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "工矿建筑系2008年成立，开设建筑工程技术、煤矿智能开采技术、智能机电技术、安全技术与管理、测绘工程技术、应用化工技术、新能源汽车检测与维修技术、资源综合利用技术、无人机应用技术等9个高职专业和煤矿开采中技专业，与贵州工程应用技术学院联合培养土木工程、工程管理、采矿工程3个本科专业学生。建筑工程技术、煤矿智能开采技术专业群为贵州省高水平专业群。"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "现有教职工82人，博士、教授、副教授等高层次人才齐备。建有国家、省、市三级高技能人才培训基地，打造模拟矿井、智能综采中心、建筑模型等30余间实训室，实训总投入近1.4 亿元。"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "依托统战资源对接广州港、广汽、奇瑞等东部龙头企业，年均提供实习就业岗位2000余个。牵头成立西南地区新型综合能源行业产教融合共同体、毕节市智能矿山市域产教联合体，加入全国城市更新、全国核能建设等10余个共同体和联合体。"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "累计培养学生2万余名，斩获国家级教学成果二等奖1项、省级一等奖2项，近三年学生竞赛获奖120余项，获评贵州省脱贫攻坚先进集体；教师承担省市级科研项目50余项，年度横向经费到账80余万元，成果丰硕。"
-                                        }
-                                    ]
-                     }
-                 ]
+  "id": "mining-construction",
+  "type": "department",
+  "name": "工矿建筑系",
+  "summary": "",
+  "cover": "",
+  "stats": [],
+  "sections": []
 }

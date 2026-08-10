@@ -2,79 +2,8 @@
   "id": "smart-construction",
   "type": "topic",
   "name": "智慧建造",
-  "summary": "面向现代建造、工程管理、测绘应用和绿色施工，承接工矿建筑系的建筑工程方向。",
-  "cover": "/uploads/blueprint/departments/mining-construction/images/img01.webp",
-  "stats": [
-    { "label": "整合系部", "value": "3 个" },
-    { "label": "核心方向", "value": "工程建造" },
-    { "label": "应用场景", "value": "智慧工地" },
-    { "label": "能力链条", "value": "设计施工管" }
-  ],
-  "sections": [
-    {
-      "id": "overview",
-      "title": "专题概况",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "智慧建造专题以工矿建筑系建筑工程方向为核心，联动电子信息工程系的数字技术能力和财政经济系的项目管理、成本核算与供应链能力，展示现代建造、测绘应用、工程管理和绿色施工的综合育人路径。"
-        },
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/mining-construction/images/img01.webp",
-          "caption": "工矿建筑系工程技术展示"
-        }
-      ]
-    },
-    {
-      "id": "majors",
-      "title": "专业群布局",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "关联系部：工矿建筑系承担建筑工程、测绘、施工组织和安全管理；电子信息工程系支撑工程数字化、数据采集和可视化展示；财政经济系支撑工程成本、项目运营与供应链管理。"
-        },
-        {
-          "type": "text",
-          "content": "专题可展示建筑模型、工程测绘、智慧工地、绿色施工、安全教育、项目管理和工程类学生实践成果。"
-        }
-      ]
-    },
-    {
-      "id": "cooperation",
-      "title": "产教协同",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "专题适合对接建筑施工、城市更新、测绘服务、工程咨询和数字建造企业，通过真实工程任务组织课程、实训和成果展示。"
-        }
-      ]
-    },
-    {
-      "id": "achievements",
-      "title": "专题成果",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "成果展示可聚合工程实践作品、技能竞赛、校企项目、服务地方建设案例和学生岗位能力成长记录。"
-        }
-      ]
-    },
-    {
-      "id": "gallery",
-      "title": "图文资料",
-      "blocks": [
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/information/images/img04.webp",
-          "caption": "数字化技术支撑智慧建造"
-        },
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/finance/images/img02.webp",
-          "caption": "项目运营与供应链管理能力"
-        }
-      ]
-    }
-  ]
+  "summary": "",
+  "cover": "",
+  "stats": [],
+  "sections": []
 }

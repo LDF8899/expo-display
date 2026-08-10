@@ -11,7 +11,7 @@ def main():
     css = BLUEPRINT_CSS.read_text(encoding="utf-8")
     logo_block = css.split(".brand-logo {", 1)[1].split("}", 1)[0]
     checks = {
-        "cache bust": "blueprint.css?v=design-20260805e" in html and "blueprint.js?v=design-20260805e" in html,
+        "cache bust": "blueprint.css?v=design-20260811f" in html and "blueprint.js?v=design-20260811f" in html,
         "logo scales to display visual size": "max-height: 90px;" in logo_block and "flex: 0 0 540px;" in logo_block,
         "logo contains full width": "width: min(540px, 100%);" in logo_block,
         "logo no circle crop": "border-radius" not in logo_block and "width: 82px;" not in logo_block and "height: 82px;" not in logo_block,

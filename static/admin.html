@@ -28,7 +28,7 @@
           <p id="viewIntro">正在加载</p>
         </div>
         <div class="topbar-actions">
-          <a class="button ghost" href="/departments">学校门户</a>
+          <a class="button ghost" href="/departments">门户官网</a>
           <a class="button ghost" href="/display">扫码大屏</a>
           <button id="refreshData" class="button ghost" type="button">刷新</button>
         </div>
@@ -41,7 +41,7 @@
           <div class="panel-head">
             <div>
               <h2>账号管理</h2>
-              <p>创建老师、系部管理员和管理员账号，维护部门、角色和启用状态。</p>
+              <p>创建老师、专题管理员和管理员账号，维护部门、角色和启用状态。</p>
             </div>
           </div>
           <form id="userForm" class="form-grid four">
@@ -51,7 +51,7 @@
             <input id="userPassword" placeholder="初始/重置密码" />
             <select id="userRole">
               <option value="teacher">老师</option>
-              <option value="department_admin">系部管理员</option>
+              <option value="department_admin">专题管理员</option>
               <option value="admin">管理员</option>
             </select>
             <button class="button primary" type="submit">保存账号</button>
@@ -67,7 +67,7 @@
             <select id="userRoleFilter">
               <option value="">全部角色</option>
               <option value="admin">管理员</option>
-              <option value="department_admin">系部管理员</option>
+              <option value="department_admin">专题管理员</option>
               <option value="teacher">老师</option>
             </select>
             <select id="userEnabledFilter">
@@ -90,16 +90,15 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-               <h2 id="projectsHeading">门户管理</h2>
-               <p id="projectsIntro">统一维护学校门户、系部门户和专题门户，并分配归属老师。</p>
+               <h2 id="projectsHeading">门户官网管理</h2>
+               <p id="projectsIntro">统一维护学校门户和专题门户；系部按专题门户管理。</p>
             </div>
             <div class="toolbar">
               <input id="projectSearch" placeholder="搜索门户、归属、路由" />
               <select id="projectTypeFilter">
                 <option value="">全部门户</option>
                 <option value="school">学校门户</option>
-                <option value="department">系部门户</option>
-                <option value="topic">专题门户</option>
+                <option value="content">专题门户</option>
               </select>
               <select id="projectPublishFilter">
                 <option value="">全部发布状态</option>
@@ -134,7 +133,7 @@
           <div class="form-grid portal-config-grid">
             <input id="projectName" placeholder="门户名称，如 医学护理系" required />
             <select id="projectPortalType" class="admin-only">
-              <option value="department">系部门户</option>
+              <option value="department">专题门户（原系部）</option>
               <option value="school">学校门户</option>
               <option value="topic">专题门户</option>
             </select>
@@ -152,6 +151,42 @@
             <input id="projectImageFile" type="file" accept="image/*" />
             <button id="selectProjectAsset" class="button ghost" type="button">选择资源</button>
           </div>
+          <fieldset class="portal-home-editor">
+            <legend>官网首页显示</legend>
+            <section id="schoolHomeFields" class="portal-home-fieldset">
+              <div class="field-head">
+                <span>/departments 首页顶部</span>
+                <small>学校门户负责首页导览、矩阵标题、页脚等固定位置文字。</small>
+              </div>
+              <div class="form-grid two">
+                <input id="portalHomeKicker" placeholder="导览小标题，如 School Portal" />
+                <input id="portalHomeTitle" placeholder="导览标题，如 学校门户" />
+              </div>
+              <textarea id="portalHomeCopy" rows="2" placeholder="导览说明文字"></textarea>
+              <div class="form-grid two">
+                <input id="portalHomeSectionKicker" placeholder="矩阵小标题，如 Integrated Showcase" />
+                <input id="portalHomeSectionTitle" placeholder="矩阵标题，如 创新育人矩阵" />
+              </div>
+              <textarea id="portalHomeSectionCopy" rows="2" placeholder="矩阵说明文字"></textarea>
+              <div class="form-grid two">
+                <textarea id="portalHomeRouteLabels" rows="3" placeholder="参观动线标签，每行一个"></textarea>
+                <textarea id="portalHomeFooter" rows="3" placeholder="底部提示文字"></textarea>
+              </div>
+            </section>
+            <section id="topicHomeCardFields" class="portal-home-fieldset">
+              <div class="field-head">
+                <span>/departments 首页卡片</span>
+                <small>专题门户负责自己在学校门户首页中的卡片文字、标签、关联入口和排序；封面图使用上面的默认图片。</small>
+              </div>
+              <div class="form-grid three">
+                <input id="portalHomeCardLabel" placeholder="卡片左上标签，如 创新育人专题" />
+                <input id="portalHomeCardSortOrder" type="number" step="1" placeholder="排序，数字越小越靠前" />
+                <input id="portalHomeCardImageHint" value="封面图使用上方默认图片/上传图片" disabled />
+              </div>
+              <textarea id="portalHomeCardSummary" rows="3" placeholder="卡片摘要文字"></textarea>
+              <textarea id="portalHomeCardChips" rows="4" placeholder="卡片底部标签，每行一个：显示文字|目标路由，如 旅游管理系|tourism"></textarea>
+            </section>
+          </fieldset>
           <fieldset class="quality-rules-editor">
             <legend>资料质量规则</legend>
             <div class="form-grid quality-rules-grid">
@@ -209,40 +244,87 @@
               <select id="pageModuleFilter">
                 <option value="">全部板块</option>
               </select>
-              <button id="newPage" class="button primary" type="button">新建结构化资料</button>
-              <button id="newLegacyPage" class="button ghost" type="button">旧版富文本</button>
+              <button id="newPage" class="button primary" type="button">新建内容</button>
+              <button id="newLegacyPage" class="button ghost" type="button">兼容旧页</button>
             </div>
           </div>
           <div id="currentPortalStrip" class="current-portal-strip"></div>
-          <section class="module-coverage-panel" aria-label="标准板块覆盖">
-            <div class="module-coverage-head">
-              <div>
-                <strong id="moduleCoverageTitle">标准板块覆盖</strong>
-                <span id="moduleCoverageSummary">正在统计门户资料完整度</span>
-              </div>
-              <div class="module-coverage-toolbar">
-                <span id="moduleCoverageBadge" class="badge warn">待统计</span>
-                <button id="exportModuleCoverage" class="button small" type="button">导出板块 CSV</button>
-                <button id="exportModuleGaps" class="button small" type="button">导出待补 CSV</button>
-              </div>
+          <section id="contentWorkspaceNav" class="content-workspace-nav" aria-label="内容工作台分区">
+            <div>
+              <strong id="contentWorkspaceModeTitle">栏目看板</strong>
+              <span id="contentWorkspaceModeIntro">从门户完整度和结构化资料开始维护，优先补齐缺项和待审内容。</span>
             </div>
-            <div id="moduleLibrary" class="module-library"></div>
-            <p class="module-coverage-hint">已通过资料会进入对应门户页；展厅发布用于控制扫码大屏展示范围。</p>
-          </section>
-          <section class="content-quality-panel" aria-label="资料质量检查">
-            <div class="panel-subhead">
-              <div>
-                <strong>资料质量检查</strong>
-                <span id="contentQualitySummary">正在检查标题、摘要、正文和素材完整度。</span>
-              </div>
-              <div class="content-quality-toolbar">
-                <span id="contentQualityBadge" class="badge warn">待检查</span>
-                <button id="exportContentQuality" class="button small" type="button">导出清单 CSV</button>
-              </div>
+            <div class="content-mode-tabs">
+              <button class="active" type="button" data-content-mode="content">栏目内容</button>
+              <button type="button" data-content-mode="templates">资料采集</button>
+              <button type="button" data-content-mode="reports">数据报表</button>
+              <button type="button" data-content-mode="advanced">高级兼容</button>
             </div>
-            <div id="contentQualityList" class="content-quality-list"></div>
           </section>
-          <section class="lowcode-template-panel" aria-label="资料采集模板">
+          <section class="content-workflow-shell" data-content-section="content reports" aria-label="内容维护工作流">
+            <aside class="portal-tree-panel" data-workspace-only="content" aria-label="门户树">
+              <div class="workspace-panel-head">
+                <strong>门户树</strong>
+                <span>按学校门户和专题门户选择维护对象。</span>
+              </div>
+              <div id="contentPortalTree" class="content-portal-tree"></div>
+            </aside>
+            <section class="module-coverage-panel" aria-label="标准板块覆盖">
+              <div class="module-coverage-head">
+                <div>
+                  <strong id="moduleCoverageTitle">标准板块覆盖</strong>
+                  <span id="moduleCoverageSummary">正在统计门户资料完整度</span>
+                </div>
+                <div class="module-coverage-toolbar">
+                  <span id="moduleCoverageBadge" class="badge warn">待统计</span>
+                  <button id="exportModuleCoverage" class="button small" type="button">导出板块 CSV</button>
+                  <button id="exportModuleGaps" class="button small" type="button">导出待补 CSV</button>
+                </div>
+              </div>
+              <div id="moduleLibrary" class="module-library"></div>
+              <p class="module-coverage-hint">已通过资料会进入对应门户页；扫码大屏管理用于控制大屏可打开的资料范围。</p>
+              <section class="structured-panel cms-main-list" data-content-section="content" aria-label="结构化资料">
+                <div class="panel-subhead">
+                  <div>
+                    <strong>栏目内容</strong>
+                    <span>按资料类型录入，前端自动套用人物、活动、荣誉、成果、场景、视频或图文抽屉模板。</span>
+                  </div>
+                  <div class="content-item-toolbar">
+                    <input id="contentItemSearch" placeholder="搜索标题、摘要、类型" />
+                    <select id="contentItemModuleFilter">
+                      <option value="">全部板块</option>
+                    </select>
+                    <span id="contentItemsSummary" class="badge">0 条</span>
+                    <button id="exportAssetArchive" class="button small" type="button">导出素材归档 CSV</button>
+                  </div>
+                </div>
+                <div id="contentItemsGrid" class="content-items-grid"></div>
+                <div id="contentItemsPager" class="list-pager"></div>
+              </section>
+            </section>
+            <aside class="workspace-status-panel" data-workspace-only="content reports" aria-label="门户状态和建议">
+              <div class="workspace-panel-head">
+                <strong>状态建议</strong>
+                <span>把下一步动作直接摆在维护流程旁边。</span>
+              </div>
+              <div id="workspaceStatusSummary" class="workspace-status-summary"></div>
+              <div id="workspaceActionList" class="workspace-action-list"></div>
+              <section class="content-quality-panel cms-side-quality" data-content-section="content reports" aria-label="资料质量检查">
+                <div class="panel-subhead">
+                  <div>
+                    <strong>质量检查</strong>
+                    <span id="contentQualitySummary">正在检查标题、摘要、正文和素材完整度。</span>
+                  </div>
+                  <div class="content-quality-toolbar">
+                    <span id="contentQualityBadge" class="badge warn">待检查</span>
+                    <button id="exportContentQuality" class="button small" type="button">导出清单 CSV</button>
+                  </div>
+                </div>
+                <div id="contentQualityList" class="content-quality-list"></div>
+              </section>
+            </aside>
+          </section>
+          <section class="lowcode-template-panel" data-content-section="templates" aria-label="资料采集模板">
             <div class="panel-subhead">
               <div>
                 <strong>资料采集模板</strong>
@@ -258,7 +340,7 @@
             </div>
             <div id="lowcodeFormsGrid" class="lowcode-forms-grid"></div>
           </section>
-          <section class="lowcode-report-panel" aria-label="资料填报统计">
+          <section class="lowcode-report-panel" data-content-section="reports" aria-label="资料填报统计">
             <div class="panel-subhead">
               <div>
                 <strong>资料填报统计</strong>
@@ -272,7 +354,7 @@
             </div>
             <div id="lowcodeReportGrid" class="lowcode-report-grid"></div>
           </section>
-          <section class="lowcode-record-panel" aria-label="模板提交记录">
+          <section class="lowcode-record-panel" data-content-section="templates reports" aria-label="模板提交记录">
             <div class="panel-subhead">
               <div>
                 <strong>模板提交记录</strong>
@@ -302,37 +384,19 @@
             </div>
             <div id="lowcodeRecordDetail" class="lowcode-record-detail"></div>
           </section>
-          <section class="structured-panel" aria-label="结构化资料">
-            <div class="panel-subhead">
-              <div>
-                <strong>结构化资料</strong>
-                <span>按资料类型录入，前端自动套用人物、活动、荣誉、成果、场景、视频或图文抽屉模板。</span>
-              </div>
-              <div class="content-item-toolbar">
-                <input id="contentItemSearch" placeholder="搜索标题、摘要、类型" />
-                <select id="contentItemModuleFilter">
-                  <option value="">全部板块</option>
-                </select>
-                <span id="contentItemsSummary" class="badge">0 条</span>
-                <button id="exportAssetArchive" class="button small" type="button">导出素材归档 CSV</button>
-              </div>
-            </div>
-            <div id="contentItemsGrid" class="content-items-grid"></div>
-            <div id="contentItemsPager" class="list-pager"></div>
-          </section>
-          <div class="panel-subhead legacy-subhead">
+          <div class="panel-subhead legacy-subhead" data-content-section="advanced">
             <div>
               <strong>兼容展示页</strong>
               <span>结构化资料通过后会自动同步到这里；旧资料仍可编辑。</span>
             </div>
           </div>
-          <div id="legacyPagesTableWrap" class="table-wrap">
+          <div id="legacyPagesTableWrap" class="table-wrap" data-content-section="advanced">
             <table class="pages-table">
               <thead><tr><th>编号</th><th>标题</th><th>板块</th><th>状态</th><th>二维码</th><th>操作</th></tr></thead>
               <tbody id="pagesTable"></tbody>
             </table>
           </div>
-          <div id="pagesPager" class="list-pager"></div>
+          <div id="pagesPager" class="list-pager" data-content-section="advanced"></div>
           <section id="pageHistoryPanel" class="history-panel" hidden>
             <div class="panel-head">
               <div><h2 id="pageHistoryTitle">板块资料历史</h2><p>查看资料草稿、删除申请、审核结果和字段变化。</p></div>
@@ -474,7 +538,26 @@
             <input id="contentSubtitle" placeholder="副标题 / 身份 / 活动信息" />
           </div>
           <textarea id="contentSummary" rows="2" placeholder="摘要：卡片和抽屉开头优先展示"></textarea>
-          <textarea id="contentBodyText" rows="8" placeholder="正文段落：一段一行或空行分隔，系统会保存为结构化段落"></textarea>
+          <section class="rich-editor-section content-rich-editor">
+            <div class="field-head">
+              <span>正文</span>
+              <small>像写文档一样编辑，保存后同步到门户和扫码详情页</small>
+            </div>
+            <div class="rich-toolbar">
+              <button type="button" data-content-block="h2">H2</button>
+              <button type="button" data-content-block="h3">H3</button>
+              <button type="button" data-content-block="p">正文</button>
+              <button type="button" data-content-command="bold">B</button>
+              <button type="button" data-content-command="italic">I</button>
+              <button type="button" data-content-command="insertUnorderedList">列表</button>
+              <button type="button" data-content-command="insertOrderedList">编号</button>
+              <button type="button" data-content-insert="quote">引用</button>
+              <button type="button" data-content-insert="divider">分割线</button>
+              <button type="button" data-content-insert="image">插图</button>
+            </div>
+            <div id="contentRichBody" class="rich-body content-rich-body" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="在这里编辑资料正文"></div>
+            <textarea id="contentBodyText" hidden></textarea>
+          </section>
           <div class="form-grid two">
             <textarea id="contentMetaText" rows="6" placeholder="类型字段：每行一个，例如&#10;姓名：张三&#10;身份：优秀校友&#10;年份：2026"></textarea>
             <section class="content-asset-manager" aria-label="结构化素材">
@@ -662,21 +745,21 @@
 
       <section id="deployView" class="view admin-only">
         <section class="panel">
-          <div class="panel-head"><div><h2>展厅发布</h2><p>欢迎页和板块资料独立发布；欢迎页只允许选择学校门户，资料可按当前门户勾选展示。</p></div></div>
+          <div class="panel-head"><div><h2>扫码大屏管理</h2><p>管理 /display 欢迎页、扫码内容池和现场大屏发布范围；内容来源复用门户资料库。</p></div></div>
           <div class="form-grid two">
             <select id="deployProject"></select>
             <button id="deployWelcome" class="button ghost" type="button">发布欢迎页</button>
           </div>
           <div id="deployCheck" class="deploy-check"></div>
           <div class="list-controls">
-            <input id="deployPageSearch" placeholder="搜索可发布资料编号、标题、板块" />
+            <input id="deployPageSearch" placeholder="搜索可进入大屏的资料编号、标题、板块" />
             <select id="deployPageModuleFilter">
               <option value="">全部板块</option>
             </select>
           </div>
           <div id="deployPages" class="check-list"></div>
           <div id="deployPagesPager" class="list-pager"></div>
-          <button id="deployContent" class="button primary" type="button">发布板块资料</button>
+          <button id="deployContent" class="button primary" type="button">发布到扫码大屏</button>
           <p id="deployStatus" class="status-text"></p>
         </section>
       </section>
@@ -702,6 +785,36 @@
         </section>
       </section>
 
+      <section id="settingsView" class="view admin-only">
+        <section class="panel">
+          <div class="panel-head">
+            <div><h2>系统设置</h2><p>把低频维护入口收拢到这里，日常内容维护不再被账号、日志和上线配置打断。</p></div>
+          </div>
+          <div class="settings-grid">
+            <article>
+              <strong>账号与权限</strong>
+              <span>维护管理员、专题管理员和老师账号，分配门户归属。</span>
+              <button class="button small primary" type="button" data-settings-view="users">进入账号管理</button>
+            </article>
+            <article>
+              <strong>扫码大屏</strong>
+              <span>配置欢迎页和扫码内容池，查看影响范围与可进入大屏内容。</span>
+              <button class="button small primary" type="button" data-settings-view="deploy">进入扫码大屏</button>
+            </article>
+            <article>
+              <strong>操作日志</strong>
+              <span>按账号、动作和时间追踪关键后台操作，支持导出 CSV。</span>
+              <button class="button small" type="button" data-settings-view="logs">查看日志</button>
+            </article>
+            <article>
+              <strong>个人信息</strong>
+              <span>查看当前账号资料，并修改登录密码。</span>
+              <button class="button small" type="button" data-settings-view="account">个人设置</button>
+            </article>
+          </div>
+        </section>
+      </section>
+
       <section id="accountView" class="view">
         <section class="panel">
           <div class="panel-head"><div><h2>个人设置</h2><p>查看资料并修改自己的密码。</p></div></div>
@@ -717,6 +830,6 @@
     </main>
 
     <template id="emptyTpl"><div class="empty">暂无数据</div></template>
-    <script src="/static/admin.js?v=nav-restore-20260805a"></script>
+    <script src="/static/admin.js?v=visual-preview-20260810a"></script>
   </body>
 </html>

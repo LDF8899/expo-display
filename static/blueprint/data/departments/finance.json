@@ -1,76 +1,9 @@
 {
-    "id":  "finance",
-    "type":  "department",
-    "name":  "财政经济系",
-    "summary":  "数字商贸、智慧物流与财务实践",
-    "cover":  "/uploads/blueprint/departments/finance/images/img01.webp",
-    "stats":  [
-                  {
-                      "label":  "组建时间",
-                      "value":  "2008 年"
-                  },
-                  {
-                      "label":  "核心专业",
-                      "value":  "3 个"
-                  },
-                  {
-                      "label":  "在校生",
-                      "value":  "约 1600 人"
-                  },
-                  {
-                      "label":  "专升本上线",
-                      "value":  "93%"
-                  },
-                  {
-                      "label":  "获奖累计",
-                      "value":  "400 余项"
-                  }
-              ],
-    "sections":  [
-                     {
-                         "id":  "overview",
-                         "title":  "基本情况",
-                         "blocks":  [
-                                        {
-                                            "type":  "text",
-                                            "content":  "改：财政经济系于 2008 年组建，开设大数据与会计、现代物流管理、电子商务三大专业，年均在校生约 1600 人。2022 年起与贵州工程应用技术学院联合培养财务管理本科班。"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "电子商务专业为毕节市人民政府授牌 \"毕节电子商务学院\"，专业群获评贵州省职业教育特色骨干专业群（优秀等次）；大数据与会计专业为省级骨干专业。加入全国直播电商职业教育集团等 5 个国家级产教融合共同体，牵头组建毕节市乡村电商职业教育产教联盟、东西部协作乡村电商行业产教融合共同体（成员单位 120 余家）。拥有贵州省农业电商产业扶贫协同创新中心、高水平乡村电商产教融合实训基地等省级项目 11 项，获批市级数商兴农人才团队、省级教学创新人才团队。先后荣获省级五好基层党组织、市级样板院系、全国五四红旗团支部、全国活力团支部等荣誉。"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "学生专升本上线率 93%、录取率 89%。2025年荣获贵州省教学成果特等奖；技能大赛斩获国家级铜奖5项、省级一等奖12项，各级各类奖项累计400余项，为区域经济社会发展作出积极贡献。"
-                                        },
-                                        {
-                                            "type":  "image",
-                                            "src":  "/uploads/blueprint/departments/finance/images/img01.webp",
-                                            "caption":  ""
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "京东实战班618校内真岗实战"
-                                        },
-                                        {
-                                            "type":  "image",
-                                            "src":  "/uploads/blueprint/departments/finance/images/img02.webp",
-                                            "caption":  "京东实战班618校内真岗实战"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "物流专业教师开展校内专业教学"
-                                        },
-                                        {
-                                            "type":  "image",
-                                            "src":  "/uploads/blueprint/departments/finance/images/img03.webp",
-                                            "caption":  "物流专业教师开展校内专业教学"
-                                        },
-                                        {
-                                            "type":  "text",
-                                            "content":  "学生到昆山亚洲一号物流园开展实践教学"
-                                        }
-                                    ]
-                     }
-                 ]
+  "id": "finance",
+  "type": "department",
+  "name": "财政经济系",
+  "summary": "",
+  "cover": "",
+  "stats": [],
+  "sections": []
 }

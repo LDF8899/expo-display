@@ -2,84 +2,8 @@
   "id": "smart-healthcare",
   "type": "topic",
   "name": "智慧康养",
-  "summary": "围绕护理、康养服务、急救教育和智慧健康管理，整合医学护理、旅游服务与信息技术资源。",
-  "cover": "/uploads/blueprint/departments/medical-nursing/images/img01.webp",
-  "stats": [
-    { "label": "整合系部", "value": "3 个" },
-    { "label": "核心方向", "value": "康养护理" },
-    { "label": "服务对象", "value": "健康生活" },
-    { "label": "展示形态", "value": "场景化" }
-  ],
-  "sections": [
-    {
-      "id": "overview",
-      "title": "专题概况",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "智慧康养专题以医学护理系为核心，联动旅游管理系的服务接待与康养场景运营能力，以及电子信息工程系的数字化平台与智能设备支撑，展示护理教育、急救训练、康养服务和健康管理的综合育人路径。"
-        },
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/medical-nursing/images/img01.webp",
-          "caption": "护理与康养服务实训场景"
-        }
-      ]
-    },
-    {
-      "id": "majors",
-      "title": "专业群布局",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "关联系部：医学护理系承担临床护理、急救教育和康养服务主线；旅游管理系承接康养旅游、酒店服务与接待运营；电子信息工程系支撑健康数据、智能终端和数字化互动展示。"
-        },
-        {
-          "type": "text",
-          "content": "可展示护理技能、老年照护、急救科普、康养服务设计、智慧健康设备应用和学生志愿服务成果。"
-        }
-      ]
-    },
-    {
-      "id": "cooperation",
-      "title": "产教协同",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "专题适合联动医院、社区、养老机构、康养企业与旅游服务企业，共建真实服务场景，让学生在护理、健康管理、服务运营和数字工具应用中完成综合训练。"
-        },
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/tourism/images/img02.webp",
-          "caption": "服务接待与康养运营场景"
-        }
-      ]
-    },
-    {
-      "id": "achievements",
-      "title": "专题成果",
-      "blocks": [
-        {
-          "type": "text",
-          "content": "成果展示可包括护理技能竞赛、急救教育活动、康养服务案例、志愿服务项目、校企合作实践和智慧健康互动内容。"
-        }
-      ]
-    },
-    {
-      "id": "gallery",
-      "title": "图文资料",
-      "blocks": [
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/medical-nursing/images/img02.webp",
-          "caption": "医学护理教学成果"
-        },
-        {
-          "type": "image",
-          "src": "/uploads/blueprint/departments/information/images/img02.webp",
-          "caption": "信息技术支撑智慧健康应用"
-        }
-      ]
-    }
-  ]
+  "summary": "",
+  "cover": "",
+  "stats": [],
+  "sections": []
 }

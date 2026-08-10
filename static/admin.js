@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", reviewStatusFilter: "pending", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "", deploySelectionProjectId: "", deploySelectedPageIds: [] };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", reviewStatusFilter: "pending", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", contentWorkspaceMode: "content", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "", deploySelectionProjectId: "", deploySelectedPageIds: [] };
 const listState = {
   users: { page: 1, pageSize: 10 },
   projects: { page: 1, pageSize: 10 },
@@ -155,9 +155,9 @@ const moduleDefaultContentTypes = {
   honors: "honor",
   media: "video",
 };
-const portalTypeLabels = { school: "学校门户", department: "系部门户", topic: "专题门户" };
+const portalTypeLabels = { school: "学校门户", department: "专题门户", topic: "专题门户" };
 const moduleSets = {
-  department: standardModules,
+  department: topicModules,
   school: [
     { key: "service", label: "社会服务", description: "技术服务、培训服务、校地合作", code: "SERVICE", aliases: ["社会服务", "技术服务", "培训服务", "校地合作", "服务地方"] },
     { key: "international", label: "国际交流", description: "国际合作、交流项目、开放办学", code: "INTL", aliases: ["国际交流", "国际交流合作", "国际合作", "中外合作", "境外交流"] },
@@ -237,14 +237,16 @@ const templateGuides = {
 const allowedRichTags = new Set(["A", "B", "BLOCKQUOTE", "BR", "DIV", "EM", "FIGCAPTION", "FIGURE", "H2", "H3", "H4", "HR", "I", "IMG", "LI", "OL", "P", "SPAN", "STRONG", "U", "UL"]);
 
 const views = {
-  dashboard: ["门户总览", "查看欢迎页、学校门户、系部门户、专题门户和发布状态。"],
-  users: ["账号管理", "创建、导入、禁用和维护老师、系部管理员与管理员账号。"],
-  projects: ["门户管理", "统一维护学校门户、系部门户和专题门户，并分配归属老师。"],
-  pages: ["板块资料", "维护门户下的板块资料，审核通过后进入展示。"],
-  assets: ["素材库", "上传、复用和删除图片、视频和附件素材。"],
-  reviews: ["审核发布", "审核板块资料草稿、删除申请和门户配置草稿。"],
-  deploy: ["展厅发布", "选择欢迎页项目和实际展示资料。"],
+  dashboard: ["工作台", "快速查看待办、缺项、最近更新和发布状态。"],
+  users: ["账号管理", "创建、导入、禁用和维护老师、专题管理员与管理员账号。"],
+  projects: ["门户官网", "统一维护学校门户和专题门户；系部按专题门户管理。"],
+  pages: ["门户内容", "按专题栏目看板推进资料维护、质量检查和前台预览。"],
+  assets: ["素材中心", "上传、复用和删除图片、视频和附件素材。"],
+  reviews: ["门户审核", "审核内容、门户配置和删除申请，并进入发布检查。"],
+  reports: ["数据与报表", "集中查看门户完整度、内容质量、素材归档和资料填报统计。"],
+  deploy: ["扫码大屏", "管理 /display 欢迎页、扫码内容池和现场大屏发布范围。"],
   logs: ["操作日志", "查询和导出关键操作日志。"],
+  settings: ["系统设置", "维护账号、操作日志、个人信息和低频后台配置。"],
   account: ["个人设置", "查看个人资料并修改密码。"],
 };
 const teacherViews = {
@@ -254,16 +256,28 @@ const teacherViews = {
   account: ["个人设置", "查看个人资料并修改密码。"],
 };
 const teacherViewOrder = ["pages", "assets", "projects", "account"];
-const reviewerViewOrder = ["dashboard", "projects", "pages", "assets", "reviews", "account"];
+const reviewerViewOrder = ["dashboard", "projects", "pages", "assets", "reviews", "reports", "account"];
 
 function isAdmin() { return state.user && state.user.role === "admin"; }
 function isDepartmentAdmin() { return state.user && state.user.role === "department_admin"; }
 function canReview() { return isAdmin() || isDepartmentAdmin(); }
 function isTeacherPortal() { return !canReview(); }
-function roleLabel(role) { return { admin: "管理员", department_admin: "系部管理员", teacher: "老师" }[role] || "老师"; }
+function roleLabel(role) { return { admin: "管理员", department_admin: "专题管理员", teacher: "老师" }[role] || "老师"; }
 function appBasePath() { return isTeacherPortal() ? "/teacher" : "/admin"; }
 function allowedViewOrder() {
-  return isAdmin() ? ["dashboard", "users", "projects", "pages", "assets", "reviews", "deploy", "logs", "account"] : canReview() ? reviewerViewOrder : teacherViewOrder;
+  return isAdmin() ? ["dashboard", "projects", "pages", "assets", "reviews", "reports", "settings", "users", "deploy", "logs", "account"] : canReview() ? reviewerViewOrder : teacherViewOrder;
+}
+function primaryNavOrder() {
+  return isAdmin() ? ["dashboard", "projects", "deploy", "settings"] : canReview() ? ["dashboard", "projects", "account"] : teacherViewOrder;
+}
+function navGroupForView(view) {
+  if (view === "dashboard") return "";
+  if (["projects", "pages", "assets", "reviews", "reports"].includes(view)) return "门户官网管理";
+  if (view === "deploy") return "扫码大屏管理";
+  return "系统管理";
+}
+function viewContainerId(view) {
+  return view === "reports" ? "pagesView" : `${view}View`;
 }
 function viewMeta(view) { return isTeacherPortal() && teacherViews[view] ? teacherViews[view] : views[view]; }
 function escapeHtml(value) {
@@ -363,6 +377,14 @@ function portalPreviewUrl(project) {
   if (type === "topic") return slug ? `/topics/${slug}` : "";
   return slug ? `/departments/${slug}` : "";
 }
+function portalVisualEditUrl(project) {
+  const type = normalizePortalType(project && project.portalType);
+  const slug = normalizePortalSlug(project && project.portalSlug);
+  const url = new URL("/departments", location.origin);
+  url.searchParams.set("edit", "1");
+  if (type !== "school" && slug) url.searchParams.set("focus", slug);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
 function portalRouteLabel(project) {
   return portalPreviewUrl(project) || "未配置前台路径";
 }
@@ -380,7 +402,33 @@ function syncProjectPortalSlugField() {
   const type = normalizePortalType($("projectPortalType").value);
   input.disabled = type === "school";
   if (type === "school") input.value = "";
-  input.placeholder = type === "topic" ? "专题路由，如 smart-energy" : type === "department" ? "系部路由，如 finance" : "学校门户无需填写";
+  input.placeholder = type === "school" ? "学校门户无需填写" : "专题路由，如 finance 或 smart-energy";
+}
+function textareaFromList(value) {
+  return Array.isArray(value) ? value.filter(Boolean).join("\n") : String(value || "");
+}
+function listFromTextarea(value) {
+  return String(value || "").split(/\n+/).map((item) => item.trim()).filter(Boolean);
+}
+function textareaFromHomeChips(value) {
+  if (!Array.isArray(value)) return "";
+  return value.map((chip) => {
+    const label = chip && (chip.label || chip.name || "");
+    const targetId = chip && (chip.targetId || chip.id || chip.slug || "");
+    const targetKind = chip && (chip.targetKind || chip.kind || "departments");
+    return [label, targetId, targetKind].filter(Boolean).join("|");
+  }).filter(Boolean).join("\n");
+}
+function homeChipsFromTextarea(value) {
+  return String(value || "").split(/\n+/).map((line) => {
+    const [label, targetId = "", targetKind = "departments"] = line.split("|").map((part) => part.trim());
+    return label ? { label, targetId: normalizePortalSlug(targetId), targetKind: targetKind === "topics" || targetKind === "topic" ? "topics" : "departments" } : null;
+  }).filter(Boolean);
+}
+function syncPortalHomeFields() {
+  const type = normalizePortalType($("projectPortalType")?.value || "topic");
+  if ($("schoolHomeFields")) $("schoolHomeFields").hidden = type !== "school";
+  if ($("topicHomeCardFields")) $("topicHomeCardFields").hidden = type === "school";
 }
 function currentProject() {
   const selectedId = $("projectSelect") ? $("projectSelect").value : "";
@@ -414,6 +462,37 @@ function renderCurrentPortalStrip() {
       ${route ? `<a class="button small" href="${escapeHtml(route)}">前台预览</a>` : ""}
     </div>
   `;
+}
+function renderPortalTree() {
+  const tree = $("contentPortalTree");
+  if (!tree) return;
+  const selectedId = String($("projectSelect")?.value || "");
+  const groups = [
+    ["school", "学校门户"],
+    ["content", "专题门户"],
+  ].map(([type, label]) => ({
+    type,
+    label,
+    projects: (state.projects || []).filter((project) => {
+      const portalType = normalizePortalType(project.portalType);
+      return type === "content" ? portalType !== "school" : portalType === type;
+    }),
+  })).filter((group) => group.projects.length);
+  tree.innerHTML = groups.length ? groups.map((group) => `
+    <section>
+      <strong>${escapeHtml(group.label)}</strong>
+      ${group.projects.map((project) => {
+        const active = String(project.id) === selectedId;
+        const pending = Number(project.pendingPageCount || 0);
+        const route = portalRouteLabel(project);
+        return `<button class="${active ? "active" : ""}" type="button" data-portal-tree-project="${project.id}">
+          <span>${escapeHtml(project.name)}</span>
+          <small>${escapeHtml(route)}</small>
+          <em>${project.pageCount || 0} 条${pending ? ` · 待审 ${pending}` : ""}</em>
+        </button>`;
+      }).join("")}
+    </section>
+  `).join("") : `<div class="empty">暂无可维护门户</div>`;
 }
 function modulesForPortalType(portalType = selectedPortalType()) {
   return moduleSets[normalizePortalType(portalType)] || standardModules;
@@ -511,6 +590,26 @@ function textFromBodyJson(bodyJson) {
     if (block.type === "html") return htmlToPlainText(block.html || "");
     return block.text || block.content || block.title || "";
   }).filter(Boolean).join("\n\n");
+}
+function htmlFromBodyJson(bodyJson) {
+  if (!Array.isArray(bodyJson)) return "";
+  return bodyJson.map((block) => {
+    if (typeof block === "string") return textToRichHtml(block);
+    if (!block || typeof block !== "object") return "";
+    const type = String(block.type || "paragraph").toLowerCase();
+    if (type === "html") return sanitizeRichHtml(block.html || "");
+    if (type === "heading" || type === "h2" || type === "title") return `<h2>${escapeHtml(block.text || block.title || "")}</h2>`;
+    if (type === "h3" || type === "subheading") return `<h3>${escapeHtml(block.text || block.title || "")}</h3>`;
+    if ((type === "list" || type === "ul") && Array.isArray(block.items)) {
+      return `<ul>${block.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+    }
+    if (type === "quote" || type === "blockquote") return `<blockquote>${escapeHtml(block.text || "")}</blockquote>`;
+    return `<p>${escapeHtml(block.text || block.content || block.title || "").replaceAll("\n", "<br>")}</p>`;
+  }).filter(Boolean).join("");
+}
+function bodyJsonFromRichHtml(html) {
+  const clean = sanitizeRichHtml(html || "");
+  return clean ? [{ type: "html", html: clean }] : [];
 }
 function metaJsonFromText(value) {
   const meta = {};
@@ -1363,7 +1462,7 @@ function lowcodeDepartmentReportRows(useReport = true) {
       rows.set(key, {
         key,
         label: key,
-        subline: "按系部/部门统计资料填报进度",
+        subline: "按专题/部门统计资料填报进度",
         stats: lowcodeRecordStats([]),
         records: [],
       });
@@ -1512,7 +1611,7 @@ function renderLowcodeReports() {
   const reminderRows = lowcodeReminderRows();
   grid.innerHTML = [
     renderLowcodeReportGroup("按模板统计", "查看每个资料采集模板的使用和审核状态", templateRows, "当前门户暂无资料采集模板"),
-    renderLowcodeReportGroup("按部门统计", "查看各系部或部门的资料提交进度", departmentRows, "当前门户暂无部门填报记录"),
+    renderLowcodeReportGroup("按部门统计", "查看各专题或部门的资料提交进度", departmentRows, "当前门户暂无部门填报记录"),
     renderLowcodeReportGroup("按填报人统计", "查看老师或管理员的资料提交进度", submitterRows, "当前门户暂无填报记录"),
     renderLowcodeReminderReport(reminderRows),
   ].join("");
@@ -2105,7 +2204,7 @@ function lowcodeTemplateQualityChecks(fields, contentType, moduleKey, portalType
   if (module) {
     checks.push(lowcodeTemplateQualityStatus("ok", "板块归属", `${module.label} · ${contentTypeLabel(contentType)}，审核通过后会同步到对应门户板块。`));
   } else {
-    checks.push(lowcodeTemplateQualityStatus("warn", "板块归属", "当前模板没有匹配到标准板块。", "建议选择固定专题板块或系部门户板块，方便完整度统计。"));
+    checks.push(lowcodeTemplateQualityStatus("warn", "板块归属", "当前模板没有匹配到标准板块。", "建议选择固定专题板块，方便完整度统计。"));
   }
   return checks;
 }
@@ -2491,6 +2590,7 @@ function renderModuleLibrary(coverage = state.moduleCoverage) {
   const normalized = coverage && coverage.modules ? coverage : buildCoverageFromPages(state.pages, portalType);
   state.moduleCoverage = normalized;
   if (!$("moduleLibrary")) return;
+  const activeModuleKey = inputValue("contentItemModuleFilter") || inputValue("pageModuleFilter");
   const total = normalized.total || modules.length;
   const covered = normalized.covered || 0;
   const ready = normalized.publishReady || 0;
@@ -2504,14 +2604,67 @@ function renderModuleLibrary(coverage = state.moduleCoverage) {
     const stateText = module.publishReady ? "可发布" : module.covered ? "待审核" : "缺失";
     const pageText = module.count ? `${module.count} 条资料，${module.approvedCount || 0} 条已通过` : "建议补充该板块资料";
     const actionText = module.covered ? "新增资料" : "补齐板块";
-    return `<article class="${stateClass}" data-module-key="${module.key}">
+    const activeClass = activeModuleKey === module.key ? " is-active" : "";
+    return `<article class="${stateClass}${activeClass}" data-module-key="${module.key}">
       <span class="module-state">${stateText}</span>
       <strong>${escapeHtml(module.label)}</strong>
       <span>${escapeHtml(module.description)}</span>
       <small>${escapeHtml(pageText)}</small>
+      <button class="module-filter" type="button" data-module-filter="${escapeHtml(module.key)}">查看内容</button>
       <button class="module-create" type="button" data-module-create="${escapeHtml(module.key)}">${actionText}</button>
     </article>`;
   }).join("");
+  renderWorkspaceStatus(normalized);
+}
+function renderWorkspaceStatus(coverage = state.moduleCoverage) {
+  const summary = $("workspaceStatusSummary");
+  const actions = $("workspaceActionList");
+  if (!summary || !actions) return;
+  const project = currentProject();
+  if (!project) {
+    summary.innerHTML = `<div class="empty">请选择门户</div>`;
+    actions.innerHTML = "";
+    return;
+  }
+  const modules = coverage?.modules || [];
+  const total = Number(coverage?.total || modules.length || 0);
+  const covered = Number(coverage?.covered || 0);
+  const ready = Number(coverage?.publishReady || 0);
+  const pending = modules.reduce((sum, module) => sum + Number(module.pendingCount || 0), 0);
+  const rejected = (state.pages || []).filter((page) => page.reviewStatus === "rejected").length
+    + (state.contentItems || []).filter((item) => item.reviewStatus === "rejected").length;
+  const selectedModuleKey = inputValue("contentItemModuleFilter") || inputValue("pageModuleFilter");
+  const selectedModule = modules.find((module) => module.key === selectedModuleKey);
+  const missing = modules.filter((module) => !module.covered);
+  summary.innerHTML = `
+    <article>
+      <span>门户完整度</span>
+      <strong>${ready}/${total || 0}</strong>
+      <div class="workspace-meter"><i style="width:${total ? Math.round((ready / total) * 100) : 0}%"></i></div>
+      <small>${escapeHtml(project.name)} · ${escapeHtml(portalTypeLabel(project.portalType))}</small>
+    </article>
+    <article>
+      <span>当前栏目</span>
+      <strong>${escapeHtml(selectedModule ? selectedModule.label : "全部栏目")}</strong>
+      <small>${selectedModule ? `${selectedModule.count || 0} 条资料，${selectedModule.approvedCount || 0} 条可发布` : `已覆盖 ${covered}/${total || 0} 个栏目`}</small>
+    </article>
+    <article>
+      <span>待处理</span>
+      <strong>${pending + rejected}</strong>
+      <small>${pending} 条待审核 · ${rejected} 条驳回</small>
+    </article>
+  `;
+  const actionRows = [];
+  if (selectedModule) {
+    actionRows.push(`<button type="button" class="primary" data-workspace-new-module="${escapeHtml(selectedModule.key)}">新增 ${escapeHtml(selectedModule.label)}</button>`);
+  }
+  missing.slice(0, 4).forEach((module) => {
+    actionRows.push(`<button type="button" data-workspace-new-module="${escapeHtml(module.key)}">补齐 ${escapeHtml(module.label)}</button>`);
+  });
+  if (pending && canReview()) actionRows.push(`<button type="button" data-workspace-view="reviews">处理待审核</button>`);
+  if (rejected) actionRows.push(`<button type="button" data-workspace-status="rejected">查看驳回内容</button>`);
+  actionRows.push(`<button type="button" data-content-mode-shortcut="advanced">高级兼容页</button>`);
+  actions.innerHTML = actionRows.join("");
 }
 function exportModuleCoverageCsv() {
   const project = currentProject();
@@ -2998,6 +3151,15 @@ function syncRichBody() {
   $("pageBody").value = sanitizeRichHtml($("richBody").innerHTML);
   updatePagePreview();
 }
+function setContentRichBody(value) {
+  const html = Array.isArray(value) ? htmlFromBodyJson(value) : normalizeRichBody(value);
+  $("contentRichBody").innerHTML = html || "";
+  syncContentRichBody();
+}
+function syncContentRichBody() {
+  $("contentBodyText").value = sanitizeRichHtml($("contentRichBody").innerHTML);
+  updateContentPreview();
+}
 function setTemplateGuide(templateKey) {
   const meta = moduleMeta(templateKey);
   const portalType = selectedPortalType();
@@ -3010,7 +3172,7 @@ function setTemplateGuide(templateKey) {
   setText($("templateGuideSummary"), templateKey ? `已套用模板 · ${contentTypeLabel(selectedType)}` : "选择模板后查看内容结构和展示效果");
 }
 function sourceForPortalType(portalType = selectedPortalType()) {
-  return { school: "学校门户", department: "系部门户", topic: "专题门户" }[normalizePortalType(portalType)];
+  return { school: "学校门户", department: "专题门户", topic: "专题门户" }[normalizePortalType(portalType)];
 }
 function genericRichTemplate(moduleKey) {
   const meta = moduleMeta(moduleKey) || modulesForPortalType()[0];
@@ -3108,25 +3270,31 @@ function buildQrUrl(projectId, code) {
 
 function setupNav() {
   document.body.classList.toggle("teacher-portal", isTeacherPortal());
-  const order = allowedViewOrder();
-  $("nav").innerHTML = order.map((view) => `<button type="button" data-view="${view}">${viewMeta(view)[0]}</button>`).join("");
+  const order = primaryNavOrder();
+  let lastGroup = null;
+  $("nav").innerHTML = order.map((view) => {
+    const group = navGroupForView(view);
+    const groupHtml = group && group !== lastGroup ? `<span class="nav-group-title">${escapeHtml(group)}</span>` : "";
+    lastGroup = group || lastGroup;
+    return `${groupHtml}<button type="button" data-view="${view}">${viewMeta(view)[0]}</button>`;
+  }).join("");
   $("nav").querySelectorAll("button").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
   document.querySelectorAll(".admin-only").forEach((node) => { node.hidden = !isAdmin(); });
   $("reviewsView").hidden = !canReview();
-  $("brandTitle").textContent = canReview() ? "数字门户后台" : "门户资料工作台";
-  $("consoleEyebrow").textContent = canReview() ? "Portal Exhibition Console" : "Portal Submission";
-  document.title = canReview() ? "数字门户后台" : "门户资料工作台";
+  $("brandTitle").textContent = canReview() ? "门户与大屏后台" : "门户资料工作台";
+  $("consoleEyebrow").textContent = canReview() ? "Portal & Display Console" : "Portal Submission";
+  document.title = canReview() ? "门户与大屏后台" : "门户资料工作台";
   $("roleBadge").textContent = roleLabel(state.user && state.user.role);
-  $("projectsHeading").textContent = canReview() ? "门户管理" : "我的门户";
-  $("projectsIntro").textContent = canReview() ? "维护权限范围内的学校门户、系部门户和专题门户。" : "查看自己负责的门户，必要时提交基础信息修改。";
+  $("projectsHeading").textContent = canReview() ? "门户官网管理" : "我的门户";
+  $("projectsIntro").textContent = canReview() ? "维护学校门户和专题门户；系部按专题门户管理。" : "查看自己负责的门户，必要时提交基础信息修改。";
   $("projectFormTitle").textContent = canReview() ? "门户配置" : "门户信息编辑";
   $("projectSubmitButton").textContent = canReview() ? "保存/提交审核" : "提交门户信息修改";
-  $("pagesHeading").textContent = canReview() ? "板块资料" : "上传板块资料";
-  setText($("pagesPanelIntro"), canReview() ? "按门户维护基本情况、专业设置、实训基地、产教融合、教学成果等板块资料。" : "维护自己门户下的板块资料，提交后由管理员审核发布。");
+  $("pagesHeading").textContent = canReview() ? "门户内容工作台" : "上传板块资料";
+  setText($("pagesPanelIntro"), canReview() ? "选择学校门户或专题门户后，按栏目看板推进资料维护、模板采集、质量检查和兼容展示页管理。" : "维护自己门户下的板块资料，提交后由管理员审核发布。");
   $("newPage").textContent = canReview() ? "新建板块资料" : "上传板块资料";
   $("pageFormTitle").textContent = "板块资料编辑";
   $("pageSubmitButton").textContent = canReview() ? "保存/提交审核" : "提交审核";
-  $("assetsHeading").textContent = "素材库";
+  $("assetsHeading").textContent = "素材中心";
   $("assetsIntro").textContent = canReview() ? "上传、复用和删除权限范围内的门户展示素材及归档附件。" : "上传板块资料所需图片、视频和附件，只能查看和管理自己上传的素材。";
 }
 function showView(view) {
@@ -3134,7 +3302,9 @@ function showView(view) {
   if (!allowed.includes(view)) view = allowed[0] || "pages";
   if (!views[view]) view = allowed[0] || "pages";
   state.activeView = view;
-  document.querySelectorAll(".view").forEach((node) => node.classList.toggle("active", node.id === `${view}View`));
+  if (view === "pages") state.contentWorkspaceMode = "content";
+  if (view === "reports") state.contentWorkspaceMode = "reports";
+  document.querySelectorAll(".view").forEach((node) => node.classList.toggle("active", node.id === viewContainerId(view)));
   $("nav").querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   $("viewTitle").textContent = viewMeta(view)[0];
   $("viewIntro").textContent = viewMeta(view)[1];
@@ -3453,7 +3623,7 @@ function adminActionLabel(action) {
     approve_content_item: "通过结构化资料",
     copy_lowcode_form: "复制采集模板",
     delete_lowcode_draft: "删除低代码草稿",
-    deploy_content: "发布展厅资料",
+    deploy_content: "发布扫码大屏内容",
     import_users: "导入账号",
     login: "登录",
     reject_content_item: "驳回结构化资料",
@@ -3667,7 +3837,7 @@ function renderDashboardVisualization(dashboard, portalRows) {
           { label: "通过", value: lowcode.approved, color: "#14746f" },
           { label: "驳回", value: lowcode.rejected, color: "#c94848" },
         ], `共 ${lowcode.total} 条模板记录`)}
-        ${renderDashboardBarChart("门户类型分布", typeItems, "学校、系部、专题门户数量")}
+        ${renderDashboardBarChart("门户类型分布", typeItems, "学校门户和专题门户数量")}
         ${renderDashboardBarChart("资料分类 Top 8", categoryItems, "按板块资料分类统计")}
       </div>
     </section>
@@ -3699,18 +3869,18 @@ async function renderDashboard() {
       <div class="panel-head">
         <div>
           <h2>展厅页面逻辑</h2>
-          <p>先维护学校门户，再维护各系部门户，最后补充每个板块的资料和特色入口。</p>
+          <p>先维护学校门户，再维护各专题门户，最后补充每个板块的资料和特色入口。</p>
         </div>
         <a class="button ghost" href="/departments">预览学校门户</a>
       </div>
       <div class="portal-flow">
-        <article><span>1</span><strong>学校门户</strong><p>/departments：学校总入口，负责进入各系部和创新育人专题。</p></article>
-        <article><span>2</span><strong>系部门户</strong><p>/departments/系部：展示系部概览、核心数据和板块入口。</p></article>
+        <article><span>1</span><strong>学校门户</strong><p>/departments：学校总入口，负责进入各专题门户。</p></article>
+        <article><span>2</span><strong>专题门户</strong><p>/departments/原系部 或 /topics/专题：展示专题概览、核心数据和板块入口。</p></article>
         <article><span>3</span><strong>板块资料</strong><p>基本情况、专业设置、实训基地、产教融合、教学成果、视频资源。</p></article>
         <article><span>4</span><strong>特色功能</strong><p>特色系统入口、特色数字资源、专题内容和扫码联动。</p></article>
       </div>
       <div class="portal-rules">
-        <article><strong>二维码边界</strong><p>只有 /display 欢迎页和 /departments 学校门户展示学校官网二维码；系部、专题和扫码详情页保持内容沉浸。</p></article>
+        <article><strong>二维码边界</strong><p>只有 /display 欢迎页和 /departments 学校门户展示学校官网二维码；专题和扫码详情页保持内容沉浸。</p></article>
         <article><strong>顶部栏统一</strong><p>学校标识、四个学校级栏目和二级页切换入口保持一致，减少观众在不同页面间的认知跳转。</p></article>
       </div>
     </section>
@@ -3747,10 +3917,10 @@ async function renderDashboard() {
       `).join("")}</div>` : `<div class="empty">暂无上线配置风险</div>`}
     </section>
     <section class="panel ops-panel">
-      <div class="panel-head"><div><h2>部署状态</h2><p>当前大屏发布目标</p></div></div>
+      <div class="panel-head"><div><h2>扫码大屏状态</h2><p>当前 /display 欢迎页和扫码内容池</p></div></div>
       <div class="ops-grid">
         <article><span>欢迎页项目</span><strong>${escapeHtml(deployed.welcomeProjectName || s.welcomeDeployed || "未部署")}</strong><small>ID ${deployed.welcomeProjectId || "-"} · ${formatTime(deployed.welcomeDeployedAt)}</small></article>
-        <article><span>当前门户</span><strong>${escapeHtml(deployed.contentProjectName || s.contentDeployed || "未部署")}</strong><small>ID ${deployed.contentProjectId || "-"} · ${formatTime(deployed.contentDeployedAt)}</small></article>
+        <article><span>扫码内容池</span><strong>${escapeHtml(deployed.contentProjectName || s.contentDeployed || "未部署")}</strong><small>ID ${deployed.contentProjectId || "-"} · ${formatTime(deployed.contentDeployedAt)}</small></article>
         <article><span>资料待审</span><strong>${pending.pages || 0}</strong><small>提交后需审核</small></article>
         <article><span>门户待审</span><strong>${pending.projects || 0}</strong><small>配置变更</small></article>
       </div>
@@ -3786,7 +3956,8 @@ function renderProjects() {
   const publishFilter = inputValue("projectPublishFilter");
   const query = inputValue("projectSearch");
   const visibleProjects = (state.projects || []).filter((project) => {
-    if (typeFilter && normalizePortalType(project.portalType) !== typeFilter) return false;
+    if (typeFilter === "content" && normalizePortalType(project.portalType) === "school") return false;
+    if (typeFilter && typeFilter !== "content" && normalizePortalType(project.portalType) !== typeFilter) return false;
     if (publishFilter === "welcome" && !project.deployed) return false;
     if (publishFilter === "content" && !project.contentDeployed) return false;
     if (publishFilter === "pending" && project.configStatus !== "pending") return false;
@@ -3803,7 +3974,7 @@ function renderProjects() {
       <td><span class="badge">${escapeHtml(portalTypeLabel(p.portalType))}</span> ${badge(p.configStatus || "approved")} ${p.deployed ? `<span class="badge success">欢迎页已发布</span><div class="muted">欢迎页发布时间：${formatTime(p.deployedAt)}</div>` : ""} ${p.contentDeployed ? `<span class="badge success">资料已发布</span><div class="muted">资料发布时间：${formatTime(p.contentDeployedAt)}</div>` : ""}</td>
       <td>${p.pageCount || 0} / 待审 ${p.pendingPageCount || 0}</td>
       <td><div class="actions">
-        ${portalPreviewUrl(p) ? `<a class="button small" href="${escapeHtml(portalPreviewUrl(p))}">预览</a>` : ""}
+        ${portalPreviewUrl(p) ? `<a class="button small" href="${escapeHtml(portalVisualEditUrl(p))}">预览</a>` : ""}
         <button class="button small primary" data-project-pages="${p.id}">${pagesLabel}</button>
         <button class="button small" data-project-edit="${p.id}">${configLabel}</button>
         <button class="button small" data-project-history="${p.id}">历史</button>
@@ -3813,6 +3984,7 @@ function renderProjects() {
 }
 function syncTeacherPagesLayout() {
   const teacherOnly = isTeacherPortal();
+  syncContentWorkspaceSections();
   [
     ".content-quality-panel",
     ".lowcode-report-panel",
@@ -3827,6 +3999,45 @@ function syncTeacherPagesLayout() {
     const node = $(id);
     if (node) node.hidden = teacherOnly;
   });
+}
+function syncContentWorkspaceSections() {
+  const nav = $("contentWorkspaceNav");
+  if (!nav) return;
+  const mode = isTeacherPortal() ? "teacher" : (state.activeView === "reports" ? "reports" : state.contentWorkspaceMode || "content");
+  nav.hidden = isTeacherPortal();
+  document.querySelectorAll(".content-workflow-shell").forEach((node) => { node.dataset.workflowMode = mode; });
+  document.querySelectorAll("[data-content-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.contentMode === mode);
+  });
+  document.querySelectorAll("[data-content-section]").forEach((node) => {
+    if (isTeacherPortal()) return;
+    const modes = String(node.dataset.contentSection || "").split(/\s+/);
+    node.hidden = !modes.includes(mode);
+  });
+  document.querySelectorAll("[data-workspace-only]").forEach((node) => {
+    const modes = String(node.dataset.workspaceOnly || "").split(/\s+/);
+    node.hidden = isTeacherPortal() || !modes.includes(mode);
+  });
+  const modeText = {
+    content: ["栏目内容", "左侧选门户，中间维护栏目内容，右侧查看状态和质量检查。"],
+    templates: ["资料采集", "管理老师填报模板和提交记录，日常内容维护不需要进入这里。"],
+    reports: ["数据与报表", "集中查看质量清单、填报统计、素材归档和可导出的治理数据。"],
+    advanced: ["高级兼容", "保留旧版展示页入口，用于历史资料、扫码大屏兼容和必要的富文本维护。"],
+  }[mode];
+  if (modeText) {
+    setText($("contentWorkspaceModeTitle"), modeText[0]);
+    setText($("contentWorkspaceModeIntro"), modeText[1]);
+  }
+}
+function setContentWorkspaceMode(mode) {
+  state.contentWorkspaceMode = mode || "content";
+  if (state.contentWorkspaceMode === "reports") state.activeView = "reports";
+  if (state.contentWorkspaceMode !== "reports" && state.activeView === "reports") state.activeView = "pages";
+  $("viewTitle").textContent = viewMeta(state.activeView)[0];
+  $("viewIntro").textContent = viewMeta(state.activeView)[1];
+  $("nav").querySelectorAll("button").forEach((navButton) => navButton.classList.toggle("active", navButton.dataset.view === state.activeView));
+  history.replaceState(null, "", `${appBasePath()}?view=${state.activeView}`);
+  syncContentWorkspaceSections();
 }
 function selectedDeployProject() {
   const projectId = String($("deployProject").value || "");
@@ -3851,6 +4062,7 @@ async function loadPages(projectId = $("projectSelect").value) {
     state.lowcodeReport = null;
     state.lowcodeTemplateQualityReport = null;
     renderCurrentPortalStrip();
+    renderPortalTree();
     renderTemplateActions();
     renderContentModuleOptions();
     renderPages();
@@ -3882,10 +4094,12 @@ async function loadPages(projectId = $("projectSelect").value) {
   setModuleFilterOptions("pageModuleFilter", (state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   setModuleFilterOptions("contentItemModuleFilter", (state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderCurrentPortalStrip();
+  renderPortalTree();
   renderPages();
 }
 function renderPages() {
   syncTeacherPagesLayout();
+  renderPortalTree();
   const filter = $("pageStatusFilter").value;
   const query = inputValue("pageSearch");
   const moduleFilter = inputValue("pageModuleFilter");
@@ -4114,7 +4328,7 @@ async function renderDeploy() {
   });
   const page = pagedList("deployPages", approved);
   renderDeployCheck(checkData.check || {}, project);
-  renderPager("deployPagesPager", "deployPages", approved.length, "条可发布资料");
+  renderPager("deployPagesPager", "deployPages", approved.length, "条可进入大屏资料");
   $("deployPages").innerHTML = page.items.length ? page.items.map((p) => `
     <label class="check-item"><input type="checkbox" value="${p.id}" ${selected.has(String(p.id)) ? "checked" : ""} /> <span>${escapeHtml(p.code)} - ${escapeHtml(p.title)}${deployedTimes[String(p.id)] ? ` · 已发布于 ${formatTime(deployedTimes[String(p.id)])}` : ""}</span></label>
   `).join("") : `<div class="empty">当前筛选条件下暂无已通过板块资料</div>`;
@@ -4150,11 +4364,11 @@ function renderDeployCheck(check, project = null) {
     {
       className: "info",
       title: "二维码边界",
-      badge: "/display /departments",
-      body: "学校官网二维码只在欢迎页和学校门户显示；系部、专题、资料详情页保持沉浸展示。"
+      badge: "/display",
+      body: "学校官网二维码只在欢迎页和学校门户显示；专题、资料详情页保持沉浸展示。"
     }
   ];
-  const coverageText = coverage.total ? `${escapeHtml(coverage.portalTypeLabel || portalTypeLabel(coverage.portalType))}标准板块 ${coverage.covered}/${coverage.total}，可发布 ${coverage.publishReady}/${coverage.total}` : "标准板块待统计";
+  const coverageText = coverage.total ? `${escapeHtml(coverage.portalTypeLabel || portalTypeLabel(coverage.portalType))}标准板块 ${coverage.covered}/${coverage.total}，可进入大屏 ${coverage.publishReady}/${coverage.total}` : "标准板块待统计";
   const moduleList = (coverage.modules || []).map((module) => `
     <span class="${module.publishReady ? "ready" : module.covered ? "covered" : "missing"}">${escapeHtml(module.label)}</span>
   `).join("");
@@ -4170,7 +4384,7 @@ function renderDeployCheck(check, project = null) {
     </div>
     <div class="deploy-check-box ${errors.length ? "danger" : warnings.length ? "warn" : "success"}">
       <strong>${stateLabel}</strong>
-      <span>可发布资料 ${check.eligiblePageIds ? check.eligiblePageIds.length : 0}，已选 ${check.pageIds ? check.pageIds.length : 0}；${coverageText}</span>
+      <span>可进入大屏资料 ${check.eligiblePageIds ? check.eligiblePageIds.length : 0}，已选 ${check.pageIds ? check.pageIds.length : 0}；${coverageText}</span>
       ${moduleList ? `<div class="deploy-module-strip">${moduleList}</div>` : ""}
       ${errors.length ? `<ul>${errors.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
       ${warnings.length ? `<ul>${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
@@ -4262,7 +4476,7 @@ async function refreshView(view = state.activeView) {
   if (view === "dashboard") await renderDashboard();
   if (view === "users") { await loadUsers(); renderUsers(); }
   if (view === "projects") { await loadUsers(); await loadProjects(); renderProjects(); }
-  if (view === "pages") {
+  if (view === "pages" || view === "reports") {
     const preferredProjectId = state.preferredProjectId || $("projectSelect").value;
     state.preferredProjectId = "";
     await loadProjects(preferredProjectId);
@@ -4270,7 +4484,7 @@ async function refreshView(view = state.activeView) {
       ? preferredProjectId
       : $("projectSelect").value;
     await loadPages(projectId);
-    if (state.preferredModuleKey) {
+    if (state.preferredModuleKey && view === "pages") {
       const moduleKey = state.preferredModuleKey;
       state.preferredModuleKey = "";
       startContentItemDraft(moduleKey);
@@ -4393,6 +4607,20 @@ function fillProject(project) {
   $("idleKicker").value = project.idleKicker || "";
   $("idleCopy").value = project.idleCopy || "";
   $("defaultImageUrl").value = project.defaultImageUrl || "";
+  const displayConfig = project.displayConfig || {};
+  $("portalHomeKicker").value = displayConfig.portalHomeKicker || "";
+  $("portalHomeTitle").value = displayConfig.portalHomeTitle || "";
+  $("portalHomeCopy").value = displayConfig.portalHomeCopy || "";
+  $("portalHomeSectionKicker").value = displayConfig.portalHomeSectionKicker || "";
+  $("portalHomeSectionTitle").value = displayConfig.portalHomeSectionTitle || "";
+  $("portalHomeSectionCopy").value = displayConfig.portalHomeSectionCopy || "";
+  $("portalHomeRouteLabels").value = textareaFromList(displayConfig.portalHomeRouteLabels || []);
+  $("portalHomeFooter").value = displayConfig.portalHomeFooter || "";
+  $("portalHomeCardLabel").value = displayConfig.portalHomeCardLabel || "";
+  $("portalHomeCardSummary").value = displayConfig.portalHomeCardSummary || "";
+  $("portalHomeCardChips").value = textareaFromHomeChips(displayConfig.portalHomeCardChips || []);
+  $("portalHomeCardSortOrder").value = displayConfig.portalHomeCardSortOrder || "";
+  syncPortalHomeFields();
   const qualityRules = projectQualityRules(project);
   setQualityRuleInputs("quality", qualityRules);
   state.qualityModuleRuleDrafts = projectModuleQualityRules(project);
@@ -4406,6 +4634,18 @@ function projectPayload() {
   const current = state.projects.find((project) => String(project.id) === String(state.editingProjectId)) || {};
   const displayConfig = { ...(current.displayConfig || {}) };
   displayConfig.qualityRules = qualityRulesFromInputs("quality");
+  displayConfig.portalHomeKicker = $("portalHomeKicker").value.trim();
+  displayConfig.portalHomeTitle = $("portalHomeTitle").value.trim();
+  displayConfig.portalHomeCopy = $("portalHomeCopy").value.trim();
+  displayConfig.portalHomeSectionKicker = $("portalHomeSectionKicker").value.trim();
+  displayConfig.portalHomeSectionTitle = $("portalHomeSectionTitle").value.trim();
+  displayConfig.portalHomeSectionCopy = $("portalHomeSectionCopy").value.trim();
+  displayConfig.portalHomeRouteLabels = listFromTextarea($("portalHomeRouteLabels").value);
+  displayConfig.portalHomeFooter = $("portalHomeFooter").value.trim();
+  displayConfig.portalHomeCardLabel = $("portalHomeCardLabel").value.trim();
+  displayConfig.portalHomeCardSummary = $("portalHomeCardSummary").value.trim();
+  displayConfig.portalHomeCardChips = homeChipsFromTextarea($("portalHomeCardChips").value);
+  displayConfig.portalHomeCardSortOrder = Number($("portalHomeCardSortOrder").value || 0);
   const validModuleKeys = new Set(modulesForPortalType(normalizePortalType($("projectPortalType").value)).map((module) => module.key));
   displayConfig.moduleQualityRules = Object.fromEntries(Object.entries(state.qualityModuleRuleDrafts || {})
     .filter(([key]) => validModuleKeys.has(key))
@@ -4436,7 +4676,7 @@ function fillContentItem(item = {}) {
   $("contentTitle").value = item.title || "";
   $("contentSubtitle").value = item.subtitle || "";
   $("contentSummary").value = item.summary || "";
-  $("contentBodyText").value = textFromBodyJson(item.bodyJson || []);
+  setContentRichBody(item.bodyJson || []);
   $("contentMetaText").value = textFromMetaJson(item.metaJson || {});
   setContentAssetDrafts(item.assets || [], { silent: true });
   $("contentFeatured").checked = Boolean(item.featured);
@@ -4465,7 +4705,7 @@ function startContentItemDraft(moduleKey) {
     title: meta.label || "",
     subtitle: meta.description || "",
     summary: meta.description || "",
-    bodyJson: bodyJsonFromText(htmlToPlainText(contentBodyTemplate(type, meta.label || ""))),
+    bodyJson: bodyJsonFromRichHtml(contentBodyTemplate(type, meta.label || "")),
     metaJson: {},
     assets: [],
     enabled: true,
@@ -4473,6 +4713,7 @@ function startContentItemDraft(moduleKey) {
   setStatus($("contentItemStatus"), "已按标准板块生成结构化草稿。", "success");
 }
 function contentItemPayload() {
+  syncContentRichBody();
   return {
     code: $("contentCode").value.trim(),
     moduleKey: $("contentModule").value,
@@ -4480,7 +4721,7 @@ function contentItemPayload() {
     title: $("contentTitle").value.trim(),
     subtitle: $("contentSubtitle").value.trim(),
     summary: $("contentSummary").value.trim(),
-    bodyJson: bodyJsonFromText($("contentBodyText").value),
+    bodyJson: bodyJsonFromRichHtml($("contentBodyText").value),
     metaJson: metaJsonFromText($("contentMetaText").value),
     assets: currentContentAssets(),
     sortOrder: Number($("contentSortOrder").value || 0),
@@ -4559,6 +4800,7 @@ $("projectSelect").addEventListener("change", () => {
 });
 $("projectPortalType").addEventListener("change", () => {
   syncProjectPortalSlugField();
+  syncPortalHomeFields();
   renderTemplateActions($("projectPortalType").value);
   renderQualityModuleOptions($("projectPortalType").value);
   renderModuleQualityRuleList();
@@ -4607,6 +4849,49 @@ document.addEventListener("click", (event) => {
   };
   if (renderers[key]) renderers[key]();
 });
+$("contentWorkspaceNav").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-content-mode]");
+  if (!button) return;
+  setContentWorkspaceMode(button.dataset.contentMode || "content");
+});
+$("contentPortalTree").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-portal-tree-project]");
+  if (!button) return;
+  const projectId = button.dataset.portalTreeProject;
+  if ($("projectSelect").value === projectId) return;
+  $("projectSelect").value = projectId;
+  resetListPage("pages");
+  resetListPage("contentItems");
+  resetListPage("lowcodeRecords");
+  await loadPages(projectId);
+});
+$("workspaceActionList").addEventListener("click", async (event) => {
+  const newModule = event.target.closest("[data-workspace-new-module]");
+  const viewButton = event.target.closest("[data-workspace-view]");
+  const statusButton = event.target.closest("[data-workspace-status]");
+  const shortcut = event.target.closest("[data-content-mode-shortcut]");
+  if (newModule) {
+    startContentItemDraft(newModule.dataset.workspaceNewModule);
+    return;
+  }
+  if (viewButton) {
+    await showView(viewButton.dataset.workspaceView);
+    return;
+  }
+  if (statusButton) {
+    $("pageStatusFilter").value = statusButton.dataset.workspaceStatus;
+    resetListPage("pages");
+    resetListPage("contentItems");
+    renderPages();
+    return;
+  }
+  if (shortcut) setContentWorkspaceMode(shortcut.dataset.contentModeShortcut);
+});
+$("settingsView").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-settings-view]");
+  if (!button) return;
+  await showView(button.dataset.settingsView);
+});
 $("deployPages").addEventListener("change", (event) => {
   const input = event.target.closest("input[type='checkbox']");
   if (!input) return;
@@ -4625,6 +4910,8 @@ $("exportLogs").addEventListener("click", () => {
 });
 $("richBody").addEventListener("input", syncRichBody);
 $("richBody").addEventListener("paste", () => setTimeout(() => setRichBody($("richBody").innerHTML), 0));
+$("contentRichBody").addEventListener("input", syncContentRichBody);
+$("contentRichBody").addEventListener("paste", () => setTimeout(() => setContentRichBody($("contentRichBody").innerHTML), 0));
 ["pageCode", "pageCategory", "pageSource", "pageTitle", "pageSubtitle", "pageContentType", "pageImageUrl"].forEach((id) => {
   $(id).addEventListener("input", updatePagePreview);
 });
@@ -4664,6 +4951,33 @@ document.querySelectorAll("[data-insert]").forEach((button) => {
     setRichBody($("richBody").innerHTML);
   });
 });
+document.querySelectorAll("[data-content-command]").forEach((button) => {
+  button.addEventListener("click", () => {
+    $("contentRichBody").focus();
+    document.execCommand(button.dataset.contentCommand, false, null);
+    syncContentRichBody();
+  });
+});
+document.querySelectorAll("[data-content-block]").forEach((button) => {
+  button.addEventListener("click", () => {
+    $("contentRichBody").focus();
+    document.execCommand("formatBlock", false, button.dataset.contentBlock);
+    syncContentRichBody();
+  });
+});
+document.querySelectorAll("[data-content-insert]").forEach((button) => {
+  button.addEventListener("click", () => {
+    $("contentRichBody").focus();
+    const type = button.dataset.contentInsert;
+    if (type === "quote") document.execCommand("insertHTML", false, "<blockquote>请输入引用内容</blockquote>");
+    if (type === "divider") document.execCommand("insertHTML", false, "<hr>");
+    if (type === "image") {
+      const url = prompt("请输入图片地址，例如 /uploads/example.jpg");
+      if (url) document.execCommand("insertHTML", false, `<figure><img src="${escapeHtml(url)}" alt=""><figcaption>图片说明</figcaption></figure>`);
+    }
+    setContentRichBody($("contentRichBody").innerHTML);
+  });
+});
 
 $("userForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -4678,7 +4992,7 @@ $("importUsers").addEventListener("click", async () => {
   try {
     const data = await jsonApi("/api/users/import-csv", body({ csv: $("csvImport").value }));
     const roles = data.result.roles || {};
-    setStatus($("userStatus"), `导入完成：新增 ${data.result.created}，更新 ${data.result.updated}，项目 ${data.result.projects}，老师 ${roles.teacher || 0}，系部管理员 ${roles.department_admin || 0}，管理员 ${roles.admin || 0}`, "success");
+    setStatus($("userStatus"), `导入完成：新增 ${data.result.created}，更新 ${data.result.updated}，项目 ${data.result.projects}，老师 ${roles.teacher || 0}，专题管理员 ${roles.department_admin || 0}，管理员 ${roles.admin || 0}`, "success");
     await refreshView("users");
   } catch (err) { setStatus($("userStatus"), err.message, "error"); }
 });
@@ -4733,7 +5047,7 @@ $("dashboardView").addEventListener("click", async (event) => {
 
 $("newProject").addEventListener("click", () => fillProject({
   id: "",
-  portalType: "department",
+  portalType: "topic",
   ownerUsername: state.users.find((u) => u.role === "teacher" && u.enabled)?.username || state.user.username,
   accent: "#f59a13",
 }));
@@ -4774,6 +5088,15 @@ $("newLegacyPage").addEventListener("click", () => {
   applyRichTemplate((modulesForPortalType()[0] || standardModules[0]).key);
 });
 $("moduleLibrary").addEventListener("click", (event) => {
+  const filter = event.target.closest("[data-module-filter]");
+  if (filter) {
+    $("pageModuleFilter").value = filter.dataset.moduleFilter;
+    $("contentItemModuleFilter").value = filter.dataset.moduleFilter;
+    resetListPage("pages");
+    resetListPage("contentItems");
+    renderPages();
+    return;
+  }
   const button = event.target.closest("[data-module-create]");
   if (!button) return;
   startContentItemDraft(button.dataset.moduleCreate);
@@ -5287,7 +5610,7 @@ $("deployContent").addEventListener("click", async () => {
   const pageIds = (state.deploySelectedPageIds || []).map((value) => Number(value)).filter(Boolean);
   try {
     await jsonApi("/api/deploy/content", body({ projectId, pageIds }));
-    setStatus($("deployStatus"), "板块资料已发布", "success");
+    setStatus($("deployStatus"), "已发布到扫码大屏", "success");
     await renderDeploy();
   } catch (err) {
     setStatus($("deployStatus"), err.message, "error");

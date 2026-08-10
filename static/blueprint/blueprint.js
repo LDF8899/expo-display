@@ -6,10 +6,39 @@
   "use strict";
 
   var DATA = { departments: {}, topics: {} };
+  var FIXED_SCHOOL_LOGO_URL = "/static/blueprint/school-logo.png";
+  var FIXED_SCHOOL_QR_URL = "/static/blueprint/school-qr.jpg";
   var PORTAL_CHROME = {
-    logoImageUrl: "/uploads/acc2be26d71f4981b3c1f125390266a8.png",
+    logoImageUrl: FIXED_SCHOOL_LOGO_URL,
     navText: "社会服务 · 国际交流 · 育人成果 · 名师名匠",
-    schoolQrImageUrl: "/uploads/fad5544323334f97a45f6afcf1eac08c.jpg"
+    schoolQrImageUrl: FIXED_SCHOOL_QR_URL
+  };
+  var PORTAL_HOME = {
+    schoolName: "",
+    schoolMeta: "",
+    summaryKicker: "School Portal",
+    summaryTitle: "学校门户",
+    summaryCopy: "",
+    routeLabels: [],
+    sectionKicker: "Integrated Showcase",
+    sectionTitle: "创新育人矩阵",
+    sectionCopy: "",
+    footer: ""
+  };
+  var HOME_CARDS = [];
+  var INLINE_EDIT = {
+    enabled: new URLSearchParams(location.search).get("edit") === "1",
+    focus: new URLSearchParams(location.search).get("focus") || "",
+    ready: false,
+    initPromise: null,
+    csrfToken: "",
+    projects: [],
+    projectMap: {},
+    dirty: {},
+    undoStack: [],
+    maxUndo: 40,
+    statusNode: null,
+    uploadTargetProjectId: ""
   };
   var ORDER = {
     departments: ["mining-construction", "finance", "information", "medical-nursing", "tourism"],
@@ -123,8 +152,9 @@
   var stage = $("bpStage"), screenHome = $("screenHome"), screenDetail = $("screenDetail");
 
   var state = { kind: null, id: null, section: 0, sections: [], lastScanAt: 0, playingVideo: false };
-  var idleTimer = null, lbImages = [], lbIndex = 0, topicMediaCarouselTimers = [], drawerMediaCarouselTimers = [];
+  var idleTimer = null, lbImages = [], lbIndex = 0, topicMediaCarouselTimers = [], drawerMediaCarouselTimers = [], topicCoverflowTimers = [];
   var drawerLoopTimer = null, drawerLoopLastAt = 0, drawerLoopCycle = 0, drawerLoopPauseUntil = 0;
+  var personDrawerContext = null, entryDrawerContext = null;
   var DRAWER_LOOP_SPEED = 24;
   var DRAWER_LOOP_RESUME_MS = 2600;
 
@@ -225,6 +255,515 @@
       });
     });
     return Promise.all(jobs);
+  }
+
+  function mergePortalHomePayload(payload) {
+    if (!payload || !payload.ok) return;
+    var school = payload.school || {};
+    var schoolConfig = school.displayConfig || {};
+    PORTAL_CHROME.navText = String(schoolConfig.schoolMeta || PORTAL_CHROME.navText).trim();
+    PORTAL_CHROME.logoImageUrl = FIXED_SCHOOL_LOGO_URL;
+    PORTAL_CHROME.schoolQrImageUrl = FIXED_SCHOOL_QR_URL;
+    PORTAL_HOME.schoolName = String(schoolConfig.schoolName || school.name || PORTAL_HOME.schoolName || "").trim();
+    PORTAL_HOME.schoolMeta = String(schoolConfig.schoolMeta || PORTAL_HOME.schoolMeta || "").trim();
+    PORTAL_HOME.summaryKicker = String(schoolConfig.portalHomeKicker || PORTAL_HOME.summaryKicker).trim();
+    PORTAL_HOME.summaryTitle = String(schoolConfig.portalHomeTitle || PORTAL_HOME.summaryTitle).trim();
+    PORTAL_HOME.summaryCopy = String(schoolConfig.portalHomeCopy || PORTAL_HOME.summaryCopy).trim();
+    PORTAL_HOME.routeLabels = Array.isArray(schoolConfig.portalHomeRouteLabels) ? schoolConfig.portalHomeRouteLabels : PORTAL_HOME.routeLabels;
+    PORTAL_HOME.sectionKicker = String(schoolConfig.portalHomeSectionKicker || PORTAL_HOME.sectionKicker).trim();
+    PORTAL_HOME.sectionTitle = String(schoolConfig.portalHomeSectionTitle || PORTAL_HOME.sectionTitle).trim();
+    PORTAL_HOME.sectionCopy = String(schoolConfig.portalHomeSectionCopy || PORTAL_HOME.sectionCopy).trim();
+    PORTAL_HOME.footer = String(schoolConfig.portalHomeFooter || PORTAL_HOME.footer).trim();
+
+    HOME_CARDS = [];
+    (payload.cards || []).forEach(function (card) {
+      var kind = card.kind === "departments" ? "departments" : "topics";
+      var id = String(card.id || "").trim();
+      if (!id) return;
+      if (ORDER[kind].indexOf(id) < 0) ORDER[kind].push(id);
+      var list = kind === "departments" ? DATA.departments : DATA.topics;
+      var data = list[id] || {
+        id: id,
+        type: kind === "departments" ? "department" : "topic",
+        name: card.name || id,
+        summary: card.summary || "",
+        cover: card.cover || "",
+        stats: [],
+        sections: []
+      };
+      data.name = card.name || data.name;
+      data.summary = card.summary || data.summary;
+      data.cover = card.cover || data.cover;
+      data.homeCard = card;
+      data.backendProjectId = card.projectId || data.backendProjectId;
+      list[id] = data;
+      HOME_CARDS.push(Object.assign({}, card, { kind: kind, id: id }));
+    });
+  }
+
+  function loadPortalHome() {
+    return fetch("/api/portal/home", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(mergePortalHomePayload)
+      .catch(function () { /* static home remains the fallback */ });
+  }
+
+  function inlineEditStatus(message, kind) {
+    if (!INLINE_EDIT.statusNode) return;
+    INLINE_EDIT.statusNode.textContent = message || "";
+    INLINE_EDIT.statusNode.dataset.kind = kind || "";
+  }
+
+  function inlineEditApi(url, options) {
+    options = options || {};
+    var headers = Object.assign({}, options.headers || {});
+    if (options.method && options.method !== "GET" && INLINE_EDIT.csrfToken) {
+      headers["X-CSRF-Token"] = INLINE_EDIT.csrfToken;
+    }
+    return fetch(url, Object.assign({}, options, { headers: headers }))
+      .then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (payload) {
+          if (!response.ok || payload.ok === false) throw new Error(payload.error || "操作失败");
+          return payload;
+        });
+      });
+  }
+
+  function inlineEditBody(data) {
+    return {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data || {})
+    };
+  }
+
+  function inlineProjectPayload(project) {
+    return {
+      name: project.name || "",
+      portalType: project.portalType || "topic",
+      portalSlug: project.portalSlug || "",
+      ownerUsername: project.ownerUsername || "",
+      accent: project.accent || "#f59a13",
+      idleTitle: project.idleTitle || project.name || "",
+      idleKicker: project.idleKicker || "",
+      idleCopy: project.idleCopy || "",
+      defaultImageUrl: project.defaultImageUrl || "",
+      displayConfig: project.displayConfig || {}
+    };
+  }
+
+  function inlineClone(value) {
+    return JSON.parse(JSON.stringify(value || null));
+  }
+
+  function inlineSnapshot() {
+    return inlineClone(INLINE_EDIT.projects);
+  }
+
+  function pushInlineUndo(label) {
+    if (!INLINE_EDIT.ready) return;
+    INLINE_EDIT.undoStack.push({ label: label || "edit", projects: inlineSnapshot() });
+    if (INLINE_EDIT.undoStack.length > INLINE_EDIT.maxUndo) INLINE_EDIT.undoStack.shift();
+  }
+
+  function inlineConfig(project) {
+    project.displayConfig = project.displayConfig || {};
+    return project.displayConfig;
+  }
+
+  function rebuildInlineHomeModel() {
+    if (!INLINE_EDIT.ready) return;
+    var school = INLINE_EDIT.projects.find(function (project) {
+      return project.portalType === "school";
+    });
+    if (school) {
+      var schoolConfig = inlineConfig(school);
+      PORTAL_HOME.schoolName = String(schoolConfig.schoolName || school.name || "").trim();
+      PORTAL_HOME.schoolMeta = String(schoolConfig.schoolMeta || PORTAL_HOME.schoolMeta || "").trim();
+      PORTAL_HOME.summaryKicker = String(schoolConfig.portalHomeKicker || "School Portal").trim();
+      PORTAL_HOME.summaryTitle = String(schoolConfig.portalHomeTitle || "学校门户").trim();
+      PORTAL_HOME.summaryCopy = String(schoolConfig.portalHomeCopy || "").trim();
+      PORTAL_HOME.routeLabels = Array.isArray(schoolConfig.portalHomeRouteLabels) ? schoolConfig.portalHomeRouteLabels : [];
+      PORTAL_HOME.sectionKicker = String(schoolConfig.portalHomeSectionKicker || "Integrated Showcase").trim();
+      PORTAL_HOME.sectionTitle = String(schoolConfig.portalHomeSectionTitle || "创新育人矩阵").trim();
+      PORTAL_HOME.sectionCopy = String(schoolConfig.portalHomeSectionCopy || "").trim();
+      PORTAL_HOME.footer = String(schoolConfig.portalHomeFooter || "").trim();
+    }
+    HOME_CARDS = INLINE_EDIT.projects
+      .filter(function (project) {
+        var type = project.portalType === "department" ? "departments" : "topics";
+        return project.portalType !== "school" && project.portalSlug && !inlineConfig(project).portalHomeCardHidden && (type === "topics" || type === "departments");
+      })
+      .map(function (project) {
+        var cfg = inlineConfig(project);
+        return {
+          id: project.portalSlug,
+          kind: project.portalType === "department" ? "departments" : "topics",
+          projectId: project.id,
+          name: project.name || "",
+          cover: project.defaultImageUrl || "",
+          label: cfg.portalHomeCardLabel || "创新育人专题",
+          summary: cfg.portalHomeCardSummary || project.idleCopy || "",
+          chips: [],
+          sortOrder: Number(cfg.portalHomeCardSortOrder || 0),
+          hidden: Boolean(cfg.portalHomeCardHidden),
+          accent: project.accent || "#f59a13",
+          previewUrl: project.previewUrl || ""
+        };
+      })
+      .sort(function (a, b) {
+        return Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.name).localeCompare(String(b.name), "zh-CN");
+      });
+  }
+
+  function restoreInlineSnapshot(snapshot, message) {
+    if (!snapshot) return;
+    INLINE_EDIT.projects = inlineClone(snapshot) || [];
+    INLINE_EDIT.projectMap = {};
+    INLINE_EDIT.projects.forEach(function (project) {
+      project.displayConfig = project.displayConfig || {};
+      INLINE_EDIT.projectMap[String(project.id)] = project;
+      INLINE_EDIT.dirty[String(project.id)] = true;
+    });
+    rebuildInlineHomeModel();
+    renderHome();
+    inlineEditStatus(message || "已回退，记得保存", "warn");
+  }
+
+  function undoInlineEdit() {
+    var last = INLINE_EDIT.undoStack.pop();
+    if (!last) {
+      inlineEditStatus("没有可撤销的步骤", "ok");
+      return;
+    }
+    restoreInlineSnapshot(last.projects, "已撤销上一步，记得保存");
+  }
+
+  function resetInlineDefaults() {
+    if (!INLINE_EDIT.ready) return;
+    pushInlineUndo("reset");
+    INLINE_EDIT.projects.forEach(function (project) {
+      var cfg = inlineConfig(project);
+      if (project.portalType === "school") {
+        cfg.portalHomeKicker = "School Portal";
+        cfg.portalHomeTitle = "学校门户";
+        cfg.portalHomeCopy = "以专题门户为主线，串联专业建设、实训基地、产教融合、教学成果与专题资源。";
+        cfg.portalHomeRouteLabels = ["学校门户", "专题门户", "板块资料", "专题展区"];
+        cfg.portalHomeSectionKicker = "Integrated Showcase";
+        cfg.portalHomeSectionTitle = "创新育人矩阵";
+        cfg.portalHomeSectionCopy = "以专题牵引院系共建，集中呈现跨系专业群、实训资源、产教融合与文化成果。";
+        cfg.portalHomeFooter = "触摸卡片进入二级页面 · 长按返回首页";
+      } else if (project.portalSlug) {
+        cfg.portalHomeCardHidden = false;
+        cfg.portalHomeCardLabel = "创新育人专题";
+        cfg.portalHomeCardSummary = project.idleCopy || "";
+        cfg.portalHomeCardChips = [];
+      }
+      INLINE_EDIT.dirty[String(project.id)] = true;
+    });
+    rebuildInlineHomeModel();
+    renderHome();
+    inlineEditStatus("已恢复默认首页，记得保存", "warn");
+  }
+
+  function markInlineDirty(projectId) {
+    if (!projectId) return;
+    INLINE_EDIT.dirty[String(projectId)] = true;
+    inlineEditStatus("有未保存修改", "warn");
+  }
+
+  function setInlinePath(project, path, value) {
+    if (!project) return;
+    var parts = path.split(".");
+    var target = project;
+    while (parts.length > 1) {
+      var key = parts.shift();
+      if (!target[key] || typeof target[key] !== "object") target[key] = {};
+      target = target[key];
+    }
+    target[parts[0]] = value;
+    markInlineDirty(project.id);
+  }
+
+  function bindInlineText(node, projectId, path, options) {
+    if (!node || node.dataset.inlineBound === "1") return;
+    var project = INLINE_EDIT.projectMap[String(projectId)];
+    if (!project) return;
+    node.dataset.inlineBound = "1";
+    node.dataset.inlineEditField = path;
+    node.contentEditable = "true";
+    node.spellcheck = false;
+    node.addEventListener("focus", function () { pushInlineUndo("text"); });
+    node.addEventListener("click", function (event) { event.stopPropagation(); });
+    node.addEventListener("keydown", function (event) {
+      event.stopPropagation();
+      if (!options || !options.multiline) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          node.blur();
+        }
+      }
+    });
+    node.addEventListener("input", function () {
+      setInlinePath(project, path, node.textContent.trim());
+    });
+    node.addEventListener("blur", function () {
+      setInlinePath(project, path, node.textContent.trim());
+    });
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function createInlineToolbar() {
+    var existing = document.querySelector(".inline-edit-toolbar");
+    if (existing) existing.remove();
+    var toolbar = document.createElement("div");
+    toolbar.className = "inline-edit-toolbar";
+    toolbar.innerHTML = '<strong>预览编辑</strong><span data-inline-edit-status>点击文字直接修改，图片点“换图”。</span>' +
+      '<button type="button" data-inline-undo>上一步</button>' +
+      '<button type="button" data-inline-reset>恢复默认</button>' +
+      '<button type="button" data-inline-save>保存</button>' +
+      '<a href="/departments">退出编辑</a>' +
+      '<input data-inline-file type="file" accept="image/*" hidden>';
+    document.body.appendChild(toolbar);
+    INLINE_EDIT.statusNode = toolbar.querySelector("[data-inline-edit-status]");
+    toolbar.querySelector("[data-inline-undo]").addEventListener("click", undoInlineEdit);
+    toolbar.querySelector("[data-inline-reset]").addEventListener("click", resetInlineDefaults);
+    toolbar.querySelector("[data-inline-save]").addEventListener("click", saveInlineEdits);
+    toolbar.querySelector("[data-inline-file]").addEventListener("change", uploadInlineImage);
+  }
+
+  function addInlineImageButton(card, projectId) {
+    if (!card || card.querySelector(".inline-edit-image-button")) return;
+    var button = document.createElement("button");
+    button.className = "inline-edit-image-button inline-edit-control";
+    button.type = "button";
+    button.textContent = "换图";
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      INLINE_EDIT.uploadTargetProjectId = String(projectId || "");
+      var input = document.querySelector("[data-inline-file]");
+      if (input) {
+        input.value = "";
+        input.click();
+      }
+    });
+    card.appendChild(button);
+  }
+
+  function addInlineDeleteButton(card, projectId) {
+    if (!card || card.querySelector(".inline-edit-delete-button")) return;
+    var button = document.createElement("button");
+    button.className = "inline-edit-delete-button inline-edit-control";
+    button.type = "button";
+    button.textContent = "删除";
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      var project = INLINE_EDIT.projectMap[String(projectId || "")];
+      if (!project) return;
+      pushInlineUndo("delete-card");
+      inlineConfig(project).portalHomeCardHidden = true;
+      markInlineDirty(project.id);
+      rebuildInlineHomeModel();
+      renderHome();
+      inlineEditStatus("已删除该卡片，记得保存", "warn");
+    });
+    card.appendChild(button);
+  }
+
+  function bindInlineCardChips(card, projectId) {
+    var project = INLINE_EDIT.projectMap[String(projectId)];
+    if (!card || !project) return;
+    var chips = Array.prototype.slice.call(card.querySelectorAll(".dept-chip"));
+    chips.forEach(function (chip) {
+      if (chip.dataset.inlineBound === "1") return;
+      chip.dataset.inlineBound = "1";
+      chip.dataset.inlineEditField = "displayConfig.portalHomeCardChips";
+      chip.contentEditable = "true";
+      chip.spellcheck = false;
+      chip.addEventListener("focus", function () { pushInlineUndo("chips"); });
+      chip.addEventListener("click", function (event) { event.preventDefault(); event.stopPropagation(); });
+      chip.addEventListener("keydown", function (event) {
+        event.stopPropagation();
+        if (event.key === "Enter") {
+          event.preventDefault();
+          chip.blur();
+        }
+      });
+      chip.addEventListener("input", function () {
+        project.displayConfig = project.displayConfig || {};
+        project.displayConfig.portalHomeCardChips = chips.map(function (item) {
+          return {
+            label: item.textContent.trim(),
+            targetId: item.dataset.goId || "",
+            targetKind: item.dataset.goKind || "departments"
+          };
+        }).filter(function (item) { return item.label; });
+        markInlineDirty(project.id);
+      });
+    });
+  }
+
+  function bindInlineRouteLabels(project) {
+    if (!project) return;
+    var labels = Array.prototype.slice.call(document.querySelectorAll(".portal-route span"));
+    labels.forEach(function (label) {
+      if (label.dataset.inlineBound === "1") return;
+      label.dataset.inlineBound = "1";
+      label.dataset.inlineEditField = "displayConfig.portalHomeRouteLabels";
+      label.contentEditable = "true";
+      label.spellcheck = false;
+      label.addEventListener("focus", function () { pushInlineUndo("route"); });
+      label.addEventListener("click", function (event) { event.stopPropagation(); });
+      label.addEventListener("keydown", function (event) {
+        event.stopPropagation();
+        if (event.key === "Enter") {
+          event.preventDefault();
+          label.blur();
+        }
+      });
+      label.addEventListener("input", function () {
+        project.displayConfig = project.displayConfig || {};
+        project.displayConfig.portalHomeRouteLabels = labels.map(function (item) {
+          return item.textContent.trim();
+        }).filter(Boolean);
+        markInlineDirty(project.id);
+      });
+    });
+  }
+
+  function uploadInlineImage(event) {
+    var file = event.target.files && event.target.files[0];
+    var project = INLINE_EDIT.projectMap[INLINE_EDIT.uploadTargetProjectId];
+    if (!file || !project) return;
+    pushInlineUndo("image");
+    inlineEditStatus("正在上传图片...", "warn");
+    fileToDataUrl(file)
+      .then(function (dataUrl) {
+        return inlineEditApi("/api/assets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, dataUrl: dataUrl })
+        });
+      })
+      .then(function (payload) {
+        var url = payload.url || (payload.asset && payload.asset.url) || "";
+        if (!url) throw new Error("上传成功但未返回图片地址");
+        project.defaultImageUrl = url;
+        markInlineDirty(project.id);
+        document.querySelectorAll('.fusion-card[data-edit-project-id="' + String(project.id) + '"] .fusion-photo')
+          .forEach(function (img) {
+            img.style.display = "";
+            img.src = url;
+          });
+        inlineEditStatus("图片已上传，记得保存", "warn");
+      })
+      .catch(function (error) {
+        inlineEditStatus(error.message || "上传失败", "error");
+      });
+  }
+
+  function saveInlineEdits() {
+    var ids = Object.keys(INLINE_EDIT.dirty);
+    if (!ids.length) {
+      inlineEditStatus("没有需要保存的修改", "ok");
+      return;
+    }
+    inlineEditStatus("正在保存...", "warn");
+    ids.reduce(function (promise, id) {
+      return promise.then(function () {
+        var project = INLINE_EDIT.projectMap[id];
+        if (!project) return null;
+        return inlineEditApi("/api/projects/" + encodeURIComponent(id), inlineEditBody(inlineProjectPayload(project)));
+      });
+    }, Promise.resolve())
+      .then(function () {
+        INLINE_EDIT.dirty = {};
+        inlineEditStatus("已保存，刷新后仍然生效", "ok");
+      })
+      .catch(function (error) {
+        inlineEditStatus(error.message || "保存失败", "error");
+      });
+  }
+
+  function applyInlineHomeControls() {
+    if (!INLINE_EDIT.ready || screenHome.hidden) return;
+    document.body.classList.add("inline-edit-mode");
+    createInlineToolbar();
+    var school = INLINE_EDIT.projects.find(function (project) {
+      return project.portalType === "school";
+    });
+    if (school) {
+      bindInlineText(document.querySelector(".portal-summary .portal-kicker"), school.id, "displayConfig.portalHomeKicker");
+      bindInlineText(document.querySelector(".portal-summary h2"), school.id, "displayConfig.portalHomeTitle");
+      bindInlineText(document.querySelector(".portal-summary p"), school.id, "displayConfig.portalHomeCopy", { multiline: true });
+      bindInlineText(document.querySelector(".fusion-head .portal-kicker"), school.id, "displayConfig.portalHomeSectionKicker");
+      bindInlineText(document.querySelector(".fusion-head .section-title"), school.id, "displayConfig.portalHomeSectionTitle");
+      bindInlineText(document.querySelector(".fusion-head p"), school.id, "displayConfig.portalHomeSectionCopy", { multiline: true });
+      bindInlineText(document.querySelector(".statusline"), school.id, "displayConfig.portalHomeFooter");
+      document.querySelectorAll(".school-name").forEach(function (node) {
+        bindInlineText(node, school.id, "displayConfig.schoolName");
+      });
+      document.querySelectorAll(".school-meta").forEach(function (node) {
+        bindInlineText(node, school.id, "displayConfig.schoolMeta");
+      });
+      bindInlineRouteLabels(school);
+    }
+    document.querySelectorAll(".fusion-card[data-edit-project-id]").forEach(function (card) {
+      var projectId = card.dataset.editProjectId;
+      bindInlineText(card.querySelector(".fusion-label"), projectId, "displayConfig.portalHomeCardLabel");
+      bindInlineText(card.querySelector("h3"), projectId, "name");
+      bindInlineText(card.querySelector(".fusion-copy p"), projectId, "displayConfig.portalHomeCardSummary", { multiline: true });
+      bindInlineCardChips(card, projectId);
+      addInlineImageButton(card, projectId);
+      addInlineDeleteButton(card, projectId);
+      if (INLINE_EDIT.focus && card.dataset.editSlug === INLINE_EDIT.focus) {
+        card.classList.add("inline-edit-focused");
+        window.setTimeout(function () { card.scrollIntoView({ block: "center", inline: "center" }); }, 120);
+      }
+    });
+  }
+
+  function initInlineEdit() {
+    if (!INLINE_EDIT.enabled) return Promise.resolve();
+    if (INLINE_EDIT.initPromise) return INLINE_EDIT.initPromise;
+    INLINE_EDIT.initPromise = inlineEditApi("/api/session")
+      .then(function (session) {
+        if (!session.authenticated || !(session.permissions || []).some(function (item) { return item === "admin" || item === "review" || item === "department_admin"; })) {
+          throw new Error("请先登录后台管理员账号，再进入预览编辑。");
+        }
+        INLINE_EDIT.csrfToken = session.csrfToken || "";
+        return inlineEditApi("/api/projects");
+      })
+      .then(function (payload) {
+        INLINE_EDIT.projects = payload.projects || [];
+        INLINE_EDIT.projectMap = {};
+        INLINE_EDIT.projects.forEach(function (project) {
+          project.displayConfig = project.displayConfig || {};
+          INLINE_EDIT.projectMap[String(project.id)] = project;
+        });
+        INLINE_EDIT.ready = true;
+        applyInlineHomeControls();
+      })
+      .catch(function (error) {
+        createInlineToolbar();
+        inlineEditStatus(error.message || "编辑模式不可用", "error");
+      });
+    return INLINE_EDIT.initPromise;
+  }
+
+  function activateInlineEditIfNeeded() {
+    if (!INLINE_EDIT.enabled) return;
+    initInlineEdit().then(applyInlineHomeControls);
   }
 
   /* ---------- 二维码 ---------- */
@@ -492,16 +1031,44 @@
   }
 
   function loadPortalChrome() {
+    if (PORTAL_HOME.schoolName) return Promise.resolve();
     return fetch("/api/display/project")
       .then(function (r) { return r.json(); })
       .then(function (payload) {
         var config = payload && payload.project && payload.project.displayConfig;
         if (!config) return;
-        PORTAL_CHROME.logoImageUrl = String(config.logoImageUrl || PORTAL_CHROME.logoImageUrl).trim();
         PORTAL_CHROME.navText = String(config.schoolMeta || PORTAL_CHROME.navText).trim();
-        PORTAL_CHROME.schoolQrImageUrl = String(config.scanImageUrl || PORTAL_CHROME.schoolQrImageUrl).trim();
+        PORTAL_CHROME.logoImageUrl = FIXED_SCHOOL_LOGO_URL;
+        PORTAL_CHROME.schoolQrImageUrl = FIXED_SCHOOL_QR_URL;
       })
       .catch(function () { /* 使用本地默认配置 */ });
+  }
+
+  function setText(selector, value) {
+    var node = document.querySelector(selector);
+    if (node && value) node.textContent = value;
+  }
+
+  function applyPortalHomeText() {
+    setText(".portal-summary .portal-kicker", PORTAL_HOME.summaryKicker);
+    setText(".portal-summary h2", PORTAL_HOME.summaryTitle);
+    setText(".portal-summary p", PORTAL_HOME.summaryCopy);
+    setText(".fusion-head .portal-kicker", PORTAL_HOME.sectionKicker);
+    setText(".fusion-head .section-title", PORTAL_HOME.sectionTitle);
+    setText(".fusion-head p", PORTAL_HOME.sectionCopy);
+    setText(".statusline", PORTAL_HOME.footer);
+    if (PORTAL_HOME.schoolName) {
+      document.querySelectorAll(".school-name").forEach(function (node) { node.textContent = PORTAL_HOME.schoolName; });
+    }
+    if (PORTAL_HOME.schoolMeta) {
+      document.querySelectorAll(".school-meta").forEach(function (node) { node.textContent = PORTAL_HOME.schoolMeta; });
+    }
+    var route = document.querySelector(".portal-route");
+    if (route && PORTAL_HOME.routeLabels && PORTAL_HOME.routeLabels.length) {
+      route.innerHTML = PORTAL_HOME.routeLabels.map(function (label) {
+        return "<span>" + esc(label) + "</span>";
+      }).join("");
+    }
   }
 
   function applyPortalChrome() {
@@ -516,6 +1083,7 @@
     document.querySelectorAll(".page-label").forEach(function (label) {
       label.textContent = PORTAL_CHROME.navText;
     });
+    applyPortalHomeText();
   }
 
   function bindUnityStartLink() {
@@ -832,6 +1400,10 @@
     var moduleHtml = MODULE_SEQUENCE.map(function (item) {
       return showcaseCard(item[0], item[1], item[2], moduleTextFor(data, item[0]), moduleIsMissing(data, item[0]));
     }).join("");
+    var homestayModelHtml = data.id === "tourism"
+      ? '<a class="homestay-model-card" href="/model/homestay">' +
+        '<span>3D Model</span><strong>民宿三维模型</strong><p>启动民宿场景建模窗口</p></a>'
+      : "";
 
     return '<section class="showcase-board" aria-label="' + esc(data.name) + '展示页面">' +
       '<header class="showcase-hero">' +
@@ -843,7 +1415,7 @@
       '<div class="showcase-grid">' +
       '<article class="showcase-panel modules-panel"><div class="showcase-panel-head"><h3>系部板块导航</h3><span>8 个标准板块</span></div>' +
       '<p class="module-map-intro">' + esc(clipText(overview || data.summary, 78)) + '</p>' +
-      '<div class="showcase-module-grid">' + moduleHtml + '</div></article>' +
+      homestayModelHtml + '<div class="showcase-module-grid">' + moduleHtml + '</div></article>' +
       '<article class="showcase-panel teaching-panel"><div class="showcase-panel-head"><h3>图像资料</h3><span>代表场景</span></div>' +
       '<figure class="showcase-media photo-frame" tabindex="0" data-lightbox="' + esc(hero.src) + '" data-caption="' + esc(hero.caption || data.name) + '">' +
       (hero.src ? '<img src="' + esc(hero.src) + '" alt="' + esc(hero.caption || data.name) + '" loading="lazy">' : '<div class="showcase-slot">图片待放置</div>') +
@@ -854,53 +1426,350 @@
       '</div></section>';
   }
 
+  function firstSectionById(data, id) {
+    return ((data && data.sections) || []).find(function (section) {
+      return section && section.id === id;
+    }) || null;
+  }
+
+  function sectionBlocks(data, id) {
+    var section = firstSectionById(data, id);
+    return section ? (section.blocks || []) : [];
+  }
+
+  function sectionTexts(data, id) {
+    return sectionBlocks(data, id).filter(function (b) {
+      return b.type === "text" && String(b.content || "").trim();
+    }).map(function (b) {
+      return cleanLeadText(b.content);
+    }).filter(function (text) {
+      return !isTitleOnlyText(text, data);
+    });
+  }
+
+  function sectionImages(data, id) {
+    return sectionBlocks(data, id).filter(function (b) {
+      return b.type === "image" && b.src;
+    });
+  }
+
+  function compactParagraph(text, limit) {
+    return esc(clipText(text || "", limit || 86));
+  }
+
+  function topicPhotoFigure(image, fallback, className) {
+    var src = (image && image.src) || fallback || "";
+    var caption = (image && image.caption) || "";
+    return '<figure class="topic-showcase-photo photo-frame ' + esc(className || "") + '" tabindex="0" data-lightbox="' + esc(src) + '" data-caption="' + esc(caption) + '">' +
+      (src ? '<img src="' + esc(src) + '" alt="' + esc(caption || "专题图片") + '" loading="lazy">' : '<div class="showcase-slot">图片待放置</div>') +
+      '</figure>';
+  }
+
+  function topicPanelTitle(title, note) {
+    return '<div class="topic-showcase-panel-head">' +
+      '<h3><span aria-hidden="true"></span>' + esc(title) + '</h3>' +
+      '<em>' + esc(note || "") + '</em>' +
+      '</div>';
+  }
+
+  /* ---------- coverflow 轮播(与 /display 页面一致) ---------- */
+  function coverflowImageUrl(src) {
+    return "url('" + String(src || "").replace(/\\/g, "%5C").replace(/'/g, "%27") + "')";
+  }
+
+  function renderTopicCoverflowCarousel(items, options) {
+    options = options || {};
+    var fallbackImage = options.fallbackImage || "";
+    var list = items && items.length ? items : [{ title: options.title || "", body: "", imageUrl: fallbackImage }];
+    var slides = list.map(function (item, index) {
+      var src = item.imageUrl || fallbackImage;
+      return '<article class="topic-coverflow-slide' + (index === 0 ? " is-active" : "") + (item.video ? " is-video" : "") + '"' +
+        ' style="--slide-image: ' + coverflowImageUrl(src) + '"' +
+        (item.sectionId ? ' data-section-id="' + esc(item.sectionId) + '"' : "") +
+        (item.lightbox ? ' data-lightbox="' + esc(item.lightbox) + '" data-caption="' + esc(item.caption || "") + '"' : "") +
+        '>' +
+        (item.video ? '<span class="topic-coverflow-play" aria-hidden="true"></span>' : "") +
+        '<p class="topic-coverflow-caption">' + esc(item.caption || "SHOWCASE " + String(index + 1).padStart(2, "0")) + '</p>' +
+        '<h3>' + esc(item.title || "") + '</h3>' +
+        '<p class="topic-coverflow-copy">' + esc(item.body || "") + '</p>' +
+        '</article>';
+    }).join("");
+    var dots = list.map(function (item, index) {
+      return '<button type="button" class="topic-coverflow-dot' + (index === 0 ? " is-active" : "") + '" aria-label="切换到第 ' + (index + 1) + ' 张"></button>';
+    }).join("");
+    return '<div class="topic-coverflow" data-topic-coverflow data-count="' + list.length + '">' +
+      '<div class="topic-coverflow-stage">' + slides + '</div>' +
+      (list.length > 1 ? '<div class="topic-coverflow-dots">' + dots + '</div>' : "") +
+      (list.length > 1 ? '<div class="topic-coverflow-controls"><button type="button" class="topic-coverflow-prev" aria-label="上一张">‹</button><button type="button" class="topic-coverflow-next" aria-label="下一张">›</button></div>' : "") +
+      '</div>';
+  }
+
+  function startTopicCoverflowCarousels(root) {
+    stopTopicCoverflowCarousels();
+    if (!root) return;
+    root.querySelectorAll("[data-topic-coverflow]").forEach(function (carousel) {
+      var slides = Array.prototype.slice.call(carousel.querySelectorAll(".topic-coverflow-slide"));
+      var dots = Array.prototype.slice.call(carousel.querySelectorAll(".topic-coverflow-dot"));
+      if (slides.length <= 1) return;
+      var active = 0;
+      var wrapIndex = function (index) {
+        return (index + slides.length) % slides.length;
+      };
+      var shortestOffset = function (index, current) {
+        var offset = index - current;
+        var half = slides.length / 2;
+        if (offset > half) offset -= slides.length;
+        if (offset < -half) offset += slides.length;
+        return offset;
+      };
+      var showSlide = function (index) {
+        active = wrapIndex(index);
+        slides.forEach(function (slide, idx) {
+          var offset = shortestOffset(idx, active);
+          var abs = Math.abs(offset);
+          var x = offset * 210;
+          var rotateY = offset * -46;
+          var depth = abs * -116;
+          var scale = idx === active ? 1.04 : Math.max(0.76, 1 - abs * 0.16);
+          slide.classList.toggle("is-active", idx === active);
+          slide.style.zIndex = String(10 - abs);
+          slide.style.opacity = abs > 1.5 ? "0" : "1";
+          slide.style.pointerEvents = abs > 1.5 ? "none" : "auto";
+          slide.style.transform = "translate3d(calc(-50% + " + x + "px), 0, " + depth + "px) rotateY(" + rotateY + "deg) scale(" + scale + ")";
+        });
+        dots.forEach(function (dot, idx) {
+          dot.classList.toggle("is-active", idx === active);
+        });
+      };
+      var timer = 0;
+      var restart = function () {
+        window.clearTimeout(timer);
+        if (slides.length > 1) {
+          timer = window.setTimeout(function () {
+            showSlide(active + 1);
+            restart();
+          }, 4200);
+        }
+        topicCoverflowTimers.push(timer);
+      };
+      slides.forEach(function (slide, idx) {
+        slide.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (slide.dataset.sectionId) {
+            openTopicLoopSection(slide.dataset.sectionId);
+            return;
+          }
+          if (idx !== active) {
+            showSlide(idx);
+            restart();
+            return;
+          }
+          if (slide.dataset.lightbox) openLightbox(slide.dataset.lightbox, slide.dataset.caption || "");
+        });
+      });
+      dots.forEach(function (dot, idx) {
+        dot.addEventListener("click", function (e) {
+          e.stopPropagation();
+          showSlide(idx);
+          restart();
+        });
+      });
+      var prev = carousel.querySelector(".topic-coverflow-prev");
+      var next = carousel.querySelector(".topic-coverflow-next");
+      if (prev) prev.addEventListener("click", function (e) { e.stopPropagation(); showSlide(active - 1); restart(); });
+      if (next) next.addEventListener("click", function (e) { e.stopPropagation(); showSlide(active + 1); restart(); });
+      showSlide(0);
+      restart();
+    });
+  }
+
+  function stopTopicCoverflowCarousels() {
+    topicCoverflowTimers.forEach(function (timer) { window.clearTimeout(timer); });
+    topicCoverflowTimers.length = 0;
+  }
+
+  var TOPIC_SHOWCASE = {
+    "modern-agriculture": {
+      slogan: "现代山地特色高效农业 · 产教融合 · 数字赋能 · 乡村振兴",
+      basic: [["山地农业概况", "overview"], ["专业群建设", "majors"], ["实训基地", "training"]],
+      coop: [["校企合作项目", "cooperation"], ["产教融合成果", "achievements"]],
+      story: [["课程成果", "masters"], ["学生项目", "students"], ["技能竞赛", "competitions"], ["乡村服务", "honors"]],
+      video: "现代山地特色高效农业宣传片"
+    }
+  };
+  function topicShowcaseConfig(id) {
+    var cfg = TOPIC_SHOWCASE[id] || {};
+    return {
+      slogan: cfg.slogan || (TOPIC_SUMMARY[id] || "产教融合 · 数字赋能 · 服务地方"),
+      basic: cfg.basic || [
+        ["专题概况", "overview"],
+        ["专业群布局", "majors"],
+        ["实训场景", "training"]
+      ],
+      coop: cfg.coop || [
+        ["校企合作项目", "cooperation"],
+        ["专题成果", "achievements"]
+      ],
+      story: cfg.story || [
+        ["名师名匠", "masters"],
+        ["优秀学生", "students"],
+        ["技能大赛", "competitions"],
+        ["荣誉资质", "honors"]
+      ],
+      video: cfg.video || ""
+    };
+  }
+
+  function renderTopicShowcaseOverview(data) {
+    var id = data.id || "";
+    var cfg = topicShowcaseConfig(id);
+    var overviewTexts = sectionTexts(data, "overview");
+    var majorTexts = sectionTexts(data, "majors");
+    var trainingTexts = sectionTexts(data, "training");
+    var cooperationTexts = sectionTexts(data, "cooperation");
+    var achievementTexts = sectionTexts(data, "achievements");
+    var allImages = ["overview", "majors", "training", "cooperation", "achievements", "honors"].reduce(function (list, id) {
+      return list.concat(sectionImages(data, id));
+    }, []);
+    var featureImages = allImages.length ? allImages : [{ src: data.cover || "", caption: data.name }];
+    var stats = (data.stats || []).slice(0, 4);
+    var basicCards = cfg.basic.map(function (item, index) {
+      var text = item[0], secId = item[1];
+      var textForCard = secId === "overview"
+        ? (overviewTexts[0] || data.summary)
+        : secId === "majors"
+          ? (majorTexts[0] || majorTexts[1] || overviewTexts[1])
+          : (trainingTexts[0] || trainingTexts[1] || overviewTexts[2]);
+      var img = featureImages[index] || featureImages[0];
+      return '<section class="topic-showcase-mini" data-section-id="' + esc(secId) + '" tabindex="0" role="button" aria-label="查看' + esc(text) + '完整资料">' +
+        '<strong>' + esc(text) + '</strong>' +
+        topicPhotoFigure(img, data.cover, "photo-" + index) +
+        '<p>' + compactParagraph(textForCard, 96) + '</p>' +
+        '</section>';
+    }).join("");
+    var cooperationList = (cfg.coop[0][0] === "校企合作项目" ? [
+      "校企合作", "产教融合", "实习实训", "订单培养"
+    ] : [
+      "农业企业合作", "合作社共建", "生产基地共建", "订单培养定制"
+    ]).map(function (label) {
+      return '<span>' + esc(label) + '</span>';
+    }).join("");
+    var resultStats = stats.length ? stats.map(function (s) {
+      return '<div class="topic-showcase-result"><b>' + esc(s.value) + '</b><span>' + esc(s.label) + '</span></div>';
+    }).join("") : [
+      "学业实践实训", "成果转化应用", "数字赋能服务", "社会服务案例"
+    ].map(function (label) {
+      return '<div class="topic-showcase-result"><span>' + esc(label) + '</span></div>';
+    }).join("");
+    var storyItems = cfg.story.map(function (item, index) {
+      var title = item[0], secId = item[1];
+      var textForStory = secId === "masters"
+        ? (majorTexts[2] || majorTexts[0])
+        : secId === "students"
+          ? (trainingTexts[2] || trainingTexts[0])
+          : secId === "competitions"
+            ? (achievementTexts[0] || achievementTexts[1])
+            : (cooperationTexts[0] || cooperationTexts[1]);
+      var img = featureImages[index + 3] || featureImages[index] || featureImages[0];
+      var src = (img && img.src) || data.cover || "";
+      return {
+        title: title,
+        body: clipText(textForStory || "", 62),
+        imageUrl: src,
+        caption: (img && img.caption) || title,
+        lightbox: src,
+        sectionId: secId
+      };
+    });
+    var achievementCarousel = renderTopicCoverflowCarousel(storyItems, { fallbackImage: data.cover || "", title: "教学与创新成果" });
+    var videoPoster = featureImages[7] || featureImages[0] || { src: data.cover || "", caption: data.name };
+    var coopA = cfg.coop[0] || ["校企合作项目", "cooperation"];
+    var coopB = cfg.coop[1] || ["专题成果", "achievements"];
+    var videoTitle = cfg.video || (data.name + "宣传片");
+    return '<section class="topic-showcase-page" aria-label="' + esc(data.name) + '专题展示页" style="--topic-bg-image:url(\'/static/blueprint/' + esc(id) + '-bg.png\')">' +
+      '<header class="topic-showcase-header">' +
+      '<div class="topic-showcase-brand topic-only-brand">' +
+      '<div class="topic-showcase-title-kicker">TOPIC SHOWCASE <span>/ 专题展区</span></div>' +
+      '<div class="topic-showcase-title-row"><strong>' + esc(data.name || "专题") + '</strong></div>' +
+      '<p>' + esc(cfg.slogan) + '</p></div>' +
+      '</header>' +
+      '<div class="topic-showcase-content">' +
+      '<article class="topic-showcase-panel topic-showcase-basic">' + topicPanelTitle("基本情况", "专题概览") +
+      '<div class="topic-showcase-basic-grid">' + basicCards + '</div></article>' +
+      '<article class="topic-showcase-panel topic-showcase-coop">' + topicPanelTitle("产教融合校企合作成果", "合作展示") +
+      '<div class="topic-showcase-coop-grid"><section class="topic-showcase-partner" data-section-id="' + esc(coopA[1]) + '" tabindex="0" role="button" aria-label="查看' + esc(coopA[0]) + '完整资料"><strong>' + esc(coopA[0]) + '</strong>' +
+      topicPhotoFigure(featureImages[8] || featureImages[3], data.cover, "partner") +
+      '<div class="topic-showcase-icons">' + cooperationList + '</div>' +
+      '<p>' + compactParagraph(cooperationTexts[0] || cooperationTexts[1] || data.summary, 116) + '</p></section>' +
+      '<section class="topic-showcase-partner" data-section-id="' + esc(coopB[1]) + '" tabindex="0" role="button" aria-label="查看' + esc(coopB[0]) + '完整资料"><strong>' + esc(coopB[0]) + '</strong><div class="topic-showcase-results">' + resultStats + '</div>' +
+      '<p>' + compactParagraph(cooperationTexts[1] || overviewTexts[2] || data.summary, 108) + '</p></section></div></article>' +
+      '<article class="topic-showcase-panel topic-showcase-achievement">' + topicPanelTitle("教学与创新成果", "轮播图") + achievementCarousel + '</article>' +
+      '<article class="topic-showcase-panel topic-showcase-video">' + topicPanelTitle("视频资源", "播放区") +
+      '<div class="topic-showcase-video-box photo-frame" data-section-id="media" tabindex="0" role="button" aria-label="查看视频资源完整资料" data-lightbox="' + esc(videoPoster.src || "") + '" data-caption="' + esc(videoPoster.caption || data.name) + '">' +
+      (videoPoster.src ? '<img src="' + esc(videoPoster.src) + '" alt="' + esc(videoPoster.caption || data.name) + '" loading="lazy">' : "") +
+      '<span class="topic-showcase-play" aria-hidden="true"></span><div class="topic-showcase-controls" aria-hidden="true"><span></span><em>00:00 / 03:45</em><i></i><em>全屏</em></div></div>' +
+      '<div class="topic-showcase-video-copy"><strong>' + esc(videoTitle) + '</strong><p>' + compactParagraph(data.summary || overviewTexts[0], 94) + '</p></div></article>' +
+      '</div>' +
+      renderTopicExperienceActions(data) +
+      '<div class="topic-showcase-pager" aria-label="分页"><button type="button" aria-label="上一页">‹</button><span>1&nbsp;&nbsp;/&nbsp;&nbsp;1</span><button type="button" aria-label="下一页">›</button><em>刷新 ↻</em></div>' +
+      '</section>';
+  }
+
   /* ---------- 一级页 ---------- */
   function renderHome() {
     setPortalDocumentTitle("学校门户");
+    document.body.dataset.portalKind = "home";
+    document.body.dataset.topic = "";
     var grid = $("fusionGrid");
     grid.innerHTML = "";
-    ORDER.topics.forEach(function (id) {
-      var t = DATA.topics[id];
+    var cards = HOME_CARDS.length ? HOME_CARDS.filter(function (card) { return !card.hidden; }) : ORDER.topics.map(function (id) {
+      return { kind: "topics", id: id };
+    });
+    cards.forEach(function (cardConfig) {
+      var kind = cardConfig.kind === "departments" ? "departments" : "topics";
+      var id = cardConfig.id;
+      var t = (kind === "departments" ? DATA.departments : DATA.topics)[id];
       if (!t) return;
-      var departments = TOPIC_DEPARTMENTS[id] || [];
-      var chips = departments.map(function (name) {
-        var deptId = departmentIdForName(name);
-        if (!deptId) return "";
-        return '<button type="button" class="dept-chip" data-go-id="' + esc(deptId) + '">' + esc(name) + '</button>';
-      }).join("");
-      var card = document.createElement("article");
-      card.className = "fusion-card";
-      card.tabIndex = 0;
-      card.setAttribute("role", "button");
-      card.setAttribute("aria-label", "进入" + t.name + "专题页");
-      card.innerHTML =
-        '<img class="fusion-photo" src="' + esc(t.cover) + '" alt="" loading="lazy">' +
+      var card = t.homeCard || cardConfig || {};
+      var article = document.createElement("article");
+      article.className = "fusion-card";
+      article.tabIndex = 0;
+      article.setAttribute("role", "button");
+      article.setAttribute("aria-label", "进入" + t.name + "专题页");
+      if (card.projectId) article.dataset.editProjectId = card.projectId;
+      article.dataset.editSlug = id;
+      article.innerHTML =
+        '<img class="fusion-photo" src="' + esc(card.cover || t.cover) + '" alt="" loading="lazy">' +
         '<div class="fusion-shade"></div>' +
         '<div class="fusion-copy">' +
-        '<span class="fusion-label">创新育人专题</span>' +
+        '<span class="fusion-label">' + esc(card.label || "创新育人专题") + '</span>' +
         '<h3>' + esc(t.name) + '</h3>' +
-        '<p>' + esc(TOPIC_SUMMARY[id] || t.summary) + '</p>' +
-        '<div class="fusion-depts">' + chips + '</div>' +
+        '<p>' + esc(card.summary || TOPIC_SUMMARY[id] || t.summary) + '</p>' +
+        '<div class="fusion-depts" hidden></div>' +
         '</div>' +
         '<span class="fusion-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
-      var go = function () { openDetail("topics", id, 0); };
-      card.addEventListener("click", function (e) {
+      var go = function () { openDetail(kind, id, 0); };
+      article.addEventListener("click", function (e) {
+        if (INLINE_EDIT.enabled && e.target.closest("[data-inline-edit-field], .inline-edit-control")) return;
+        if (INLINE_EDIT.enabled && e.target.closest(".fusion-card")) return;
         if (e.target.closest(".dept-chip")) return;
         go();
       });
-      card.addEventListener("keydown", function (e) {
+      article.addEventListener("keydown", function (e) {
+        if (INLINE_EDIT.enabled) return;
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
       });
-      Array.prototype.forEach.call(card.querySelectorAll(".dept-chip"), function (chip) {
+      Array.prototype.forEach.call(article.querySelectorAll(".dept-chip"), function (chip) {
         chip.addEventListener("click", function (e) {
           e.stopPropagation();
-          openDetail("departments", chip.dataset.goId, 0);
+          openDetail(chip.dataset.goKind || "departments", chip.dataset.goId, 0);
         });
       });
-      var photo = card.querySelector(".fusion-photo");
+      var photo = article.querySelector(".fusion-photo");
       if (photo) photo.addEventListener("error", function () { photo.style.display = "none"; }, { once: true });
-      grid.appendChild(card);
+      grid.appendChild(article);
     });
+    activateInlineEditIfNeeded();
     prepareAdaptiveMedia(screenHome);
 
     screenDetail.hidden = true;
@@ -921,8 +1790,11 @@
     setPortalDocumentTitle((kind === "departments" ? "系部门户 · " : "专题门户 · ") + d.name);
     state.kind = kind; state.id = id; state.sections = sectionsForPortal(kind, d);
     state.section = Math.max(0, Math.min(section, state.sections.length - 1));
+    document.body.dataset.portalKind = kind;
+    document.body.dataset.topic = kind === "topics" ? id : "";
     screenDetail.classList.toggle("department-showcase-mode", kind === "departments");
     screenDetail.classList.toggle("topic-loop-mode", kind === "topics");
+    screenDetail.dataset.topic = kind === "topics" ? id : "";
     setTopicLoopPaused(false);
     syncDepartmentSwitch(kind, id);
 
@@ -976,12 +1848,25 @@
     var data = getData();
     var page = $("chapterPage");
     stopTopicMediaCarousels();
+    stopTopicCoverflowCarousels();
     page.style.animation = "none";
     void page.offsetWidth;
     page.style.animation = "";
 
-    page.innerHTML = renderTopicLoopPage(data);
+    var isTopicShowcaseOverview = state.kind === "topics" && sec.id === "overview";
+    screenDetail.classList.toggle("modern-agriculture-showcase-mode", isTopicShowcaseOverview);
+    screenDetail.classList.toggle("topic-loop-mode", state.kind === "topics" && !isTopicShowcaseOverview);
+    page.innerHTML = isTopicShowcaseOverview ? renderTopicShowcaseOverview(data) : renderTopicLoopPage(data);
+    if (isTopicShowcaseOverview) {
+      prepareAdaptiveMedia(page);
+      startTopicCoverflowCarousels(page);
+      $("progressLabel").textContent = "01 / 01";
+      $("prevChapter").disabled = true;
+      $("nextChapter").disabled = true;
+      return;
+    }
     startTopicMediaCarousels(page);
+    startTopicCoverflowCarousels(page);
     prepareAdaptiveMedia(page, function () { prepareTopicLoop(page); });
     $("progressLabel").textContent =
       String(state.section + 1).padStart(2, "0") + " / " +
@@ -995,10 +1880,12 @@
     var data = getData();
     var page = $("chapterPage");
     stopTopicMediaCarousels();
+    stopTopicCoverflowCarousels();
     page.style.animation = "none";
     void page.offsetWidth;
     page.style.animation = "";
     screenDetail.classList.remove("topic-loop-mode");
+    screenDetail.classList.remove("modern-agriculture-showcase-mode");
     page.innerHTML = renderDepartmentShowcase(data);
     prepareAdaptiveMedia(page);
     $("progressLabel").textContent = "";
@@ -1056,48 +1943,97 @@
           label: link.label,
           href: link.href,
           sourceTitle: link.sourceTitle || displaySectionTitle(section),
-          description: link.description || ""
+          description: link.description || "",
+          sectionId: section.id || ""
         });
       });
     });
     return uniqueExternalLinks(links);
   }
 
-  function renderTopicExperienceDock(data) {
+  function topicExperienceKind(link) {
+    var text = [link.label, link.sourceTitle, link.description].join(" ");
+    return /资源|案例库|素材|课程|作品/.test(text) ? "resources" : "systems";
+  }
+
+  function renderTopicExperienceMenu(group, kind) {
+    if (!group.length) return "";
+    var isResource = kind === "resources";
+    var label = isResource ? "数字资源" : "体验系统";
+    var eyebrow = isResource ? "DIGITAL RESOURCES" : "INTERACTIVE SYSTEMS";
+    var icon = isResource
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z M4 5.5v16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8M9 2v2m6-2v2M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Zm2 5h.01M16 13h.01M9 17h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    var menuId = "topicExperience-" + kind;
+    var links = group.map(function (link, index) {
+      return '<a class="topic-experience-item experience-link" href="' + esc(link.href) + '" target="_blank" rel="noopener noreferrer">' +
+        '<span class="topic-experience-index">' + String(index + 1).padStart(2, "0") + '</span>' +
+        '<span class="topic-experience-copy"><strong>' + esc(link.label || "打开特色体验") + '</strong>' +
+        '<small>' + esc(link.sourceTitle || (isResource ? "专题数字资源" : "专题互动体验")) + '</small></span>' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16 16 8m-6 0h6v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>';
+    }).join("");
+    return '<div class="topic-experience-action ' + (isResource ? "is-resource" : "is-system") + '">' +
+      '<button class="topic-experience-trigger" type="button" aria-expanded="false" aria-controls="' + menuId + '">' +
+      '<span class="topic-experience-icon">' + icon + '</span><strong>' + label + '</strong><em>' + group.length + ' 项</em></button>' +
+      '<section class="topic-experience-menu" id="' + menuId + '" hidden aria-label="' + label + '入口">' +
+      '<header><span><small>' + eyebrow + '</small><strong>' + label + '</strong></span>' +
+      '<button class="topic-experience-close" type="button" aria-label="关闭' + label + '入口">×</button></header>' +
+      '<div class="topic-experience-list">' + links + '</div></section></div>';
+  }
+
+  function renderTopicExperienceActions(data) {
     var links = topicExternalLinks(data);
     if (!links.length) return "";
-    return '<section class="topic-experience-dock" aria-label="外部体验系统入口">' +
-      '<div class="topic-experience-head"><span>External Systems</span><strong>体验入口</strong></div>' +
-      renderExperienceLinks(links, false, false) +
-      '</section>';
+    var systems = links.filter(function (link) { return topicExperienceKind(link) === "systems"; });
+    var resources = links.filter(function (link) { return topicExperienceKind(link) === "resources"; });
+    return '<nav class="topic-showcase-actions" aria-label="特色体验入口">' +
+      renderTopicExperienceMenu(systems, "systems") +
+      renderTopicExperienceMenu(resources, "resources") + '</nav>';
+  }
+
+  function renderTopicExperienceDock(data) {
+    return renderTopicExperienceActions(data);
   }
 
   function renderTopicLoopPage(data) {
-    var sections = orderedTopicSections();
+    var section = state.sections[state.section];
+    if (!section) return "";
+    var model = topicSectionModel(section);
+    var indexLabel = String(state.section + 1).padStart(2, "0") + " / " +
+      String(state.sections.length).padStart(2, "0");
     var statHtml = (data.stats || []).slice(0, 4).map(function (s) {
-      return '<div class="topic-loop-stat"><b>' + esc(s.value) + '</b><span>' + esc(s.label) + '</span></div>';
+      return '<div class="topic-section-stat"><b>' + esc(s.value) + '</b><span>' + esc(s.label) + '</span></div>';
     }).join("");
-    var sectionsHtml = sections.map(function (section) {
-      var originalIndex = state.sections.indexOf(section);
-      return renderTopicLoopSection(section, originalIndex, false);
+    var points = model.points.slice(0, 4).map(function (text) {
+      return '<li>' + esc(compactText(text, 92)) + '</li>';
     }).join("");
-    var cloneHtml = sections.map(function (section) {
-      var originalIndex = state.sections.indexOf(section);
-      return renderTopicLoopSection(section, originalIndex, true);
-    }).join("");
-    return '<section class="topic-loop-stage" data-topic-loop>' +
-      '<header class="topic-loop-hero">' +
-      '<div class="topic-loop-title"><span>Topic Showcase</span><h2>' + esc(data.name || "专题门户") + '</h2>' +
+    var prevIndex = state.section > 0 ? state.section - 1 : state.sections.length - 1;
+    var nextIndex = state.section < state.sections.length - 1 ? state.section + 1 : 0;
+    return '<section class="topic-section-page topic-theme-' + esc(data.id) + '" style="--topic-section-bg:url(\'/static/blueprint/' + esc(data.id) + '-bg.png\')">' +
+      '<header class="topic-section-hero">' +
+      '<div class="topic-section-heading"><span>' + esc(data.name || "专题门户") + ' · ' + indexLabel + '</span>' +
+      '<h2>' + esc(displaySectionTitle(section)) + '</h2>' +
       '<p>' + esc(data.summary || TOPIC_SUMMARY[data.id] || "围绕重点专业群、成果资源和展示素材组织专题内容。") + '</p></div>' +
-      '<div class="topic-loop-stats">' + statHtml + '</div>' +
+      '<div class="topic-section-stats">' + statHtml + '</div>' +
       '</header>' +
-      renderTopicExperienceDock(data) +
-      '<div class="topic-loop-mask">' +
-      '<div class="topic-loop-track">' +
-      '<div class="topic-loop-sequence">' + sectionsHtml + '</div>' +
-      '<div class="topic-loop-sequence topic-loop-clone" aria-hidden="true">' + cloneHtml + '</div>' +
-      '</div>' +
-      '</div>' +
+      '<div class="topic-section-content">' +
+      '<article class="topic-section-story">' +
+      '<div class="topic-section-kicker"><span>' + esc(SECTION_EN[section.id] || "SECTION") + '</span><em>章节摘要</em></div>' +
+      '<h3>' + esc(model.title || displaySectionTitle(section)) + '</h3>' +
+      '<p class="topic-section-lead">' + esc(compactText(model.lead, 260)) + '</p>' +
+      (points ? '<ul class="topic-section-points">' + points + '</ul>' : '') +
+      '<button type="button" class="topic-section-open" data-section-id="' + esc(section.id) + '">' +
+      '<span>查看完整资料</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+      '</article>' +
+      '<aside class="topic-section-media" aria-label="' + esc(displaySectionTitle(section)) + '图片资料">' +
+      '<div class="topic-section-media-head"><span>影像资料</span><em>' + Math.max(1, model.media.length) + ' 项</em></div>' +
+      renderTopicLoopMedia(model.media, data, section) +
+      '</aside></div>' +
+      '<footer class="topic-section-footer">' +
+      '<button type="button" data-section-index="' + prevIndex + '"><span>上一章节</span><strong>' + esc(displaySectionTitle(state.sections[prevIndex])) + '</strong></button>' +
+      '<p>点击上方章节标签可快速切换内容</p>' +
+      '<button type="button" data-section-index="' + nextIndex + '"><span>下一章节</span><strong>' + esc(displaySectionTitle(state.sections[nextIndex])) + '</strong></button>' +
+      '</footer>' +
       '</section>';
   }
 
@@ -1142,14 +2078,14 @@
       return !!b.src;
     });
     if (!list.length) list = fallback;
-    var count = list.length;
-    return '<div class="topic-loop-media' + (count > 1 ? ' has-carousel' : ' is-single') +
-      '" data-topic-carousel data-media-count="' + count + '">' +
-      '<div class="topic-loop-carousel">' + list.map(function (b, index) {
-        return renderTopicLoopSlide(b, data, section, index);
-      }).join("") + '</div>' +
-      (count > 1 ? '<div class="topic-loop-counter" aria-hidden="true"><span data-carousel-current>1</span><em>/</em><span>' + count + '</span></div>' : '') +
-      '</div>';
+    var items = list.map(function (b) {
+      if (b.type === "video") {
+        var poster = b.poster || data.cover || "";
+        return { title: b.title || displaySectionTitle(section), body: "", imageUrl: poster, caption: b.title || "视频资源", lightbox: "", video: true };
+      }
+      return { title: b.caption || data.name || displaySectionTitle(section), body: "", imageUrl: b.src, caption: b.caption || "", lightbox: b.src };
+    });
+    return '<div class="topic-loop-media">' + renderTopicCoverflowCarousel(items, { fallbackImage: data.cover || "", title: displaySectionTitle(section) }) + '</div>';
   }
 
   function renderTopicLoopSlide(b, data, section, index) {
@@ -1195,7 +2131,6 @@
       '<span class="topic-display-code">编号 ' + esc(code) + '</span>' +
       '<h1>' + esc(section.backendPageTitle || displaySectionTitle(section)) + '</h1>' +
       (intro ? '<p class="topic-display-subtitle">' + esc(intro) + '</p>' : '') +
-      renderExperienceLinks(section.externalLinks || [], false, false) +
       '<div class="topic-display-body">' + renderTypedFullBlockSequence(blocks, displaySectionTitle(section), contentType) + '</div>' +
       '<footer class="topic-display-footer"><span>学校大屏展示内容</span><span>扫码进入子级展示页</span></footer>' +
       '</article>';
@@ -1214,10 +2149,109 @@
   function renderTypedFullBlockSequence(blocks, title, contentType) {
     var type = normalizeContentType(contentType);
     if (type === "person") return renderPersonFullSequence(blocks, title);
-    if (type === "honor") return renderHonorFullSequence(blocks, title);
-    if (type === "video") return renderVideoFullSequence(blocks, title);
     if (type === "attachment") return renderAttachmentFullSequence(blocks, title);
-    return renderFullBlockSequence(blocks, title);
+    return renderEntryFullSequence(blocks, title, type);
+  }
+
+  /* ---------- 通用条目分组:列表 → 详情 两级展示 ---------- */
+  function groupSectionEntries(blocks, title, contentType) {
+    var entries = [];
+    var current = null;
+    function pushEntry(t) {
+      current = { title: t || "", texts: [], images: [], videos: [] };
+      entries.push(current);
+    }
+    (blocks || []).forEach(function (b) {
+      if (!b) return;
+      if (b.type === "video" && (b.src || b.poster)) {
+        var ve = { title: b.title || "视频资源", texts: [], images: [], videos: [b] };
+        entries.push(ve);
+        current = null;
+        return;
+      }
+      if (b.type === "image" && b.src) {
+        if (!current) pushEntry(b.caption || "图片资料");
+        current.images.push(b);
+        return;
+      }
+      if (b.type === "text") {
+        var text = blockText(b);
+        if (!text) return;
+        if (!current) {
+          if (isTopicDisplayHeading(text)) pushEntry(text);
+          else { pushEntry(title || "资料"); current.texts.push(text); }
+          return;
+        }
+        if (isTopicDisplayHeading(text) && (current.texts.length || current.images.length || current.videos.length)) {
+          pushEntry(text);
+          return;
+        }
+        current.texts.push(text);
+      }
+    });
+    var filtered = [];
+    entries.forEach(function (e) {
+      var hasContent = e.texts.length + e.images.length + e.videos.length > 0;
+      if (!hasContent) {
+        if (filtered.length) filtered[filtered.length - 1].title += " " + e.title;
+        else filtered.push(e);
+        return;
+      }
+      filtered.push(e);
+    });
+    return filtered;
+  }
+
+  function renderEntryList(entries, title, leadTexts) {
+    var leadHtml = (leadTexts && leadTexts.length)
+      ? '<div class="topic-entry-lead">' + leadTexts.map(function (t) { return '<p>' + esc(t).replace(/\n/g, "<br>") + '</p>'; }).join("") + '</div>'
+      : "";
+    if (!entries.length) {
+      return leadHtml || '<p>资料正在整理中。</p>';
+    }
+    var cards = entries.map(function (entry, index) {
+      var src = (entry.images[0] && entry.images[0].src) || (entry.videos[0] && entry.videos[0].poster) || "";
+      return '<button type="button" class="topic-person-card topic-entry-card" data-entry-index="' + index + '" tabindex="0" aria-label="查看' + esc(entry.title) + '的详细资料">' +
+        (src
+          ? '<span class="topic-person-card-photo photo-frame" tabindex="-1">' +
+            '<img src="' + esc(src) + '" alt="' + esc(entry.title) + '" loading="lazy">' +
+            '</span>'
+          : '<span class="topic-person-card-photo topic-person-card-photo-empty" aria-hidden="true">' + esc((entry.title || "?").slice(0, 1)) + '</span>') +
+        '<strong>' + esc(entry.title) + '</strong>' +
+        '<em>查看详情</em>' +
+        '</button>';
+    }).join("");
+    return leadHtml + '<section class="topic-person-grid" aria-label="' + esc(title) + '列表">' +
+      '<p class="topic-person-grid-hint">共 ' + entries.length + ' 项,点击卡片查看详情</p>' +
+      cards + '</section>';
+  }
+
+  function renderEntryDetail(entry, title) {
+    var copy = renderTopicTextFlow((entry.texts || []).map(function (t) { return { content: t }; }));
+    var photoHtml = entry.images.length
+      ? renderTopicDisplayCarousel(entry.images, entry.title || title)
+      : "";
+    var videoHtml = entry.videos.map(function (b) { return '<div class="topic-display-video">' + renderVideo(b) + '</div>'; }).join("");
+    return '<div class="topic-person-detail" data-entry-detail>' +
+      '<button type="button" class="topic-person-back" data-entry-back aria-label="返回' + esc(title) + '列表">← 返回列表</button>' +
+      '<h2 class="topic-person-name">' + esc(entry.title || title) + '</h2>' +
+      (copy ? '<section class="topic-video-copy">' + copy + '</section>' : "") +
+      photoHtml + videoHtml +
+      '</div>';
+  }
+
+  function renderEntryFullSequence(blocks, title, contentType) {
+    var all = groupSectionEntries(blocks, title, contentType);
+    if (!all.length) return '<p>资料正在整理中。</p>';
+    var leadTexts = [];
+    var entries = all;
+    var first = all[0];
+    if (all.length > 1 && (!isTopicDisplayHeading(first.title) || first.title === (title || ""))) {
+      leadTexts = first.texts.slice();
+      entries = all.slice(1);
+    }
+    entryDrawerContext = { entries: entries, title: title };
+    return renderEntryList(entries, title, leadTexts);
   }
 
   function splitTopicBlocks(blocks) {
@@ -1242,22 +2276,100 @@
   }
 
   function renderPersonFullSequence(blocks, title) {
-    var grouped = splitTopicBlocks(blocks);
-    var portrait = grouped.images[0];
-    var copy = renderTopicTextFlow(grouped.texts) || '<p>人物资料正在整理中。</p>';
+    var people = groupPersonBlocks(blocks);
+    personDrawerContext = { people: people, title: title };
+    if (!people.length) return '<p>人物资料正在整理中。</p>';
+    return renderPersonList(people, title);
+  }
+
+  function renderPersonList(people, title) {
+    var cards = people.map(function (person, index) {
+      var src = person.portrait ? person.portrait.src : "";
+      return '<button type="button" class="topic-person-card" data-person-index="' + index + '" tabindex="0" aria-label="查看' + esc(person.name) + '的详细资料">' +
+        (src
+          ? '<span class="topic-person-card-photo photo-frame" tabindex="-1">' +
+            '<img src="' + esc(src) + '" alt="' + esc(person.name) + '" loading="lazy">' +
+            '</span>'
+          : '<span class="topic-person-card-photo topic-person-card-photo-empty" aria-hidden="true">' + esc((person.name || "?").slice(0, 1)) + '</span>') +
+        '<strong>' + esc(person.name) + '</strong>' +
+        '<em>查看详情</em>' +
+        '</button>';
+    }).join("");
+    return '<section class="topic-person-grid" aria-label="' + esc(title) + '列表">' +
+      '<p class="topic-person-grid-hint">共 ' + people.length + ' 位,点击卡片查看详情</p>' +
+      cards + '</section>';
+  }
+
+  function groupPersonBlocks(blocks) {
+    var people = [];
+    var current = null;
+    function isPersonNameText(text, cur) {
+      var t = String(text || "").trim();
+      if (!t || t.length > 40) return false;
+      if (cur.portrait == null && cur.texts.length === 0) return false;
+      if (t.indexOf("——") !== -1) return true;
+      return true;
+    }
+    (blocks || []).forEach(function (b) {
+      if (!b) return;
+      if (b.type === "video") {
+        if (!current) {
+          current = { name: b.title || "视频", portrait: null, images: [], texts: [], videos: [] };
+          people.push(current);
+        }
+        current.videos.push(b);
+        return;
+      }
+      if (b.type === "image") {
+        if (!current) {
+          current = { name: b.caption || "", portrait: null, images: [], texts: [], videos: [] };
+          people.push(current);
+        }
+        if (!current.portrait) {
+          current.portrait = b;
+          if (!current.name && b.caption) current.name = b.caption;
+        } else {
+          current.images.push(b);
+        }
+        return;
+      }
+      var content = String(b.content || "").trim();
+      if (!content) return;
+      if (!current) {
+        current = { name: content, portrait: null, images: [], texts: [], videos: [] };
+        people.push(current);
+        return;
+      }
+      if (isPersonNameText(content, current)) {
+        current = { name: content, portrait: null, images: [], texts: [], videos: [] };
+        people.push(current);
+      } else {
+        current.texts.push(content);
+      }
+    });
+    return people;
+  }
+
+  function renderPersonDetail(person, title) {
+    var copy = renderTopicTextFlow((person.texts || []).map(function (t) { return { content: t }; })) || '<p>人物资料正在整理中。</p>';
+    var portrait = person.portrait;
     var portraitHtml = portrait
-      ? '<figure class="photo-frame topic-person-portrait" tabindex="0" data-lightbox="' + esc(portrait.src) + '" data-caption="' + esc(portrait.caption || title) + '">' +
-        '<img src="' + esc(portrait.src) + '" alt="' + esc(portrait.caption || title) + '" loading="lazy">' +
+      ? '<figure class="photo-frame topic-person-portrait" tabindex="0" data-lightbox="' + esc(portrait.src) + '" data-caption="' + esc(portrait.caption || person.name) + '">' +
+        '<img src="' + esc(portrait.src) + '" alt="' + esc(portrait.caption || person.name) + '" loading="lazy">' +
         (portrait.caption ? '<figcaption>' + esc(portrait.caption) + '</figcaption>' : "") +
         '</figure>'
       : "";
-    var restPhotos = grouped.images.slice(1);
+    var restPhotos = person.images;
     var restPhotoHtml = restPhotos.length
-      ? renderTopicDisplayCarousel(restPhotos, title, "topic-person-gallery")
+      ? renderTopicDisplayCarousel(restPhotos, person.name || title, "topic-person-gallery")
       : "";
-    var videoHtml = grouped.videos.map(function (b) { return '<div class="topic-display-video">' + renderVideo(b) + '</div>'; }).join("");
-    return '<section class="topic-person-layout">' + portraitHtml +
-      '<div class="topic-person-copy">' + copy + '</div></section>' + restPhotoHtml + videoHtml;
+    var videoHtml = person.videos.map(function (b) { return '<div class="topic-display-video">' + renderVideo(b) + '</div>'; }).join("");
+    return '<div class="topic-person-detail" data-person-detail>' +
+      '<button type="button" class="topic-person-back" data-person-back aria-label="返回' + esc(title) + '列表">← 返回列表</button>' +
+      '<h2 class="topic-person-name">' + esc(person.name || title) + '</h2>' +
+      '<section class="topic-person-layout">' + portraitHtml +
+      '<div class="topic-person-copy">' + copy + '</div></section>' + restPhotoHtml + videoHtml +
+      '</div>';
   }
 
   function renderHonorFullSequence(blocks, title) {
@@ -1707,10 +2819,7 @@
 
   /* ---------- 抽屉 ---------- */
   function drawerLoopContent(fullHtml) {
-    return '<div class="drawer-loop-track" data-drawer-loop-track>' +
-      '<div class="drawer-loop-sequence" data-drawer-loop-sequence>' + fullHtml + '</div>' +
-      '<div class="drawer-loop-sequence drawer-loop-clone" aria-hidden="true">' + fullHtml + '</div>' +
-      '</div>';
+    return fullHtml;
   }
 
   function stopDrawerAutoLoop() {
@@ -1754,7 +2863,6 @@
         img.addEventListener("load", measureDrawerLoop, { once: true });
         img.addEventListener("error", measureDrawerLoop, { once: true });
       });
-      drawerLoopTimer = window.setInterval(stepDrawerAutoLoop, 50);
     });
   }
 
@@ -1787,13 +2895,17 @@
   function openDrawer(fullHtml) {
     stopDrawerAutoLoop();
     stopDrawerMediaCarousels();
-    $("drawerBody").innerHTML = drawerLoopContent(fullHtml);
+    var isTopicDrawer = state.kind === "topics";
+    $("drawer").classList.toggle("topic-reader-drawer", isTopicDrawer);
+    $("drawerBody").classList.toggle("drawer-loop-static", isTopicDrawer);
+    $("drawerBody").innerHTML = isTopicDrawer ? fullHtml : drawerLoopContent(fullHtml);
+    $("drawerBody").scrollTop = 0;
     bindVideos($("drawerBody"));
     prepareAdaptiveMedia($("drawerBody"), measureDrawerLoop);
     $("drawer").hidden = false;
     setTopicLoopPaused(true);
     startDrawerMediaCarousels($("drawerBody"));
-    startDrawerAutoLoop();
+    if (!isTopicDrawer) startDrawerAutoLoop();
     $("drawerClose").focus();
   }
 
@@ -1808,6 +2920,7 @@
     options = options || {};
     if (state.playingVideo) { resetIdle(); return; }
     stopTopicMediaCarousels();
+    stopTopicCoverflowCarousels();
     screenDetail.classList.remove("department-showcase-mode");
     screenDetail.classList.remove("topic-loop-mode", "topic-loop-paused");
     syncDepartmentSwitch("home", "");
@@ -1852,6 +2965,8 @@
   function bindKeys() {
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
+        var openExperience = document.querySelector(".topic-experience-action.is-open");
+        if (openExperience) { setTopicExperienceMenu(openExperience, false); return; }
         if (!$("lightbox").hidden) { closeLightbox(); return; }
         if (!$("drawer").hidden) { closeDrawer(); return; }
         if (!screenHome.hidden) return;
@@ -1882,6 +2997,19 @@
     $("nextChapter").addEventListener("click", function () { goSection(Math.min(state.section + 1, state.sections.length - 1)); });
 
     $("chapterPage").addEventListener("click", function (e) {
+      var experienceClose = e.target.closest(".topic-experience-close");
+      if (experienceClose) {
+        setTopicExperienceMenu(experienceClose.closest(".topic-experience-action"), false);
+        return;
+      }
+      var experienceTrigger = e.target.closest(".topic-experience-trigger");
+      if (experienceTrigger) {
+        var action = experienceTrigger.closest(".topic-experience-action");
+        var willOpen = experienceTrigger.getAttribute("aria-expanded") !== "true";
+        closeTopicExperienceMenus(action);
+        setTopicExperienceMenu(action, willOpen);
+        return;
+      }
       var more = e.target.closest(".more-btn");
       if (more) { openDrawer(more.dataset.full); return; }
       var showCard = e.target.closest(".showcase-card[data-full]");
@@ -1891,13 +3019,35 @@
       var rail = e.target.closest("[data-go-kind][data-go-id]");
       if (rail) { openDetail(rail.dataset.goKind, rail.dataset.goId, 0); return; }
       if (e.target.closest(".experience-link")) return;
+      var topicSectionOpen = e.target.closest(".topic-section-open[data-section-id]");
+      if (topicSectionOpen) { openTopicLoopSection(topicSectionOpen.dataset.sectionId); return; }
+      var topicSectionJump = e.target.closest("[data-section-index]");
+      if (topicSectionJump) { goSection(Number(topicSectionJump.dataset.sectionIndex)); return; }
       var topicLoopCard = e.target.closest(".topic-loop-card[data-section-id]");
       if (topicLoopCard) { openTopicLoopSection(topicLoopCard.dataset.sectionId); return; }
+      var showcaseMini = e.target.closest(".topic-showcase-mini[data-section-id]");
+      if (showcaseMini) { openTopicLoopSection(showcaseMini.dataset.sectionId); return; }
+      var showcaseSection = e.target.closest(".topic-showcase-partner[data-section-id], .topic-showcase-video-box[data-section-id]");
+      if (showcaseSection) { openTopicLoopSection(showcaseSection.dataset.sectionId); return; }
       var frame = e.target.closest(".photo-frame[data-lightbox]");
       if (frame) openLightbox(frame.dataset.lightbox, frame.dataset.caption);
     });
+    document.addEventListener("click", function (e) {
+      if (!e.target.closest(".topic-experience-action")) closeTopicExperienceMenus();
+    });
     $("chapterPage").addEventListener("keydown", function (e) {
       if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("topic-loop-card")) {
+        e.preventDefault();
+        openTopicLoopSection(e.target.dataset.sectionId);
+        return;
+      }
+      if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("topic-showcase-mini")) {
+        e.preventDefault();
+        openTopicLoopSection(e.target.dataset.sectionId);
+        return;
+      }
+      if ((e.key === "Enter" || e.key === " ") &&
+          (e.target.classList.contains("topic-showcase-partner") || e.target.classList.contains("topic-showcase-video-box"))) {
         e.preventDefault();
         openTopicLoopSection(e.target.dataset.sectionId);
         return;
@@ -1920,6 +3070,28 @@
       if (e.target === this) closeDrawer();
     });
     $("drawerBody").addEventListener("click", function (e) {
+      var personCard = e.target.closest(".topic-person-card[data-person-index]");
+      if (personCard && personDrawerContext) {
+        var person = personDrawerContext.people[Number(personCard.dataset.personIndex)];
+        if (person) openDrawer(renderPersonDetail(person, personDrawerContext.title));
+        return;
+      }
+      var personBack = e.target.closest("[data-person-back]");
+      if (personBack && personDrawerContext) {
+        openDrawer(renderPersonList(personDrawerContext.people, personDrawerContext.title));
+        return;
+      }
+      var entryCard = e.target.closest(".topic-entry-card[data-entry-index]");
+      if (entryCard && entryDrawerContext) {
+        var entry = entryDrawerContext.entries[Number(entryCard.dataset.entryIndex)];
+        if (entry) openDrawer(renderEntryDetail(entry, entryDrawerContext.title));
+        return;
+      }
+      var entryBack = e.target.closest("[data-entry-back]");
+      if (entryBack && entryDrawerContext) {
+        openDrawer(renderEntryList(entryDrawerContext.entries, entryDrawerContext.title));
+        return;
+      }
       var frame = e.target.closest(".photo-frame[data-lightbox]");
       if (frame) openLightbox(frame.dataset.lightbox, frame.dataset.caption);
     });
@@ -1933,6 +3105,28 @@
     });
   }
 
+  function setTopicExperienceMenu(action, open) {
+    if (!action) return;
+    var trigger = action.querySelector(".topic-experience-trigger");
+    var menu = action.querySelector(".topic-experience-menu");
+    if (!trigger || !menu) return;
+    trigger.setAttribute("aria-expanded", open ? "true" : "false");
+    action.classList.toggle("is-open", open);
+    menu.hidden = !open;
+    if (open) {
+      var firstLink = menu.querySelector("a");
+      if (firstLink) firstLink.focus({ preventScroll: true });
+    } else if (menu.contains(document.activeElement)) {
+      trigger.focus({ preventScroll: true });
+    }
+  }
+
+  function closeTopicExperienceMenus(except) {
+    document.querySelectorAll(".topic-experience-action.is-open").forEach(function (action) {
+      if (action !== except) setTopicExperienceMenu(action, false);
+    });
+  }
+
   /* ---------- 启动 ---------- */
   function fitCanvas() {
     // DESIGN.md 4.3: 1920×1080 基准画布等比缩放居中，窗口比例不一致时不重新布局
@@ -1942,7 +3136,7 @@
   function boot() {
     fitCanvas();
     window.addEventListener("resize", fitCanvas);
-    Promise.all([loadData().then(loadPortalContent), loadPortalChrome()]).then(function () {
+    loadData().then(loadPortalHome).then(loadPortalContent).then(loadPortalChrome).then(function () {
       applyPortalChrome();
       bindUnityStartLink();
       initDepartmentSwitch();
@@ -1964,6 +3158,7 @@
       });
       window.addEventListener("pagehide", function () {
         stopTopicMediaCarousels();
+        stopTopicCoverflowCarousels();
         stopDrawerMediaCarousels();
         stopDrawerAutoLoop();
       });
@@ -1976,7 +3171,7 @@
 
   function restoreRouteFromCache() {
     fitCanvas();
-    Promise.all([loadPortalContent(), loadPortalChrome()])
+    loadPortalHome().then(loadPortalContent).then(loadPortalChrome)
       .catch(function () { /* keep cached data */ })
       .then(function () {
         applyPortalChrome();

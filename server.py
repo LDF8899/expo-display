@@ -1,5 +1,6 @@
 ﻿import base64
 import csv
+import ctypes
 import hashlib
 import hmac
 import io
@@ -8,6 +9,7 @@ import os
 import re
 import secrets
 import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -74,7 +76,10 @@ def env_path(name, default):
 
 UPLOAD_DIR = env_path("UPLOAD_DIR", "uploads")
 DB_PATH = env_path("DB_PATH", "expo.db")
+RESET_MARKER_PATH = env_path("RESET_MARKER_PATH", ".content-reset")
 UNITY_MODEL_DIR = UPLOAD_DIR / "unityceshi111"
+HOMESTAY_MODEL_EXE = env_path("HOMESTAY_MODEL_EXE", UPLOAD_DIR / "民宿" / "CoffeeShop.exe")
+HOMESTAY_INPUT_MODE = os.environ.get("HOMESTAY_INPUT_MODE", "message").strip().lower()
 UNITY_MODEL_HOST = "127.0.0.1"
 UNITY_MODEL_PORT = env_int("UNITY_MODEL_PORT", 8080)
 UNITY_MODEL_FALLBACK_PORTS = os.environ.get("UNITY_MODEL_FALLBACK_PORTS", "18080,18081,18082")
@@ -287,7 +292,7 @@ MODULE_DEFAULT_CONTENT_TYPES = {
 }
 PORTAL_TYPES = {
     "school": "学校门户",
-    "department": "系部门户",
+    "department": "专题门户",
     "topic": "专题门户",
 }
 BLUEPRINT_PORTALS = [
@@ -391,7 +396,7 @@ BLUEPRINT_PORTALS = [
     },
 ]
 MODULE_SETS = {
-    "department": STANDARD_MODULES,
+    "department": TOPIC_MODULES,
     "school": [
         {
             "key": "service",
@@ -649,6 +654,19 @@ DEFAULT_DISPLAY_CONFIG = {
     "brandColor": "#28539c",
     "brandDeepColor": "#20468b",
     "accent2": "#47b7ff",
+    "portalHomeKicker": "School Portal",
+    "portalHomeTitle": "学校门户",
+    "portalHomeCopy": "以专题门户为主线，串联专业建设、实训基地、产教融合、教学成果与专题资源。",
+    "portalHomeRouteLabels": ["学校门户", "专题门户", "板块资料", "专题展区"],
+    "portalHomeSectionKicker": "Integrated Showcase",
+    "portalHomeSectionTitle": "创新育人矩阵",
+    "portalHomeSectionCopy": "以专题牵引院系共建，集中呈现跨系专业群、实训资源、产教融合与文化成果。",
+    "portalHomeFooter": "触摸卡片进入二级页面 · 长按返回首页",
+    "portalHomeCardLabel": "创新育人专题",
+    "portalHomeCardSummary": "",
+    "portalHomeCardChips": [],
+    "portalHomeCardSortOrder": 0,
+    "portalHomeCardHidden": False,
     "slides": [
         {
             "label": "校园入口与主楼",
@@ -687,6 +705,8 @@ DEFAULT_QUALITY_RULES = {
 SSE_CLIENTS = set()
 UNITY_MODEL_PROCESS = None
 UNITY_MODEL_LOCK = threading.Lock()
+HOMESTAY_MODEL_PROCESS = None
+HOMESTAY_MODEL_LOCK = threading.Lock()
 LAST_SCAN = None
 RATE_LIMITS = {}
 RATE_LIMIT_LOCK = threading.Lock()
@@ -1019,15 +1039,17 @@ def init_db():
             """
         )
         migrate_projects_table(conn)
-        ensure_default_project(conn)
+        if not RESET_MARKER_PATH.exists():
+            ensure_default_project(conn)
         upgrade_legacy_default_project(conn)
         migrate_pages_table(conn)
         ensure_page_extra_columns(conn)
         ensure_unique_page_codes(conn)
         migrate_role_tables(conn)
         migrate_review_tables(conn)
-        ensure_blueprint_portal_projects(conn)
-        ensure_blueprint_pages(conn)
+        if not RESET_MARKER_PATH.exists():
+            ensure_blueprint_portal_projects(conn)
+            ensure_blueprint_pages(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS scans (
@@ -1062,15 +1084,18 @@ def init_db():
         migrate_logs_table(conn)
         migrate_assets_table(conn)
         migrate_content_tables(conn)
+        if not RESET_MARKER_PATH.exists():
+            ensure_blueprint_content_items(conn)
         migrate_lowcode_tables(conn)
-        ensure_special_experience_links(conn)
+        if not RESET_MARKER_PATH.exists():
+            ensure_special_experience_links(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at)")
         project_id = deployed_content_project_id(conn)
         existing = conn.execute(
             "SELECT code FROM pages WHERE code = ?",
             (DEFAULT_SAMPLE_CODE,),
         ).fetchone()
-        if not existing:
+        if not RESET_MARKER_PATH.exists() and project_id and not existing:
             conn.execute(
                 """
                 INSERT INTO pages (project_id, code, title, subtitle, body, image_url, accent, enabled, updated_at)
@@ -1089,7 +1114,8 @@ def init_db():
             )
         upsert_admin_credentials(conn)
         ensure_default_user(conn)
-        seed_lowcode_forms(conn)
+        if not RESET_MARKER_PATH.exists():
+            seed_lowcode_forms(conn)
         ensure_legacy_versions(conn)
 
 
@@ -1102,17 +1128,19 @@ def init_mysql_db():
         migrate_lowcode_tables(conn)
         upsert_admin_credentials(conn)
         ensure_default_user(conn)
-        seed_lowcode_forms(conn)
-        ensure_default_project(conn)
-        ensure_blueprint_portal_projects(conn)
-        ensure_blueprint_pages(conn)
-        ensure_special_experience_links(conn)
+        if not RESET_MARKER_PATH.exists():
+            seed_lowcode_forms(conn)
+            ensure_default_project(conn)
+            ensure_blueprint_portal_projects(conn)
+            ensure_blueprint_pages(conn)
+            ensure_blueprint_content_items(conn)
+            ensure_special_experience_links(conn)
         project_id = deployed_content_project_id(conn)
         existing = conn.execute(
             "SELECT code FROM pages WHERE code = ?",
             (DEFAULT_SAMPLE_CODE,),
         ).fetchone()
-        if not existing:
+        if not RESET_MARKER_PATH.exists() and project_id and not existing:
             conn.execute(
                 """
                 INSERT INTO pages (
@@ -1387,11 +1415,120 @@ def blueprint_first_media(blocks, fallback=""):
     return fallback or ""
 
 
+def blueprint_blocks_to_content_payload(blocks):
+    body_parts = []
+    assets = []
+    for block in blocks or []:
+        if not isinstance(block, dict):
+            continue
+        block_type = str(block.get("type") or "").strip().lower()
+        if block_type == "text":
+            text = str(block.get("content") or "").strip()
+            if not text:
+                continue
+            if len(text) <= 30 and not re.search(r"[。！？；;]", text):
+                body_parts.append(f"<h2>{xml_escape(text)}</h2>")
+            else:
+                body_parts.append(f"<p>{xml_escape(text)}</p>")
+        elif block_type == "image":
+            src = str(block.get("src") or "").strip()
+            if not src:
+                continue
+            assets.append(
+                {
+                    "url": src,
+                    "caption": str(block.get("caption") or "").strip(),
+                    "role": "cover" if not assets else "gallery",
+                }
+            )
+        elif block_type == "video":
+            src = str(block.get("src") or "").strip()
+            poster = str(block.get("poster") or "").strip()
+            title = str(block.get("title") or block.get("caption") or "视频资源").strip()
+            if poster:
+                assets.append({"url": poster, "caption": title, "role": "cover" if not assets else "gallery"})
+            if src:
+                assets.append({"url": src, "caption": title, "role": "video"})
+    body_html = "\n".join(body_parts).strip()
+    return {
+        "bodyJson": [{"type": "html", "html": body_html}] if body_html else [],
+        "assets": [{**asset, "sortOrder": index} for index, asset in enumerate(assets)],
+    }
+
+
 def blueprint_page_code(portal_type, portal_slug, section_id):
     prefix = "TOPIC" if normalize_portal_type(portal_type) == "topic" else "DEPT"
     slug = normalize_portal_slug(portal_slug).upper().replace("-", "_") or "PORTAL"
     section = normalize_portal_slug(section_id).upper().replace("-", "_") or "SECTION"
     return f"BP-{prefix}-{slug}-{section}"
+
+
+def blueprint_content_item_code(portal_type, portal_slug, section_id):
+    prefix = "BIT" if normalize_portal_type(portal_type) == "topic" else "BID"
+    slug = normalize_portal_slug(portal_slug).upper().replace("-", "_") or "PORTAL"
+    section = normalize_portal_slug(section_id).upper().replace("-", "_") or "SECTION"
+    return f"{prefix}-{slug}-{section}"
+
+
+def ensure_blueprint_content_items(conn):
+    projects = conn.execute(
+        """
+        SELECT id, name, portal_type, portal_slug, default_image_url
+        FROM projects
+        WHERE portal_type IN ('department', 'topic') AND portal_slug <> ''
+        ORDER BY id
+        """
+    ).fetchall()
+    actor = {"username": ADMIN_USERNAME}
+    for project in projects:
+        data = load_blueprint_json(project["portal_type"], project["portal_slug"])
+        if not data:
+            continue
+        portal_type = normalize_portal_type(project["portal_type"])
+        for index, section in enumerate(data.get("sections") or [], start=1):
+            section_id = normalize_portal_slug(section.get("id") or f"section-{index}")
+            if not section_id:
+                continue
+            module_key = section_id
+            if not module_meta_for_key(module_key, portal_type):
+                module_key = module_key_for_category(blueprint_section_category(portal_type, section), portal_type)
+            if not module_key or not module_meta_for_key(module_key, portal_type):
+                continue
+            code = blueprint_content_item_code(portal_type, project["portal_slug"], section_id)
+            existing = conn.execute(
+                "SELECT id FROM content_items WHERE project_id = ? AND code = ? LIMIT 1",
+                (project["id"], code),
+            ).fetchone()
+            if existing:
+                continue
+            blocks = section.get("blocks") or []
+            converted = blueprint_blocks_to_content_payload(blocks)
+            text_blocks = [str(block.get("content") or "").strip() for block in blocks if isinstance(block, dict) and block.get("type") == "text"]
+            summary = str(section.get("summary") or data.get("summary") or "").strip()
+            if not summary and text_blocks:
+                summary = text_blocks[0][:180]
+            title = str(section.get("title") or blueprint_section_category(portal_type, section) or data.get("name") or project["name"]).strip()
+            content_type = normalize_content_type(section.get("contentType") or default_content_type_for_module(module_key))
+            snapshot = {
+                "code": code,
+                "moduleKey": module_key,
+                "contentType": content_type,
+                "title": title[:255],
+                "subtitle": str(data.get("name") or project["name"] or "").strip()[:512],
+                "summary": summary[:1024],
+                "bodyJson": converted["bodyJson"],
+                "metaJson": {"来源": "前台蓝图资料入库", "门户": str(data.get("name") or project["name"] or "").strip()},
+                "coverAssetId": None,
+                "sortOrder": index,
+                "featured": index == 1,
+                "enabled": True,
+                "assets": converted["assets"],
+            }
+            if not snapshot["assets"]:
+                fallback = blueprint_first_media(blocks, data.get("cover") or project["default_image_url"])
+                if fallback:
+                    snapshot["assets"] = [{"url": fallback, "caption": title, "role": "cover", "sortOrder": 0}]
+            apply_content_item_snapshot(conn, project["id"], None, snapshot, actor)
 
 
 def ensure_blueprint_pages(conn):
@@ -2492,7 +2629,7 @@ def can_review_user(user):
 def user_role_label(role):
     return {
         ROLE_ADMIN: "管理员",
-        ROLE_DEPARTMENT_ADMIN: "系部管理员",
+        ROLE_DEPARTMENT_ADMIN: "专题管理员",
         ROLE_TEACHER: "老师",
     }.get(role or "", "老师")
 
@@ -2507,6 +2644,7 @@ def normalize_user_role(role, default=ROLE_TEACHER):
         "dept_admin": ROLE_DEPARTMENT_ADMIN,
         "department-admin": ROLE_DEPARTMENT_ADMIN,
         "系部管理员": ROLE_DEPARTMENT_ADMIN,
+        "专题管理员": ROLE_DEPARTMENT_ADMIN,
         "部门管理员": ROLE_DEPARTMENT_ADMIN,
         "teacher": ROLE_TEACHER,
         "老师": ROLE_TEACHER,
@@ -2719,6 +2857,35 @@ def normalize_text_list(value, fallback, max_items=8):
     return items[:max_items] if items else []
 
 
+def normalize_portal_home_chips(value):
+    source = value
+    if isinstance(source, str):
+        source = [line for line in re.split(r"[\n]+", source) if line.strip()]
+    if not isinstance(source, list):
+        return []
+    chips = []
+    for item in source:
+        if isinstance(item, dict):
+            label = clean_config_text(item.get("label"))
+            target_id = normalize_portal_slug(item.get("targetId") or item.get("id") or item.get("slug") or "")
+            target_kind = str(item.get("targetKind") or item.get("kind") or "departments").strip().lower()
+        else:
+            parts = [part.strip() for part in str(item or "").split("|")]
+            label = clean_config_text(parts[0] if parts else "")
+            target_id = normalize_portal_slug(parts[1] if len(parts) > 1 else "")
+            target_kind = parts[2].strip().lower() if len(parts) > 2 else "departments"
+        if not label:
+            continue
+        if target_kind in {"department", "dept"}:
+            target_kind = "departments"
+        elif target_kind in {"topic", "topics"}:
+            target_kind = "topics"
+        else:
+            target_kind = "departments"
+        chips.append({"label": label, "targetId": target_id, "targetKind": target_kind})
+    return chips[:8]
+
+
 def normalize_display_config(value):
     if isinstance(value, str):
         try:
@@ -2745,6 +2912,15 @@ def normalize_display_config(value):
         "brandColor",
         "brandDeepColor",
         "accent2",
+        "portalHomeKicker",
+        "portalHomeTitle",
+        "portalHomeCopy",
+        "portalHomeSectionKicker",
+        "portalHomeSectionTitle",
+        "portalHomeSectionCopy",
+        "portalHomeFooter",
+        "portalHomeCardLabel",
+        "portalHomeCardSummary",
     )
     for field in text_fields:
         if field in value:
@@ -2755,6 +2931,22 @@ def normalize_display_config(value):
             value.get("summaryTags"),
             DEFAULT_DISPLAY_CONFIG["summaryTags"],
         )
+    if "portalHomeRouteLabels" in value:
+        config["portalHomeRouteLabels"] = normalize_text_list(
+            value.get("portalHomeRouteLabels"),
+            DEFAULT_DISPLAY_CONFIG["portalHomeRouteLabels"],
+            max_items=6,
+        )
+    if "portalHomeCardChips" in value:
+        config["portalHomeCardChips"] = normalize_portal_home_chips(value.get("portalHomeCardChips"))
+    config["portalHomeCardSortOrder"] = int_value(
+        value.get("portalHomeCardSortOrder"),
+        DEFAULT_DISPLAY_CONFIG["portalHomeCardSortOrder"],
+    )
+    config["portalHomeCardHidden"] = bool_value(
+        value.get("portalHomeCardHidden"),
+        DEFAULT_DISPLAY_CONFIG["portalHomeCardHidden"],
+    )
 
     source_quality = value.get("qualityRules") if isinstance(value.get("qualityRules"), dict) else {}
     config["qualityRules"] = {
@@ -4251,7 +4443,7 @@ def lowcode_template_quality_checks(fields, content_type, module_key, portal_typ
     if module:
         checks.append(lowcode_template_quality_status("ok", "板块归属", f"{module['label']} · {content_type_label(content_type)}，审核通过后会同步到对应门户板块。"))
     else:
-        checks.append(lowcode_template_quality_status("warn", "板块归属", "当前模板没有匹配到标准板块。", "建议选择固定专题板块或系部门户板块，方便完整度统计。"))
+        checks.append(lowcode_template_quality_status("warn", "板块归属", "当前模板没有匹配到标准板块。", "建议选择固定专题板块，方便完整度统计。"))
     return checks
 
 
@@ -5078,7 +5270,7 @@ def lowcode_department_report_rows(records):
         rows.setdefault(key, {
             "key": key,
             "label": key,
-            "subline": "按系部/部门统计资料填报进度",
+            "subline": "按专题/部门统计资料填报进度",
             "stats": lowcode_record_stats([]),
             "records": [],
         })
@@ -5702,7 +5894,16 @@ def replace_content_item_assets(conn, content_item_id, assets):
 def sync_content_item_page(conn, project_id, content_item_id, snapshot, actor):
     row = conn.execute("SELECT page_id FROM content_items WHERE id = ?", (content_item_id,)).fetchone()
     page_id = row["page_id"] if row and row["page_id"] else None
-    project = get_project(project_id) or {}
+    project_row = conn.execute(
+        """
+        SELECT projects.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
+        FROM projects
+        LEFT JOIN users ON users.username = projects.owner_username
+        WHERE projects.id = ?
+        """,
+        (project_id,),
+    ).fetchone()
+    project = row_to_project(project_row) if project_row else (get_project(project_id) or {})
     module_meta = module_meta_for_key(snapshot["moduleKey"], project.get("portalType", "department"))
     category = module_meta["label"] if module_meta else snapshot["moduleKey"]
     assets = content_item_asset_rows(conn, content_item_id)
@@ -7870,6 +8071,68 @@ def get_public_portal_content(portal_type, portal_slug):
     }
 
 
+def public_portal_home_card(project):
+    config = project.get("displayConfig") or {}
+    portal_type = normalize_portal_type(project.get("portalType", "topic"))
+    portal_slug = normalize_portal_slug(project.get("portalSlug", ""))
+    kind = "topics" if portal_type == "topic" else "departments"
+    return {
+        "id": portal_slug,
+        "kind": kind,
+        "projectId": project.get("id"),
+        "name": project.get("name", ""),
+        "cover": project.get("defaultImageUrl", ""),
+        "label": config.get("portalHomeCardLabel") or DEFAULT_DISPLAY_CONFIG["portalHomeCardLabel"],
+        "summary": config.get("portalHomeCardSummary") or project.get("idleCopy", ""),
+        "chips": config.get("portalHomeCardChips") or [],
+        "sortOrder": int_value(config.get("portalHomeCardSortOrder"), 0),
+        "hidden": bool(config.get("portalHomeCardHidden")),
+        "accent": project.get("accent", "#f59a13"),
+        "previewUrl": project.get("previewUrl", ""),
+    }
+
+
+def get_public_portal_home():
+    with db_connect() as conn:
+        school_row = conn.execute(
+            """
+            SELECT p.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
+            FROM projects p
+            LEFT JOIN users ON users.username = p.owner_username
+            WHERE p.portal_type = 'school'
+              AND p.config_status = 'approved'
+              AND COALESCE(users.enabled, 1) = 1
+            ORDER BY p.content_deployed DESC, p.deployed DESC, p.updated_at DESC, p.id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        card_rows = conn.execute(
+            """
+            SELECT p.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
+            FROM projects p
+            LEFT JOIN users ON users.username = p.owner_username
+            WHERE p.portal_type IN ('department', 'topic')
+              AND p.portal_slug <> ''
+              AND p.config_status = 'approved'
+              AND COALESCE(users.enabled, 1) = 1
+            ORDER BY p.updated_at DESC, p.id DESC
+            """
+        ).fetchall()
+
+    school = row_to_project(school_row) if school_row else None
+    cards = [public_portal_home_card(row_to_project(row)) for row in card_rows]
+    blueprint_order = {
+        portal["portal_slug"]: index + 100
+        for index, portal in enumerate(BLUEPRINT_PORTALS)
+        if portal.get("portal_type") in {"department", "topic"} and portal.get("portal_slug")
+    }
+    cards.sort(key=lambda card: (
+        card["sortOrder"] if card["sortOrder"] else blueprint_order.get(card["id"], 999),
+        card["name"],
+    ))
+    return {"school": school, "cards": cards}
+
+
 def scan_code_candidates(code):
     text = str(code or "").strip()
     if not text:
@@ -8392,6 +8655,509 @@ def start_unity_model_server():
         return {"ok": False, "error": f"启动 Unity 模型服务失败：{last_error or '没有可用端口'}{blocked_text}", "url": unity_model_url(UNITY_MODEL_PORT)}
 
 
+def same_file_path(left, right):
+    try:
+        left_path = Path(left).resolve()
+        right_path = Path(right).resolve()
+    except OSError:
+        return False
+    return os.path.normcase(str(left_path)) == os.path.normcase(str(right_path))
+
+
+def homestay_model_processes():
+    if os.name != "nt":
+        process = HOMESTAY_MODEL_PROCESS
+        if process and process.poll() is None:
+            return [{"pid": process.pid, "path": str(HOMESTAY_MODEL_EXE.resolve())}]
+        return []
+
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
+                "Get-CimInstance Win32_Process -Filter \"Name = 'CoffeeShop.exe'\" "
+                "| ForEach-Object { \"{0}`t{1}\" -f $_.ProcessId, $_.ExecutablePath }",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+    except Exception:
+        return []
+
+    exe = HOMESTAY_MODEL_EXE.resolve()
+    processes = []
+    for line in result.stdout.splitlines():
+        if not line.strip() or "\t" not in line:
+            continue
+        pid, path = line.split("\t", 1)
+        if pid.strip().isdigit() and path.strip() and same_file_path(path.strip(), exe):
+            processes.append({"pid": int(pid.strip()), "path": path.strip()})
+    return processes
+
+
+def homestay_model_status():
+    processes = homestay_model_processes()
+    return {
+        "ok": True,
+        "running": bool(processes),
+        "pids": [item["pid"] for item in processes],
+        "exe": str(HOMESTAY_MODEL_EXE.resolve()),
+    }
+
+
+def start_homestay_model():
+    global HOMESTAY_MODEL_PROCESS
+    exe = HOMESTAY_MODEL_EXE.resolve()
+    if not exe.exists():
+        return {"ok": False, "error": f"民宿模型程序不存在：{exe}", "running": False, "exe": str(exe)}
+
+    with HOMESTAY_MODEL_LOCK:
+        if HOMESTAY_MODEL_PROCESS and HOMESTAY_MODEL_PROCESS.poll() is None:
+            return {
+                "ok": True,
+                "running": True,
+                "alreadyRunning": True,
+                "pid": HOMESTAY_MODEL_PROCESS.pid,
+                "exe": str(exe),
+            }
+
+        existing = homestay_model_processes()
+        if existing:
+            return {
+                "ok": True,
+                "running": True,
+                "alreadyRunning": True,
+                "pid": existing[0]["pid"],
+                "pids": [item["pid"] for item in existing],
+                "exe": str(exe),
+            }
+
+        try:
+            HOMESTAY_MODEL_PROCESS = subprocess.Popen(
+                [str(exe)],
+                cwd=str(exe.parent),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError as exc:
+            HOMESTAY_MODEL_PROCESS = None
+            return {"ok": False, "error": f"启动民宿模型失败：{exc}", "running": False, "exe": str(exe)}
+
+        time.sleep(0.4)
+        if HOMESTAY_MODEL_PROCESS.poll() is not None:
+            return {"ok": False, "error": "民宿模型启动后立即退出", "running": False, "exe": str(exe)}
+
+        return {
+            "ok": True,
+            "running": True,
+            "started": True,
+            "pid": HOMESTAY_MODEL_PROCESS.pid,
+            "exe": str(exe),
+        }
+
+
+def stop_homestay_model():
+    global HOMESTAY_MODEL_PROCESS
+    stopped = []
+    errors = []
+
+    with HOMESTAY_MODEL_LOCK:
+        pids = {item["pid"] for item in homestay_model_processes()}
+        if HOMESTAY_MODEL_PROCESS and HOMESTAY_MODEL_PROCESS.poll() is None:
+            pids.add(HOMESTAY_MODEL_PROCESS.pid)
+
+        for pid in sorted(pids):
+            try:
+                if os.name == "nt":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=6,
+                    )
+                else:
+                    os.kill(pid, 15)
+                stopped.append(pid)
+            except Exception as exc:
+                errors.append(f"{pid}: {exc}")
+
+        HOMESTAY_MODEL_PROCESS = None
+
+    return {"ok": not errors, "running": False, "stopped": stopped, "errors": errors, "exe": str(HOMESTAY_MODEL_EXE.resolve())}
+
+
+def homestay_model_window():
+    if os.name != "nt":
+        return None
+
+    try:
+        import win32con
+        import win32gui
+        import win32process
+    except ImportError:
+        return None
+
+    pids = {item["pid"] for item in homestay_model_processes()}
+    if not pids:
+        return None
+
+    candidates = []
+
+    def visit(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd):
+            return
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        if pid not in pids:
+            return
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        width = right - left
+        height = bottom - top
+        if width < 120 or height < 120:
+            return
+        title = win32gui.GetWindowText(hwnd)
+        candidates.append((hwnd, width * height, title))
+
+    win32gui.EnumWindows(visit, None)
+    if not candidates:
+        return None
+
+    hwnd = sorted(candidates, key=lambda item: item[1], reverse=True)[0][0]
+    if win32gui.IsIconic(hwnd):
+        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+    return hwnd
+
+
+def capture_window_pixels(hwnd):
+    if os.name != "nt" or not hwnd:
+        return None
+
+    try:
+        import win32con
+        import win32gui
+        import win32ui
+    except ImportError:
+        return None
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+    hwnd_dc = win32gui.GetWindowDC(hwnd)
+    source_dc = win32ui.CreateDCFromHandle(hwnd_dc)
+    memory_dc = source_dc.CreateCompatibleDC()
+    bitmap = win32ui.CreateBitmap()
+    bitmap.CreateCompatibleBitmap(source_dc, width, height)
+    memory_dc.SelectObject(bitmap)
+
+    try:
+        rendered = False
+        try:
+            rendered = bool(ctypes.windll.user32.PrintWindow(hwnd, memory_dc.GetSafeHdc(), 2))
+        except Exception:
+            rendered = False
+        if not rendered:
+            memory_dc.BitBlt((0, 0), (width, height), source_dc, (0, 0), win32con.SRCCOPY)
+
+        info = bitmap.GetInfo()
+        bits = bitmap.GetBitmapBits(True)
+        bit_count = int(info.get("bmBitsPixel") or 32)
+        row_size = int(info.get("bmWidthBytes") or (width * bit_count + 31) // 32 * 4)
+        rows = [bits[index:index + row_size] for index in range(0, len(bits), row_size)]
+        bits = b"".join(reversed(rows))
+        return {"width": width, "height": height, "bit_count": bit_count, "row_size": row_size, "bits": bits}
+    finally:
+        win32gui.DeleteObject(bitmap.GetHandle())
+        memory_dc.DeleteDC()
+        source_dc.DeleteDC()
+        win32gui.ReleaseDC(hwnd, hwnd_dc)
+
+
+def bmp_bytes_for_capture(capture):
+    if not capture:
+        return None
+    width = capture["width"]
+    height = capture["height"]
+    bit_count = capture["bit_count"]
+    bits = capture["bits"]
+    data_size = len(bits)
+    file_header_size = 14
+    info_header_size = 40
+    pixel_offset = file_header_size + info_header_size
+    file_size = pixel_offset + data_size
+    file_header = struct.pack("<2sIHHI", b"BM", file_size, 0, 0, pixel_offset)
+    info_header = struct.pack(
+        "<IiiHHIIiiII",
+        info_header_size,
+        width,
+        height,
+        1,
+        bit_count,
+        0,
+        data_size,
+        0,
+        0,
+        0,
+        0,
+    )
+    return file_header + info_header + bits
+
+
+def jpeg_bytes_for_capture(capture, quality=58, max_width=1280):
+    if not capture:
+        return None
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+
+    width = capture["width"]
+    height = capture["height"]
+    row_size = capture["row_size"]
+    bits = capture["bits"]
+    image = Image.frombuffer("RGBA", (width, height), bits, "raw", "BGRA", row_size, -1).convert("RGB")
+    if max_width and width > max_width:
+        next_height = max(1, round(height * (max_width / width)))
+        image = image.resize((max_width, next_height), Image.Resampling.BILINEAR)
+    output = io.BytesIO()
+    image.save(output, format="JPEG", quality=max(25, min(90, int(quality))), optimize=False)
+    return output.getvalue()
+
+
+def encoded_frame_for_window(hwnd, prefer="jpeg", quality=58, max_width=1280):
+    capture = capture_window_pixels(hwnd)
+    if not capture:
+        return None, ""
+    if prefer == "jpeg":
+        encoded = jpeg_bytes_for_capture(capture, quality=quality, max_width=max_width)
+        if encoded:
+            return encoded, "image/jpeg"
+    return bmp_bytes_for_capture(capture), "image/bmp"
+
+
+def bitmap_bytes_for_window(hwnd):
+    capture = capture_window_pixels(hwnd)
+    return bmp_bytes_for_capture(capture)
+
+
+def homestay_model_frame(prefer="jpeg", quality=58, max_width=1280):
+    hwnd = homestay_model_window()
+    if not hwnd:
+        return None, ""
+    return encoded_frame_for_window(hwnd, prefer=prefer, quality=quality, max_width=max_width)
+
+
+def homestay_model_window_point(x_ratio, y_ratio):
+    hwnd = homestay_model_window()
+    if not hwnd:
+        return None, None, None
+
+    try:
+        import win32gui
+    except ImportError:
+        return None, None, None
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+    x_ratio = min(1.0, max(0.0, float(x_ratio)))
+    y_ratio = min(1.0, max(0.0, float(y_ratio)))
+    return hwnd, int(left + width * x_ratio), int(top + height * y_ratio)
+
+
+def homestay_model_client_point(hwnd, x_ratio, y_ratio):
+    try:
+        import win32gui
+    except ImportError:
+        return None, None
+    left, top, right, bottom = win32gui.GetClientRect(hwnd)
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+    x_ratio = min(1.0, max(0.0, float(x_ratio)))
+    y_ratio = min(1.0, max(0.0, float(y_ratio)))
+    return int(width * x_ratio), int(height * y_ratio)
+
+
+def homestay_virtual_key(key):
+    key = str(key or "")
+    aliases = {
+        "ArrowLeft": 0x25,
+        "ArrowUp": 0x26,
+        "ArrowRight": 0x27,
+        "ArrowDown": 0x28,
+        "Escape": 0x1B,
+        "Enter": 0x0D,
+        " ": 0x20,
+        "Space": 0x20,
+        "Shift": 0x10,
+        "Control": 0x11,
+        "Alt": 0x12,
+        "w": 0x57,
+        "a": 0x41,
+        "s": 0x53,
+        "d": 0x44,
+        "W": 0x57,
+        "A": 0x41,
+        "S": 0x53,
+        "D": 0x44,
+    }
+    if key in aliases:
+        return aliases[key]
+    if len(key) == 1 and key.isalnum():
+        return ord(key.upper())
+    return None
+
+
+def restore_foreground_window(previous_hwnd):
+    if os.name != "nt" or not previous_hwnd:
+        return
+    try:
+        import win32gui
+        if win32gui.IsWindow(previous_hwnd):
+            win32gui.SetForegroundWindow(previous_hwnd)
+    except Exception:
+        pass
+
+
+def send_homestay_model_input(kind, x_ratio=0.0, y_ratio=0.0, delta_y=0.0, key="", mode=""):
+    if os.name != "nt":
+        return {"ok": False, "error": "当前系统不支持窗口输入转发"}
+
+    try:
+        import win32api
+        import win32con
+        import win32gui
+    except ImportError:
+        return {"ok": False, "error": "缺少 pywin32，无法转发模型输入"}
+
+    hwnd, x, y = homestay_model_window_point(x_ratio, y_ratio)
+    if not hwnd:
+        return {"ok": False, "error": "未找到民宿模型窗口"}
+
+    use_foreground = (mode or HOMESTAY_INPUT_MODE) == "foreground"
+    if not use_foreground:
+        client_x, client_y = homestay_model_client_point(hwnd, x_ratio, y_ratio)
+        if client_x is None:
+            return {"ok": False, "error": "无法计算模型窗口坐标"}
+        lparam = win32api.MAKELONG(client_x, client_y)
+        if kind == "down":
+            win32gui.PostMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
+        elif kind == "move":
+            win32gui.PostMessage(hwnd, win32con.WM_MOUSEMOVE, win32con.MK_LBUTTON, lparam)
+        elif kind == "up":
+            win32gui.PostMessage(hwnd, win32con.WM_LBUTTONUP, 0, lparam)
+        elif kind == "click":
+            win32gui.PostMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
+            time.sleep(0.02)
+            win32gui.PostMessage(hwnd, win32con.WM_LBUTTONUP, 0, lparam)
+        elif kind == "wheel":
+            wheel_delta = -120 if float(delta_y or 0) > 0 else 120
+            wparam = win32api.MAKELONG(0, wheel_delta & 0xFFFF)
+            win32gui.PostMessage(hwnd, win32con.WM_MOUSEWHEEL, wparam, lparam)
+        elif kind in {"keydown", "keyup"}:
+            vk = homestay_virtual_key(key)
+            if not vk:
+                return {"ok": False, "error": "不支持的按键"}
+            message = win32con.WM_KEYDOWN if kind == "keydown" else win32con.WM_KEYUP
+            win32gui.PostMessage(hwnd, message, vk, 0)
+        else:
+            return {"ok": False, "error": "不支持的输入类型"}
+        return {"ok": True, "mode": "message", "type": kind, "x": client_x, "y": client_y}
+
+    previous_hwnd = None
+    try:
+        previous_hwnd = win32gui.GetForegroundWindow()
+        win32gui.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+
+    try:
+        if kind in {"down", "move", "up", "click", "wheel"}:
+            win32api.SetCursorPos((x, y))
+
+        if kind == "down":
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)
+        elif kind == "move":
+            pass
+        elif kind == "up":
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x, y, 0, 0)
+        elif kind == "click":
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)
+            time.sleep(0.02)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x, y, 0, 0)
+        elif kind == "wheel":
+            wheel_delta = -120 if float(delta_y or 0) > 0 else 120
+            win32api.mouse_event(win32con.MOUSEEVENTF_WHEEL, x, y, wheel_delta, 0)
+        elif kind in {"keydown", "keyup"}:
+            vk = homestay_virtual_key(key)
+            if not vk:
+                return {"ok": False, "error": "不支持的按键"}
+            flags = 0 if kind == "keydown" else win32con.KEYEVENTF_KEYUP
+            win32api.keybd_event(vk, 0, flags, 0)
+        else:
+            return {"ok": False, "error": "不支持的输入类型"}
+    finally:
+        restore_foreground_window(previous_hwnd)
+
+    return {"ok": True, "mode": "foreground", "type": kind, "x": x, "y": y}
+
+
+def click_homestay_model(x_ratio, y_ratio):
+    return send_homestay_model_input("click", x_ratio, y_ratio, mode="foreground")
+
+
+def drag_homestay_model(points):
+    if os.name != "nt":
+        return {"ok": False, "error": "当前系统不支持窗口拖拽转发"}
+
+    try:
+        import win32api
+        import win32con
+        import win32gui
+    except ImportError:
+        return {"ok": False, "error": "缺少 pywin32，无法转发模型拖拽"}
+
+    clean = []
+    hwnd = None
+    for point in points:
+        try:
+            x_ratio = float(point[0])
+            y_ratio = float(point[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        hwnd, x, y = homestay_model_window_point(x_ratio, y_ratio)
+        if not hwnd:
+            return {"ok": False, "error": "未找到民宿模型窗口"}
+        clean.append((x, y))
+
+    if not clean:
+        return {"ok": False, "error": "拖拽路径为空"}
+
+    previous_hwnd = None
+    try:
+        previous_hwnd = win32gui.GetForegroundWindow()
+        try:
+            win32gui.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
+        win32api.SetCursorPos(clean[0])
+        time.sleep(0.04)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, clean[0][0], clean[0][1], 0, 0)
+        for x, y in clean[1:]:
+            win32api.SetCursorPos((x, y))
+            win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+            time.sleep(0.012)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, clean[-1][0], clean[-1][1], 0, 0)
+    finally:
+        restore_foreground_window(previous_hwnd)
+
+    return {"ok": True, "mode": "foreground-drag", "points": len(clean)}
+
+
 def content_type_for(path):
     suffix = path.suffix.lower()
     return {
@@ -8644,6 +9410,10 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.serve_file(STATIC_DIR / "blueprint" / "index.html")
             return
 
+        if path == "/model/homestay":
+            self.serve_file(STATIC_DIR / "homestay-model.html")
+            return
+
         if path == "/login":
             user = self.current_user()
             if user:
@@ -8697,6 +9467,126 @@ class ExpoHandler(BaseHTTPRequestHandler):
         if path == "/api/unityceshi111/start":
             status = start_unity_model_server()
             self.send_json(200 if status["ok"] else 500, status)
+            return
+
+        if path == "/api/homestay-model/start":
+            status = start_homestay_model()
+            self.send_json(200 if status["ok"] else 500, status)
+            return
+
+        if path == "/api/homestay-model/stop":
+            status = stop_homestay_model()
+            self.send_json(200 if status["ok"] else 500, status)
+            return
+
+        if path == "/api/homestay-model/status":
+            self.send_json(200, homestay_model_status())
+            return
+
+        if path == "/api/homestay-model/frame":
+            query = parse_qs(parsed.query)
+            try:
+                quality = int((query.get("quality") or ["58"])[0])
+                max_width = int((query.get("width") or ["1280"])[0])
+            except ValueError:
+                self.send_json(400, {"ok": False, "error": "帧参数无效"})
+                return
+            prefer = "bmp" if (query.get("format") or ["jpeg"])[0].lower() == "bmp" else "jpeg"
+            frame, frame_type = homestay_model_frame(prefer=prefer, quality=quality, max_width=max_width)
+            if not frame:
+                self.send_json(404, {"ok": False, "error": "未捕获到民宿模型窗口画面"})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", frame_type or "image/jpeg")
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_header("Content-Length", str(len(frame)))
+            self.send_security_headers()
+            self.end_headers()
+            self.wfile.write(frame)
+            return
+
+        if path == "/api/homestay-model/stream":
+            query = parse_qs(parsed.query)
+            try:
+                quality = int((query.get("quality") or ["58"])[0])
+                max_width = int((query.get("width") or ["1280"])[0])
+                fps = float((query.get("fps") or ["10"])[0])
+            except ValueError:
+                self.send_json(400, {"ok": False, "error": "串流参数无效"})
+                return
+            delay = 1 / min(20, max(2, fps))
+            if not homestay_model_processes():
+                start_homestay_model()
+            deadline = time.time() + 12
+            first_frame = None
+            first_type = ""
+            while time.time() < deadline and not first_frame:
+                first_frame, first_type = homestay_model_frame(quality=quality, max_width=max_width)
+                if not first_frame:
+                    time.sleep(0.25)
+            if not first_frame:
+                self.send_json(404, {"ok": False, "error": "未捕获到民宿模型窗口画面"})
+                return
+
+            boundary = "homestayframe"
+            self.send_response(200)
+            self.send_header("Content-Type", f"multipart/x-mixed-replace; boundary={boundary}")
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_security_headers()
+            self.end_headers()
+            frame = first_frame
+            frame_type = first_type or "image/jpeg"
+            try:
+                while True:
+                    if frame:
+                        self.wfile.write(f"--{boundary}\r\n".encode("ascii"))
+                        self.wfile.write(f"Content-Type: {frame_type}\r\n".encode("ascii"))
+                        self.wfile.write(f"Content-Length: {len(frame)}\r\n\r\n".encode("ascii"))
+                        self.wfile.write(frame)
+                        self.wfile.write(b"\r\n")
+                        self.wfile.flush()
+                    time.sleep(delay)
+                    frame, frame_type = homestay_model_frame(quality=quality, max_width=max_width)
+                    frame_type = frame_type or "image/jpeg"
+            except Exception:
+                return
+
+        if path == "/api/homestay-model/click":
+            query = parse_qs(parsed.query)
+            try:
+                x_ratio = float((query.get("x") or ["0"])[0])
+                y_ratio = float((query.get("y") or ["0"])[0])
+            except ValueError:
+                self.send_json(400, {"ok": False, "error": "点击坐标无效"})
+                return
+            self.send_json(200, click_homestay_model(x_ratio, y_ratio))
+            return
+
+        if path == "/api/homestay-model/input":
+            query = parse_qs(parsed.query)
+            try:
+                x_ratio = float((query.get("x") or ["0"])[0])
+                y_ratio = float((query.get("y") or ["0"])[0])
+                delta_y = float((query.get("dy") or ["0"])[0])
+            except ValueError:
+                self.send_json(400, {"ok": False, "error": "输入参数无效"})
+                return
+            kind = (query.get("type") or [""])[0]
+            key = (query.get("key") or [""])[0]
+            mode = (query.get("mode") or [""])[0]
+            self.send_json(200, send_homestay_model_input(kind, x_ratio=x_ratio, y_ratio=y_ratio, delta_y=delta_y, key=key, mode=mode))
+            return
+
+        if path == "/api/homestay-model/drag":
+            query = parse_qs(parsed.query)
+            raw_points = (query.get("path") or [""])[0].split(";")
+            points = []
+            for raw_point in raw_points[:80]:
+                if "," not in raw_point:
+                    continue
+                x_text, y_text = raw_point.split(",", 1)
+                points.append((x_text, y_text))
+            self.send_json(200, drag_homestay_model(points))
             return
 
         if path == "/api/session":
@@ -8814,6 +9704,10 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     return
                 self.send_json(200, {"ok": True, "project": project, "page": page})
                 return
+
+        if path == "/api/portal/home":
+            self.send_json(200, {"ok": True, **get_public_portal_home()})
+            return
 
         if path.startswith("/api/portal/"):
             parts = path.strip("/").split("/")
