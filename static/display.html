@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Expo Display 高级感展示首页</title>
-    <link rel="stylesheet" href="/static/display.css?v=portal-chrome-20260804d" />
+    <link rel="stylesheet" href="/static/display.css?v=achievement-market-20260811a" />
   </head>
   <body>
     <main id="app" class="screen idle" data-od-id="display-app">
@@ -108,6 +108,17 @@
 
       </section>
 
+      <section id="marketView" class="market-view" hidden data-od-id="market-view">
+        <button id="returnMarketHome" class="return-home" type="button">返回首页</button>
+        <header class="market-head">
+          <p id="marketLabel" class="section-label">ACHIEVEMENT MARKET</p>
+          <h1 id="marketTitle">成果超市</h1>
+          <p id="marketIntro">选择展示项目，扫码或点击进入详情页。</p>
+        </header>
+        <div id="marketCategoryNav" class="market-nav"></div>
+        <section id="marketItems" class="market-grid"></section>
+      </section>
+
       <section id="pageView" class="detail-view" hidden data-od-id="detail-view">
         <button id="returnHome" class="return-home" type="button" data-od-id="return-home">返回首页</button>
         <figure class="detail-media" data-od-id="detail-media">
@@ -138,6 +149,6 @@
       </section>
     </main>
 
-    <script src="/static/display.js?v=portal-chrome-20260804d"></script>
+    <script src="/static/display.js?v=achievement-market-20260811a"></script>
   </body>
 </html>

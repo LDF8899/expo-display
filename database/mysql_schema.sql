@@ -161,6 +161,37 @@ CREATE TABLE IF NOT EXISTS deployed_pages (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS achievement_market_config (
+  id TINYINT PRIMARY KEY DEFAULT 1,
+  welcome_title VARCHAR(255) NOT NULL DEFAULT '成果超市',
+  welcome_subtitle VARCHAR(255) NOT NULL DEFAULT '',
+  welcome_intro TEXT NOT NULL,
+  welcome_image_url VARCHAR(1024) NOT NULL DEFAULT '',
+  welcome_note VARCHAR(255) NOT NULL DEFAULT '',
+  updated_at VARCHAR(40) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS achievement_market_items (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  project_id BIGINT NOT NULL,
+  page_id BIGINT NOT NULL,
+  category_key VARCHAR(40) NOT NULL,
+  intro VARCHAR(512) NOT NULL DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  created_at VARCHAR(40) NOT NULL,
+  updated_at VARCHAR(40) NOT NULL,
+  UNIQUE KEY uq_achievement_market_page (page_id),
+  INDEX idx_achievement_market_project (project_id, enabled, sort_order),
+  INDEX idx_achievement_market_category (category_key, enabled, sort_order),
+  CONSTRAINT fk_achievement_market_project
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_achievement_market_page
+    FOREIGN KEY (page_id) REFERENCES pages(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS scans (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   code VARCHAR(160) NOT NULL,

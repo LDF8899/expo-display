@@ -1,0 +1,4 @@
+services:
+  db:
+    ports:
+      - "${MYSQL_HOST_PORT:-127.0.0.1:3310}:3306"

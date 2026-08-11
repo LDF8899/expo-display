@@ -8,6 +8,7 @@ __pycache__/
 .playwright-cli/
 output/
 backups/
+backup-before-reset-*/
 
 server.out.log
 server.err.log

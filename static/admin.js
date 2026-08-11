@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", reviewStatusFilter: "pending", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], activeView: "dashboard", contentWorkspaceMode: "content", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "", deploySelectionProjectId: "", deploySelectedPageIds: [] };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], assignments: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", activeAssignmentId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", reviewStatusFilter: "pending", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], achievementMarket: null, activeMarketCategory: "", marketPendingWelcomeImageUrl: "", marketPreviewUrl: "/display", activeView: "dashboard", contentWorkspaceMode: "content", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "", deploySelectionProjectId: "", deploySelectedPageIds: [] };
 const listState = {
   users: { page: 1, pageSize: 10 },
   projects: { page: 1, pageSize: 10 },
@@ -62,6 +62,14 @@ const contentAssetRoles = [
   { key: "external_link", label: "跳转按钮" },
 ];
 const contentAssetRoleLabels = Object.fromEntries(contentAssetRoles.map((item) => [item.key, item.label]));
+const achievementMarketCategories = [
+  { key: "masters", label: "名师名匠", color: "#2563eb", theme: "blue" },
+  { key: "alumni", label: "优秀校友", color: "#16a34a", theme: "green" },
+  { key: "students", label: "优秀学生", color: "#d97706", theme: "yellow" },
+  { key: "innovation", label: "创新成果", color: "#ea580c", theme: "orange" },
+  { key: "honors", label: "荣誉资质", color: "#dc2626", theme: "red" },
+];
+const achievementMarketCategoryLabels = Object.fromEntries(achievementMarketCategories.map((item) => [item.key, item.label]));
 const lowcodeMappingPresets = [
   { value: "", label: "选择绑定" },
   { value: "content_item.title", label: "标题" },
@@ -237,14 +245,14 @@ const templateGuides = {
 const allowedRichTags = new Set(["A", "B", "BLOCKQUOTE", "BR", "DIV", "EM", "FIGCAPTION", "FIGURE", "H2", "H3", "H4", "HR", "I", "IMG", "LI", "OL", "P", "SPAN", "STRONG", "U", "UL"]);
 
 const views = {
-  dashboard: ["工作台", "快速查看待办、缺项、最近更新和发布状态。"],
-  users: ["账号管理", "创建、导入、禁用和维护老师、专题管理员与管理员账号。"],
-  projects: ["门户官网", "统一维护学校门户和专题门户；系部按专题门户管理。"],
+  dashboard: ["数据看板", "集中查看资料建设、审核待办、门户完整度和成果超市状态。"],
+  users: ["人员管理", "创建、导入、禁用和维护老师、专题管理员与管理员账号。"],
+  projects: ["门户系部专题管理", "统一维护学校门户、系部门户和专题门户，并分配老师资料任务。"],
   pages: ["门户内容", "按专题栏目看板推进资料维护、质量检查和前台预览。"],
   assets: ["素材中心", "上传、复用和删除图片、视频和附件素材。"],
-  reviews: ["门户审核", "审核内容、门户配置和删除申请，并进入发布检查。"],
+  reviews: ["审核", "审核内容、门户配置和删除申请，并进入发布检查。"],
   reports: ["数据与报表", "集中查看门户完整度、内容质量、素材归档和资料填报统计。"],
-  deploy: ["扫码大屏", "管理 /display 欢迎页、扫码内容池和现场大屏发布范围。"],
+  deploy: ["成果超市", "管理成果超市的欢迎页、成果内容池和现场展示发布范围。"],
   logs: ["操作日志", "查询和导出关键操作日志。"],
   settings: ["系统设置", "维护账号、操作日志、个人信息和低频后台配置。"],
   account: ["个人设置", "查看个人资料并修改密码。"],
@@ -268,16 +276,21 @@ function allowedViewOrder() {
   return isAdmin() ? ["dashboard", "projects", "pages", "assets", "reviews", "reports", "settings", "users", "deploy", "logs", "account"] : canReview() ? reviewerViewOrder : teacherViewOrder;
 }
 function primaryNavOrder() {
-  return isAdmin() ? ["dashboard", "projects", "deploy", "settings"] : canReview() ? ["dashboard", "projects", "account"] : teacherViewOrder;
+  return isAdmin() ? ["dashboard", "users", "reviews", "projects", "deploy"] : canReview() ? ["dashboard", "reviews", "projects", "account"] : teacherViewOrder;
 }
 function navGroupForView(view) {
-  if (view === "dashboard") return "";
-  if (["projects", "pages", "assets", "reviews", "reports"].includes(view)) return "门户官网管理";
-  if (view === "deploy") return "扫码大屏管理";
-  return "系统管理";
+  if (["dashboard", "users", "reviews", "projects", "pages", "assets", "reports"].includes(view)) return "门户内容管理系统";
+  if (view === "deploy") return "成果超市";
+  return "系统设置";
 }
 function viewContainerId(view) {
   return view === "reports" ? "pagesView" : `${view}View`;
+}
+function navActiveView(view) {
+  if (isTeacherPortal()) return view;
+  if (["pages", "assets", "reports"].includes(view)) return "projects";
+  if (["settings", "logs", "account"].includes(view) && !isTeacherPortal()) return "";
+  return view;
 }
 function viewMeta(view) { return isTeacherPortal() && teacherViews[view] ? teacherViews[view] : views[view]; }
 function escapeHtml(value) {
@@ -380,10 +393,9 @@ function portalPreviewUrl(project) {
 function portalVisualEditUrl(project) {
   const type = normalizePortalType(project && project.portalType);
   const slug = normalizePortalSlug(project && project.portalSlug);
-  const url = new URL("/departments", location.origin);
-  url.searchParams.set("edit", "1");
-  if (type !== "school" && slug) url.searchParams.set("focus", slug);
-  return `${url.pathname}${url.search}${url.hash}`;
+  if (type === "school") return "/departments?edit=1";
+  if (slug) return `${portalPreviewUrl(project)}?edit=1`;
+  return "/departments?edit=1";
 }
 function portalRouteLabel(project) {
   return portalPreviewUrl(project) || "未配置前台路径";
@@ -1207,6 +1219,63 @@ function renderLowcodeForms() {
     </article>`;
   }).join("") : `<div class="empty">当前门户暂无资料采集模板</div>`;
 }
+function assignmentBadgeClass(status) {
+  return status === "approved" ? "success" : status === "rejected" ? "danger" : status === "pending" || status === "draft" ? "warn" : "";
+}
+function assignmentFormFor(assignment) {
+  if (!assignment) return null;
+  const forms = (state.lowcodeForms || []).filter((form) => form.enabled !== false && form.targetModuleKey === assignment.moduleKey);
+  return forms.find((form) => normalizeContentType(form.targetContentType) === normalizeContentType(assignment.contentType)) || forms[0] || null;
+}
+function renderAssignmentControls() {
+  const panel = $("assignmentPanel");
+  if (!panel) return;
+  const project = currentProject();
+  panel.hidden = !project;
+  if (!project) return;
+  const reviewer = canReview();
+  const form = $("assignmentForm");
+  if (form) form.hidden = !isAdmin();
+  $("assignmentPanelTitle").textContent = reviewer ? "老师资料任务" : "我的资料任务";
+  $("assignmentPanelIntro").textContent = reviewer
+    ? "给老师分配标题和板块，老师填写上传后进入审核。"
+    : "按管理员分配的标题和板块填写资料，提交后等待审核通过展示。";
+  if (isAdmin()) {
+    const teachers = (state.users || []).filter((user) => user.role === "teacher" && user.enabled);
+    $("assignmentTeacher").innerHTML = teachers.map((user) => `<option value="${escapeHtml(user.username)}">${escapeHtml(user.displayName)} (${escapeHtml(user.username)})</option>`).join("");
+    const modules = modulesForPortalType(project.portalType);
+    $("assignmentModule").innerHTML = modules.map((module) => `<option value="${escapeHtml(module.key)}">${escapeHtml(module.label)}</option>`).join("");
+    const selectedModule = $("assignmentModule").value || (modules[0] && modules[0].key) || "";
+    $("assignmentContentType").innerHTML = Object.entries(contentTypeLabels).map(([key, label]) => `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`).join("");
+    $("assignmentContentType").value = normalizeContentType($("assignmentContentType").value || defaultContentTypeForModule(selectedModule));
+  }
+}
+function renderAssignments() {
+  renderAssignmentControls();
+  const list = $("assignmentList");
+  if (!list) return;
+  const assignments = state.assignments || [];
+  $("assignmentSummary").textContent = `${assignments.length} 项`;
+  list.innerHTML = assignments.length ? assignments.map((assignment) => {
+    const form = assignmentFormFor(assignment);
+    const canStart = Boolean(form) && !["pending", "approved"].includes(assignment.status);
+    return `<article class="assignment-card">
+      <div>
+        <header>
+          <strong>${escapeHtml(assignment.title)}</strong>
+          <span class="badge ${assignmentBadgeClass(assignment.status)}">${escapeHtml(assignment.statusLabel || statusText(assignment.status))}</span>
+        </header>
+        <p>${escapeHtml(assignment.projectName || currentProject()?.name || "-")} · ${escapeHtml(assignment.moduleLabel || assignment.moduleKey)} · ${escapeHtml(assignment.contentTypeLabel || contentTypeLabel(assignment.contentType))} · ${escapeHtml(assignment.teacherDisplayName || assignment.teacherUsername || "-")}</p>
+        ${assignment.description ? `<p>${escapeHtml(assignment.description)}</p>` : ""}
+      </div>
+      <div class="actions">
+        ${canStart ? `<button class="button small primary" type="button" data-assignment-start="${assignment.id}">填写</button>` : ""}
+        ${assignment.latestRecordId ? `<button class="button small" type="button" data-assignment-record="${assignment.latestRecordId}">查看提交</button>` : ""}
+        ${isAdmin() ? `<button class="button small danger" type="button" data-assignment-delete="${assignment.id}">删除</button>` : ""}
+      </div>
+    </article>`;
+  }).join("") : `<div class="empty">${canReview() ? "当前门户暂无分配任务" : "当前没有分配给你的资料任务"}</div>`;
+}
 function renderLowcodeVersions(form, versions) {
   const list = $("lowcodeVersionList");
   if (!list) return;
@@ -1986,19 +2055,26 @@ function renderLowcodeRecords() {
     </article>`;
   }).join("") : `<div class="empty">当前筛选条件下暂无模板提交记录</div>`;
 }
-function fillLowcodeRecordForm(form, record = null) {
+function fillLowcodeRecordForm(form, record = null, assignment = null) {
   if (!form) return;
   state.activeLowcodeFormId = form.id;
+  state.activeAssignmentId = assignment && assignment.id ? String(assignment.id) : "";
   const recordStatus = record ? lowcodeRecordStatus(record) : "";
   state.activeLowcodeDraftId = record && ["draft", "rejected"].includes(recordStatus) ? record.id : "";
-  const submitted = record && record.data && record.data.fields ? record.data.fields : {};
+  const submitted = { ...((record && record.data && record.data.fields) ? record.data.fields : {}) };
+  if (assignment && !record) {
+    if (!submitted.title) submitted.title = assignment.title || "";
+    if (!submitted.summary) submitted.summary = assignment.description || assignment.title || "";
+    if (!submitted.bodyText) submitted.bodyText = assignment.description || "";
+  }
   setLowcodeAssetDrafts(Array.isArray(submitted.assets) ? submitted.assets : []);
   const schema = form.schema || {};
   const fields = (schema.fields || []).filter((field) => field.type !== "asset_list");
   $("lowcodeRecordTitle").textContent = form.name || "资料采集模板";
   $("lowcodeRecordHint").textContent = recordStatus === "rejected"
     ? `审核驳回：${record.reviewNote || "请按管理员意见修改后重新提交。"}`
-    : state.activeLowcodeDraftId ? "正在继续编辑草稿，提交后会进入审核或发布流程。" : form.description || "按模板填写后自动生成结构化资料。";
+    : assignment ? `任务：${assignment.title || ""}。填写后提交管理员审核。`
+      : state.activeLowcodeDraftId ? "正在继续编辑草稿，提交后会进入审核或发布流程。" : form.description || "按模板填写后自动生成结构化资料。";
   $("lowcodeDynamicFields").innerHTML = groupedLowcodeFields(fields).map((group) => `<section class="lowcode-field-group">
     <h3>${escapeHtml(group.name)}</h3>
     <div class="lowcode-field-group-grid">${group.fields.map((field) => lowcodeFieldInput(field, submitted)).join("")}</div>
@@ -2021,7 +2097,9 @@ function lowcodeRecordPayload() {
   updateLowcodeFieldVisibility();
   const data = lowcodeFormValues();
   data.assets = orderedContentAssets(state.lowcodeAssetDrafts);
-  return { data };
+  const payload = { data };
+  if (state.activeAssignmentId) payload.assignmentId = state.activeAssignmentId;
+  return payload;
 }
 function normalizeLowcodeFieldDraft(field = {}, index = 0) {
   const key = String(field.key || `field${index + 1}`).trim();
@@ -3281,12 +3359,12 @@ function setupNav() {
   $("nav").querySelectorAll("button").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
   document.querySelectorAll(".admin-only").forEach((node) => { node.hidden = !isAdmin(); });
   $("reviewsView").hidden = !canReview();
-  $("brandTitle").textContent = canReview() ? "门户与大屏后台" : "门户资料工作台";
-  $("consoleEyebrow").textContent = canReview() ? "Portal & Display Console" : "Portal Submission";
-  document.title = canReview() ? "门户与大屏后台" : "门户资料工作台";
+  $("brandTitle").textContent = canReview() ? "数字展示管理后台" : "门户资料工作台";
+  $("consoleEyebrow").textContent = canReview() ? "Management & Achievement Market" : "Portal Submission";
+  document.title = canReview() ? "数字展示管理后台" : "门户资料工作台";
   $("roleBadge").textContent = roleLabel(state.user && state.user.role);
-  $("projectsHeading").textContent = canReview() ? "门户官网管理" : "我的门户";
-  $("projectsIntro").textContent = canReview() ? "维护学校门户和专题门户；系部按专题门户管理。" : "查看自己负责的门户，必要时提交基础信息修改。";
+  $("projectsHeading").textContent = canReview() ? "门户系部专题管理" : "我的门户";
+  $("projectsIntro").textContent = canReview() ? "维护学校门户、系部门户和专题门户；在这里分配老师资料任务并进入板块资料管理。" : "查看自己负责的门户，必要时提交基础信息修改。";
   $("projectFormTitle").textContent = canReview() ? "门户配置" : "门户信息编辑";
   $("projectSubmitButton").textContent = canReview() ? "保存/提交审核" : "提交门户信息修改";
   $("pagesHeading").textContent = canReview() ? "门户内容工作台" : "上传板块资料";
@@ -3305,7 +3383,8 @@ function showView(view) {
   if (view === "pages") state.contentWorkspaceMode = "content";
   if (view === "reports") state.contentWorkspaceMode = "reports";
   document.querySelectorAll(".view").forEach((node) => node.classList.toggle("active", node.id === viewContainerId(view)));
-  $("nav").querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+  const activeNav = navActiveView(view);
+  $("nav").querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.view === activeNav));
   $("viewTitle").textContent = viewMeta(view)[0];
   $("viewIntro").textContent = viewMeta(view)[1];
   history.replaceState(null, "", `${appBasePath()}?view=${view}`);
@@ -3623,7 +3702,7 @@ function adminActionLabel(action) {
     approve_content_item: "通过结构化资料",
     copy_lowcode_form: "复制采集模板",
     delete_lowcode_draft: "删除低代码草稿",
-    deploy_content: "发布扫码大屏内容",
+    deploy_content: "发布成果超市内容",
     import_users: "导入账号",
     login: "登录",
     reject_content_item: "驳回结构化资料",
@@ -3917,10 +3996,10 @@ async function renderDashboard() {
       `).join("")}</div>` : `<div class="empty">暂无上线配置风险</div>`}
     </section>
     <section class="panel ops-panel">
-      <div class="panel-head"><div><h2>扫码大屏状态</h2><p>当前 /display 欢迎页和扫码内容池</p></div></div>
+      <div class="panel-head"><div><h2>成果超市状态</h2><p>当前 /display 欢迎页和成果内容池</p></div></div>
       <div class="ops-grid">
         <article><span>欢迎页项目</span><strong>${escapeHtml(deployed.welcomeProjectName || s.welcomeDeployed || "未部署")}</strong><small>ID ${deployed.welcomeProjectId || "-"} · ${formatTime(deployed.welcomeDeployedAt)}</small></article>
-        <article><span>扫码内容池</span><strong>${escapeHtml(deployed.contentProjectName || s.contentDeployed || "未部署")}</strong><small>ID ${deployed.contentProjectId || "-"} · ${formatTime(deployed.contentDeployedAt)}</small></article>
+        <article><span>成果内容池</span><strong>${escapeHtml(deployed.contentProjectName || s.contentDeployed || "未部署")}</strong><small>ID ${deployed.contentProjectId || "-"} · ${formatTime(deployed.contentDeployedAt)}</small></article>
         <article><span>资料待审</span><strong>${pending.pages || 0}</strong><small>提交后需审核</small></article>
         <article><span>门户待审</span><strong>${pending.projects || 0}</strong><small>配置变更</small></article>
       </div>
@@ -3950,8 +4029,6 @@ function renderUsers() {
     </tr>`).join("") : `<tr><td colspan="7" class="empty">当前筛选条件下暂无账号</td></tr>`;
 }
 function renderProjects() {
-  const pagesLabel = canReview() ? "板块资料" : "资料";
-  const configLabel = canReview() ? "门户配置" : "门户信息";
   const typeFilter = $("projectTypeFilter") ? $("projectTypeFilter").value : "";
   const publishFilter = inputValue("projectPublishFilter");
   const query = inputValue("projectSearch");
@@ -3974,11 +4051,10 @@ function renderProjects() {
       <td><span class="badge">${escapeHtml(portalTypeLabel(p.portalType))}</span> ${badge(p.configStatus || "approved")} ${p.deployed ? `<span class="badge success">欢迎页已发布</span><div class="muted">欢迎页发布时间：${formatTime(p.deployedAt)}</div>` : ""} ${p.contentDeployed ? `<span class="badge success">资料已发布</span><div class="muted">资料发布时间：${formatTime(p.contentDeployedAt)}</div>` : ""}</td>
       <td>${p.pageCount || 0} / 待审 ${p.pendingPageCount || 0}</td>
       <td><div class="actions">
-        ${portalPreviewUrl(p) ? `<a class="button small" href="${escapeHtml(portalVisualEditUrl(p))}">预览</a>` : ""}
-        <button class="button small primary" data-project-pages="${p.id}">${pagesLabel}</button>
-        <button class="button small" data-project-edit="${p.id}">${configLabel}</button>
-        <button class="button small" data-project-history="${p.id}">历史</button>
-        ${isAdmin() ? `<button class="button small danger" data-project-delete="${p.id}">删除</button>` : ""}
+        ${canReview() ? `<button class="button small primary" type="button" data-project-assignments="${p.id}">分配老师任务</button>` : `<button class="button small primary" type="button" data-project-assignments="${p.id}">我的资料任务</button>`}
+        <button class="button small" type="button" data-project-pages="${p.id}">板块资料</button>
+        ${portalPreviewUrl(p) ? `<a class="button small" href="${escapeHtml(portalPreviewUrl(p))}">前台预览</a>` : ""}
+        ${portalPreviewUrl(p) ? `<a class="button small primary" href="${escapeHtml(portalVisualEditUrl(p))}">可视化编辑</a>` : ""}
       </div></td>
     </tr>`).join("") : `<tr><td colspan="5" class="empty">${escapeHtml(emptyText)}</td></tr>`;
 }
@@ -4022,7 +4098,7 @@ function syncContentWorkspaceSections() {
     content: ["栏目内容", "左侧选门户，中间维护栏目内容，右侧查看状态和质量检查。"],
     templates: ["资料采集", "管理老师填报模板和提交记录，日常内容维护不需要进入这里。"],
     reports: ["数据与报表", "集中查看质量清单、填报统计、素材归档和可导出的治理数据。"],
-    advanced: ["高级兼容", "保留旧版展示页入口，用于历史资料、扫码大屏兼容和必要的富文本维护。"],
+    advanced: ["高级兼容", "保留旧版展示页入口，用于历史资料、成果超市兼容和必要的富文本维护。"],
   }[mode];
   if (modeText) {
     setText($("contentWorkspaceModeTitle"), modeText[0]);
@@ -4051,9 +4127,11 @@ function syncDeployWelcomeAction(project) {
   button.title = isSchoolPortal ? "将该学校门户发布为 /display 欢迎页" : "只有学校门户可发布为欢迎页";
 }
 async function loadPages(projectId = $("projectSelect").value) {
+  if (isAdmin() && !state.users.length) await loadUsers();
   if (!projectId) {
     state.pages = [];
     state.contentItems = [];
+    state.assignments = [];
     state.lowcodeForms = [];
     state.lowcodeRecords = [];
     state.moduleCoverage = buildCoverageFromPages([]);
@@ -4063,17 +4141,19 @@ async function loadPages(projectId = $("projectSelect").value) {
     state.lowcodeTemplateQualityReport = null;
     renderCurrentPortalStrip();
     renderPortalTree();
+    renderAssignments();
     renderTemplateActions();
     renderContentModuleOptions();
     renderPages();
     return;
   }
   const loadManagementReports = canReview();
-  const [data, contentData, lowcodeData, lowcodeRecordsData, qualityData, archiveData, lowcodeReportData, templateQualityData] = await Promise.all([
+  const [data, contentData, lowcodeData, lowcodeRecordsData, assignmentsData, qualityData, archiveData, lowcodeReportData, templateQualityData] = await Promise.all([
     jsonApi(`/api/projects/${projectId}/pages`),
     loadManagementReports ? jsonApi(`/api/projects/${projectId}/content-items`) : Promise.resolve({ items: [] }),
     jsonApi(`/api/projects/${projectId}/lowcode/forms`),
     jsonApi(`/api/projects/${projectId}/lowcode/records`),
+    jsonApi(`/api/projects/${projectId}/assignments`),
     loadManagementReports ? jsonApi(`/api/projects/${projectId}/content-quality`) : Promise.resolve({ report: null }),
     loadManagementReports ? jsonApi(`/api/projects/${projectId}/asset-archive`) : Promise.resolve({ report: null }),
     loadManagementReports ? jsonApi(`/api/projects/${projectId}/lowcode/report`) : Promise.resolve({ report: null }),
@@ -4083,6 +4163,7 @@ async function loadPages(projectId = $("projectSelect").value) {
   state.contentItems = contentData.items || [];
   state.lowcodeForms = lowcodeData.forms || [];
   state.lowcodeRecords = lowcodeRecordsData.records || [];
+  state.assignments = assignmentsData.assignments || [];
   state.moduleCoverage = data.coverage || buildCoverageFromPages(state.pages);
   state.contentQualityReport = qualityData.report || null;
   state.assetArchiveReport = archiveData.report || null;
@@ -4095,6 +4176,7 @@ async function loadPages(projectId = $("projectSelect").value) {
   setModuleFilterOptions("contentItemModuleFilter", (state.moduleCoverage && state.moduleCoverage.portalType) || selectedPortalType());
   renderCurrentPortalStrip();
   renderPortalTree();
+  renderAssignments();
   renderPages();
 }
 function renderPages() {
@@ -4304,91 +4386,117 @@ async function renderReviews() {
 async function renderDeploy() {
   const projectId = $("deployProject").value || (state.projects[0] && state.projects[0].id);
   const project = selectedDeployProject() || state.projects.find((item) => String(item.id) === String(projectId)) || null;
-  syncDeployWelcomeAction(project);
-  if (!projectId) { $("deployPages").innerHTML = `<div class="empty">暂无门户</div>`; syncDeployWelcomeAction(null); return; }
-  const pagesData = await jsonApi(`/api/projects/${projectId}/pages`);
-  const deployed = await jsonApi(`/api/deploy/content/${projectId}`);
-  const checkData = await jsonApi(`/api/deploy/check/${projectId}`);
-  const deployedTimes = Object.fromEntries((deployed.records || []).map((record) => [String(record.pageId), record.updatedAt || ""]));
-  const portalType = normalizePortalType(project && project.portalType);
-  setModuleFilterOptions("deployPageModuleFilter", portalType);
+  const data = await jsonApi(`/api/achievement-market?projectId=${encodeURIComponent(projectId || 0)}`);
+  state.achievementMarket = data;
+  if (!state.activeMarketCategory && data.categories && data.categories.length) state.activeMarketCategory = "";
+  renderMarketWelcome(data.config || {});
+  renderMarketSource(project, data);
+  renderMarketAddPanel(data);
+  renderMarketCategoryTabs(data.categories || []);
   const query = inputValue("deployPageSearch");
-  const moduleFilter = inputValue("deployPageModuleFilter");
-  const allApproved = (pagesData.pages || []).filter((p) => p.reviewStatus === "approved" && p.enabled);
-  if (String(state.deploySelectionProjectId) !== String(projectId)) {
-    const deployedIds = (deployed.pageIds || []).map(String);
-    state.deploySelectionProjectId = String(projectId);
-    state.deploySelectedPageIds = deployedIds.length ? deployedIds : allApproved.map((p) => String(p.id));
-  }
-  const selected = new Set(state.deploySelectedPageIds.map(String));
-  const approved = allApproved.filter((p) => {
-    if (p.reviewStatus !== "approved" || !p.enabled) return false;
-    if (moduleFilter && p.moduleKey !== moduleFilter) return false;
-    return includesQuery([p.code, p.title, p.subtitle, p.category, p.moduleLabel, p.contentTypeLabel], query);
+  const categoryFilter = inputValue("deployPageModuleFilter") || state.activeMarketCategory;
+  const items = (data.items || []).filter((item) => {
+    if (categoryFilter && item.categoryKey !== categoryFilter) return false;
+    return includesQuery([item.code, item.title, item.subtitle, item.intro, item.categoryLabel, item.projectName], query);
   });
-  const page = pagedList("deployPages", approved);
-  renderDeployCheck(checkData.check || {}, project);
-  renderPager("deployPagesPager", "deployPages", approved.length, "条可进入大屏资料");
-  $("deployPages").innerHTML = page.items.length ? page.items.map((p) => `
-    <label class="check-item"><input type="checkbox" value="${p.id}" ${selected.has(String(p.id)) ? "checked" : ""} /> <span>${escapeHtml(p.code)} - ${escapeHtml(p.title)}${deployedTimes[String(p.id)] ? ` · 已发布于 ${formatTime(deployedTimes[String(p.id)])}` : ""}</span></label>
-  `).join("") : `<div class="empty">当前筛选条件下暂无已通过板块资料</div>`;
+  const page = pagedList("deployPages", items);
+  renderPager("deployPagesPager", "deployPages", items.length, "个成果超市项目");
+  $("deployPages").innerHTML = page.items.length ? page.items.map(renderMarketItemCard).join("") : `<div class="empty">当前主题下暂无展示项目</div>`;
 }
-function renderDeployCheck(check, project = null) {
-  const errors = check.errors || [];
-  const warnings = check.warnings || [];
-  const coverage = check.moduleCoverage || check.eligibleModuleCoverage || buildCoverageFromPages([]);
-  const portalType = normalizePortalType((project && project.portalType) || coverage.portalType);
-  const isSchoolPortal = portalType === "school";
-  const previewUrl = portalPreviewUrl(project || {});
-  const policyCards = [
-    {
-      className: isSchoolPortal ? "success" : "warn",
-      title: "欢迎页发布",
-      badge: isSchoolPortal ? "可发布" : "仅学校门户",
-      body: isSchoolPortal
-        ? `发布后影响 /display 欢迎页；当前发布时间：${formatTime(project && project.deployedAt)}。`
-        : "当前门户不能发布为 /display 欢迎页；欢迎页只允许选择学校门户。"
-    },
-    {
-      className: "info",
-      title: "门户实时资料",
-      badge: previewUrl || "门户预览",
-      body: `已通过且启用的资料会进入对应门户页；资料发布时间：${formatTime(project && project.contentDeployedAt)}。`
-    },
-    {
-      className: "info",
-      title: "扫码大屏资料",
-      badge: "按勾选发布",
-      body: "下方勾选只控制扫码大屏可打开的资料范围，不改变门户页的实时资料。"
-    },
-    {
-      className: "info",
-      title: "二维码边界",
-      badge: "/display",
-      body: "学校官网二维码只在欢迎页和学校门户显示；专题、资料详情页保持沉浸展示。"
-    }
-  ];
-  const coverageText = coverage.total ? `${escapeHtml(coverage.portalTypeLabel || portalTypeLabel(coverage.portalType))}标准板块 ${coverage.covered}/${coverage.total}，可进入大屏 ${coverage.publishReady}/${coverage.total}` : "标准板块待统计";
-  const moduleList = (coverage.modules || []).map((module) => `
-    <span class="${module.publishReady ? "ready" : module.covered ? "covered" : "missing"}">${escapeHtml(module.label)}</span>
-  `).join("");
-  const stateLabel = errors.length ? "发布前必须处理" : warnings.length ? "可以发布，但建议先处理" : "检查通过";
+function marketCategoryOptions(selected = "") {
+  return achievementMarketCategories.map((category) => `<option value="${category.key}" ${selected === category.key ? "selected" : ""}>${category.label}</option>`).join("");
+}
+function renderMarketWelcome(config) {
+  const imageUrl = state.marketPendingWelcomeImageUrl || config.welcomeImageUrl || "";
+  $("marketWelcomeTitle").value = config.welcomeTitle || "";
+  $("marketWelcomeSubtitle").value = config.welcomeSubtitle || "";
+  $("marketWelcomeIntro").value = config.welcomeIntro || "";
+  $("marketWelcomeImageUrl").value = imageUrl;
+  $("marketWelcomeNote").value = config.welcomeNote || "";
+  renderMarketPreview();
+}
+function setMarketPreview(url, label = "欢迎页") {
+  state.marketPreviewUrl = url || "/display";
+  if ($("marketPreviewFrame")) $("marketPreviewFrame").src = state.marketPreviewUrl;
+  if ($("marketPreviewOpen")) $("marketPreviewOpen").href = state.marketPreviewUrl;
+  if ($("marketPreviewLabel")) $("marketPreviewLabel").textContent = label;
+}
+function renderMarketPreview() {
+  const categoryKey = state.activeMarketCategory || "";
+  const label = categoryKey ? `${achievementMarketCategoryLabels[categoryKey] || "主题"}展示页` : "欢迎页";
+  const url = categoryKey ? `/display?market=${encodeURIComponent(categoryKey)}` : "/display";
+  setMarketPreview(url, label);
+}
+function renderMarketSource(project, data) {
+  const counts = achievementMarketCategories.map((category) => {
+    const found = (data.categories || []).find((item) => item.key === category.key);
+    return `<span style="--color:${category.color}">${category.label} ${found ? found.count : 0}</span>`;
+  }).join("");
   $("deployCheck").innerHTML = `
-    <div class="deploy-policy-grid">
-      ${policyCards.map((item) => `
-        <article class="deploy-policy-card ${item.className}">
-          <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.badge)}</span></div>
-          <p>${escapeHtml(item.body)}</p>
-        </article>
-      `).join("")}
+    <div class="market-source-summary">
+      <strong>${escapeHtml(project ? portalOptionLabel(project) : "未选择内容来源")}</strong>
+      <p>当前成果超市已编排 ${Number((data.items || []).length)} 个展示项目；保存项目后会同步扫码器可进入范围。</p>
+      <div>${counts}</div>
     </div>
-    <div class="deploy-check-box ${errors.length ? "danger" : warnings.length ? "warn" : "success"}">
-      <strong>${stateLabel}</strong>
-      <span>可进入大屏资料 ${check.eligiblePageIds ? check.eligiblePageIds.length : 0}，已选 ${check.pageIds ? check.pageIds.length : 0}；${coverageText}</span>
-      ${moduleList ? `<div class="deploy-module-strip">${moduleList}</div>` : ""}
-      ${errors.length ? `<ul>${errors.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
-      ${warnings.length ? `<ul>${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
-    </div>
+  `;
+}
+function renderMarketAddPanel(data) {
+  $("marketItemCategory").innerHTML = marketCategoryOptions("innovation");
+  $("marketNewCategory").innerHTML = marketCategoryOptions(state.activeMarketCategory || "innovation");
+  $("deployPageModuleFilter").innerHTML = `<option value="">全部主题</option>${marketCategoryOptions(state.activeMarketCategory)}`;
+  const candidates = data.candidates || [];
+  const noCandidateLabel = (data.items || []).length
+    ? "可加入项目已全部加入，下方可直接编辑"
+    : "暂无可加入资料，请先提交并审核展示项目";
+  $("marketCandidate").innerHTML = candidates.length
+    ? candidates.map((item) => `<option value="${item.pageId}" data-category="${item.categoryKey}">${escapeHtml(item.code)} · ${escapeHtml(item.title)} · ${escapeHtml(item.categoryLabel)}</option>`).join("")
+    : `<option value="">${escapeHtml(noCandidateLabel)}</option>`;
+  $("deployContent").disabled = !candidates.length;
+  const selected = candidates[0];
+  if (selected) $("marketItemCategory").value = selected.categoryKey || "innovation";
+}
+function resetMarketCreateForm() {
+  $("marketNewTitle").value = "";
+  $("marketNewSubtitle").value = "";
+  $("marketNewIntro").value = "";
+  $("marketNewImageUrl").value = "";
+  $("marketNewBody").value = "";
+  $("marketNewSort").value = "";
+}
+function renderMarketCategoryTabs(categories) {
+  $("marketCategoryTabs").innerHTML = [
+    `<button type="button" class="${!state.activeMarketCategory ? "active" : ""}" data-market-category="">全部</button>`,
+    ...achievementMarketCategories.map((category) => {
+      const found = categories.find((item) => item.key === category.key);
+      return `<button type="button" class="${state.activeMarketCategory === category.key ? "active" : ""}" style="--color:${category.color}" data-market-category="${category.key}">${category.label}<span>${found ? found.count : 0}</span></button>`;
+    })
+  ].join("");
+}
+function renderMarketItemCard(item) {
+  const qrUrl = new URL(item.qrPath || buildQrUrl(item.projectId, item.code), location.origin).toString();
+  const qrApi = `/api/qr?data=${encodeURIComponent(qrUrl)}`;
+  const previewUrl = item.qrPath || buildQrUrl(item.projectId, item.code);
+  return `
+    <article class="market-item-card" style="--color:${escapeHtml(item.color || "#2563eb")}">
+      <div class="market-item-media">${item.imageUrl ? `<img src="${escapeHtml(item.imageUrl)}" alt="" />` : `<span>${escapeHtml(item.categoryLabel || "成果")}</span>`}</div>
+      <div class="market-item-body">
+        <header><span>${escapeHtml(item.categoryLabel)}</span><strong>${escapeHtml(item.title)}</strong></header>
+        <p>${escapeHtml(item.intro || item.subtitle || "可在这里填写二维码上方简介。")}</p>
+        <small>${escapeHtml(item.projectName || "-")} · ${escapeHtml(item.code)} · 排序 ${Number(item.sortOrder || 0)}</small>
+        <div class="market-item-edit">
+          <select data-market-field="categoryKey" data-market-id="${item.id}">${marketCategoryOptions(item.categoryKey)}</select>
+          <input data-market-field="intro" data-market-id="${item.id}" value="${escapeHtml(item.intro || "")}" placeholder="二维码上方简介" />
+          <input data-market-field="sortOrder" data-market-id="${item.id}" type="number" step="1" value="${Number(item.sortOrder || 0)}" />
+          <label class="check-inline"><input data-market-field="enabled" data-market-id="${item.id}" type="checkbox" ${item.enabled ? "checked" : ""} /> 启用</label>
+        </div>
+        <div class="actions">
+          <button class="button small" type="button" data-market-preview="${escapeHtml(previewUrl)}" data-market-preview-label="${escapeHtml(item.title)}">预览</button>
+          <a class="button small" target="_blank" rel="noopener" href="${escapeHtml(qrApi)}">二维码</a>
+          <button class="button small primary" type="button" data-market-save="${item.id}">保存</button>
+          <button class="button small danger" type="button" data-market-delete="${item.id}">移除</button>
+        </div>
+      </div>
+    </article>
   `;
 }
 async function loadAssets() {
@@ -4453,6 +4561,9 @@ function useAsset(asset) {
   }
   const target = $(state.assetTargetInput);
   if (target) target.value = asset.url;
+  if (state.assetTargetInput === "marketWelcomeImageUrl") {
+    state.marketPendingWelcomeImageUrl = asset.url;
+  }
   const returnView = state.assetReturnView || "assets";
   state.assetTargetInput = "";
   state.assetReturnView = "";
@@ -4796,6 +4907,7 @@ $("projectSelect").addEventListener("change", () => {
   resetListPage("pages");
   resetListPage("contentItems");
   resetListPage("lowcodeRecords");
+  state.activeAssignmentId = "";
   loadPages();
 });
 $("projectPortalType").addEventListener("change", () => {
@@ -4820,8 +4932,7 @@ $("exportLowcodeReport").addEventListener("click", exportLowcodeReportCsv);
 $("exportLowcodeReminderReport").addEventListener("click", exportLowcodeReminderReportCsv);
 $("deployProject").addEventListener("change", () => {
   resetListPage("deployPages");
-  state.deploySelectionProjectId = "";
-  state.deploySelectedPageIds = [];
+  state.activeMarketCategory = "";
   renderDeploy();
 });
 $("filterLogs").addEventListener("click", () => {
@@ -4892,13 +5003,107 @@ $("settingsView").addEventListener("click", async (event) => {
   if (!button) return;
   await showView(button.dataset.settingsView);
 });
-$("deployPages").addEventListener("change", (event) => {
-  const input = event.target.closest("input[type='checkbox']");
-  if (!input) return;
-  const selected = new Set((state.deploySelectedPageIds || []).map(String));
-  if (input.checked) selected.add(String(input.value));
-  else selected.delete(String(input.value));
-  state.deploySelectedPageIds = Array.from(selected);
+$("marketCandidate").addEventListener("change", (event) => {
+  const option = event.target.selectedOptions && event.target.selectedOptions[0];
+  const category = option ? option.dataset.category : "";
+  if (category) $("marketItemCategory").value = category;
+});
+$("selectMarketWelcomeAsset").addEventListener("click", () => openAssetPicker("marketWelcomeImageUrl"));
+$("selectMarketNewAsset").addEventListener("click", () => openAssetPicker("marketNewImageUrl"));
+$("createMarketItem").addEventListener("click", async () => {
+  const projectId = $("deployProject").value || (state.achievementMarket && state.achievementMarket.activeProjectId) || 0;
+  const title = $("marketNewTitle").value.trim();
+  if (!projectId) {
+    setStatus($("deployStatus"), "请先选择内容来源", "error");
+    return;
+  }
+  if (!title) {
+    setStatus($("deployStatus"), "请填写展示项目标题", "error");
+    $("marketNewTitle").focus();
+    return;
+  }
+  try {
+    const data = await jsonApi("/api/achievement-market/items/new", body({
+      projectId,
+      categoryKey: $("marketNewCategory").value,
+      title,
+      subtitle: $("marketNewSubtitle").value.trim(),
+      intro: $("marketNewIntro").value.trim(),
+      imageUrl: $("marketNewImageUrl").value.trim(),
+      body: $("marketNewBody").value.trim(),
+      sortOrder: $("marketNewSort").value,
+      enabled: true,
+    }));
+    state.achievementMarket = data;
+    const item = data.item || {};
+    resetMarketCreateForm();
+    setStatus($("deployStatus"), `已创建“${item.title || title}”，并加入成果超市`, "success");
+    if (item.categoryKey) state.activeMarketCategory = item.categoryKey;
+    if (item.qrPath) setMarketPreview(item.qrPath, item.title || title);
+    await renderDeploy();
+  } catch (err) {
+    setStatus($("deployStatus"), err.message, "error");
+  }
+});
+$("marketPreviewTheme").addEventListener("click", () => {
+  if (!state.activeMarketCategory) {
+    const first = achievementMarketCategories[0];
+    state.activeMarketCategory = first ? first.key : "";
+    if ($("deployPageModuleFilter")) $("deployPageModuleFilter").value = state.activeMarketCategory;
+  }
+  renderMarketPreview();
+  renderDeploy();
+});
+$("marketPublish").addEventListener("click", async () => {
+  try {
+    const projectId = $("deployProject").value || 0;
+    const data = await jsonApi("/api/achievement-market/publish", body({ projectId }));
+    state.achievementMarket = data;
+    const result = data.result || {};
+    setStatus($("deployStatus"), `${result.message || "成果超市已发布"}：${Number(result.publishedCount || 0)} 个项目可扫码进入`, "success");
+    await renderDeploy();
+  } catch (err) {
+    setStatus($("deployStatus"), err.message, "error");
+  }
+});
+$("marketCategoryTabs").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-market-category]");
+  if (!button) return;
+  state.activeMarketCategory = button.dataset.marketCategory || "";
+  $("deployPageModuleFilter").value = state.activeMarketCategory;
+  resetListPage("deployPages");
+  renderMarketPreview();
+  renderDeploy();
+});
+$("deployPages").addEventListener("click", async (event) => {
+  const previewButton = event.target.closest("[data-market-preview]");
+  const saveButton = event.target.closest("[data-market-save]");
+  const deleteButton = event.target.closest("[data-market-delete]");
+  if (previewButton) {
+    setMarketPreview(previewButton.dataset.marketPreview, previewButton.dataset.marketPreviewLabel || "项目预览");
+    return;
+  }
+  if (!saveButton && !deleteButton) return;
+  const itemId = saveButton ? saveButton.dataset.marketSave : deleteButton.dataset.marketDelete;
+  try {
+    if (deleteButton) {
+      if (!confirm("确定从成果超市移除这个展示项目？")) return;
+      await jsonApi(`/api/achievement-market/items/${itemId}`, { method: "DELETE" });
+      setStatus($("deployStatus"), "已移除展示项目", "success");
+    } else {
+      const fields = Array.from(document.querySelectorAll(`[data-market-id="${itemId}"]`));
+      const data = {};
+      fields.forEach((field) => {
+        const key = field.dataset.marketField;
+        data[key] = field.type === "checkbox" ? field.checked : field.value;
+      });
+      await jsonApi(`/api/achievement-market/items/${itemId}`, putBody(data));
+      setStatus($("deployStatus"), "展示项目已保存，并同步扫码范围", "success");
+    }
+    await renderDeploy();
+  } catch (err) {
+    setStatus($("deployStatus"), err.message, "error");
+  }
 });
 $("exportLogs").addEventListener("click", () => {
   const params = new URLSearchParams();
@@ -5045,12 +5250,6 @@ $("dashboardView").addEventListener("click", async (event) => {
   await showView("pages");
 });
 
-$("newProject").addEventListener("click", () => fillProject({
-  id: "",
-  portalType: "topic",
-  ownerUsername: state.users.find((u) => u.role === "teacher" && u.enabled)?.username || state.user.username,
-  accent: "#f59a13",
-}));
 $("closeProjectForm").addEventListener("click", () => { $("projectForm").hidden = true; });
 $("projectForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -5070,10 +5269,17 @@ $("selectProjectAsset").addEventListener("click", () => openAssetPicker("default
 $("projectsTable").addEventListener("click", async (event) => {
   const edit = event.target.closest("[data-project-edit]");
   const pages = event.target.closest("[data-project-pages]");
+  const assignments = event.target.closest("[data-project-assignments]");
   const historyButton = event.target.closest("[data-project-history]");
   const del = event.target.closest("[data-project-delete]");
   if (edit) fillProject(state.projects.find((p) => String(p.id) === edit.dataset.projectEdit));
   if (pages) { state.preferredProjectId = pages.dataset.projectPages; await showView("pages"); }
+  if (assignments) {
+    state.preferredProjectId = assignments.dataset.projectAssignments;
+    await showView("pages");
+    $("assignmentPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setStatus($("assignmentStatus"), canReview() ? "在这里给老师分配标题和板块任务。" : "这里是分配给你的资料任务。", "");
+  }
   if (historyButton) await showProjectHistory(historyButton.dataset.projectHistory);
   if (del && confirm("确定删除该门户及其板块资料？")) { await api(`/api/projects/${del.dataset.projectDelete}`, { method: "DELETE" }); await refreshView("projects"); }
 });
@@ -5111,6 +5317,65 @@ $("contentQualityList").addEventListener("click", (event) => {
   if (!edit) return;
   const item = state.contentItems.find((entry) => String(entry.id) === String(edit.dataset.qualityEdit));
   if (item) fillContentItem(item);
+});
+$("assignmentModule").addEventListener("change", () => {
+  $("assignmentContentType").value = normalizeContentType(defaultContentTypeForModule($("assignmentModule").value));
+});
+$("assignmentForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const projectId = $("projectSelect").value;
+    if (!projectId) {
+      setStatus($("assignmentStatus"), "请先选择门户", "error");
+      return;
+    }
+    await jsonApi(`/api/projects/${projectId}/assignments`, body({
+      teacherUsername: $("assignmentTeacher").value,
+      moduleKey: $("assignmentModule").value,
+      contentType: $("assignmentContentType").value,
+      title: $("assignmentTitle").value.trim(),
+      description: $("assignmentDescription").value.trim(),
+    }));
+    $("assignmentTitle").value = "";
+    $("assignmentDescription").value = "";
+    setStatus($("assignmentStatus"), "资料任务已分配", "success");
+    await loadPages(projectId);
+  } catch (err) {
+    setStatus($("assignmentStatus"), err.message, "error");
+  }
+});
+$("assignmentList").addEventListener("click", async (event) => {
+  const start = event.target.closest("[data-assignment-start]");
+  const recordButton = event.target.closest("[data-assignment-record]");
+  const remove = event.target.closest("[data-assignment-delete]");
+  if (start) {
+    const assignment = state.assignments.find((item) => String(item.id) === String(start.dataset.assignmentStart));
+    const form = assignmentFormFor(assignment);
+    if (!assignment || !form) {
+      setStatus($("assignmentStatus"), "当前任务没有可用模板，请先启用对应板块模板", "error");
+      return;
+    }
+    const record = ["draft", "rejected"].includes(assignment.status)
+      ? state.lowcodeRecords.find((item) => String(item.id) === String(assignment.latestRecordId))
+      : null;
+    fillLowcodeRecordForm(form, record, assignment);
+    return;
+  }
+  if (recordButton) {
+    const record = state.lowcodeRecords.find((item) => String(item.id) === String(recordButton.dataset.assignmentRecord));
+    if (record) renderLowcodeRecordDetail(record);
+    return;
+  }
+  if (remove) {
+    if (!confirm("确定删除这个资料任务？")) return;
+    try {
+      await jsonApi(`/api/content-assignments/${remove.dataset.assignmentDelete}`, { method: "DELETE" });
+      setStatus($("assignmentStatus"), "资料任务已删除", "success");
+      await loadPages($("projectSelect").value);
+    } catch (err) {
+      setStatus($("assignmentStatus"), err.message, "error");
+    }
+  }
 });
 $("lowcodeFormsGrid").addEventListener("click", (event) => {
   const start = event.target.closest("[data-lowcode-start]");
@@ -5302,6 +5567,7 @@ $("lowcodeRecordForm").addEventListener("submit", async (event) => {
     const result = await jsonApi(`/api/projects/${projectId}/lowcode/forms/${form.id}/records`, body(payload));
     setStatus($("lowcodeRecordStatus"), canReview() ? "资料已按模板生成并同步展示页" : "资料已按模板提交审核", "success");
     state.activeLowcodeDraftId = "";
+    state.activeAssignmentId = "";
     state.editingContentItemId = result.item && result.item.id ? result.item.id : "";
     await loadPages();
   } catch (err) { setStatus($("lowcodeRecordStatus"), err.message, "error"); }
@@ -5590,15 +5856,16 @@ $("batchApprove").addEventListener("click", async () => {
   await renderReviews();
 });
 $("deployWelcome").addEventListener("click", async () => {
-  const projectId = $("deployProject").value;
-  const project = selectedDeployProject();
-  if (normalizePortalType(project && project.portalType) !== "school") {
-    setStatus($("deployStatus"), "只有学校门户可发布为欢迎页", "error");
-    return;
-  }
   try {
-    await jsonApi(`/api/projects/${projectId}/deploy`, body({}));
-    setStatus($("deployStatus"), "欢迎页已发布", "success");
+    await jsonApi("/api/achievement-market/config", body({
+      welcomeTitle: $("marketWelcomeTitle").value,
+      welcomeSubtitle: $("marketWelcomeSubtitle").value,
+      welcomeIntro: $("marketWelcomeIntro").value,
+      welcomeImageUrl: $("marketWelcomeImageUrl").value,
+      welcomeNote: $("marketWelcomeNote").value,
+    }));
+    state.marketPendingWelcomeImageUrl = "";
+    setStatus($("deployStatus"), "成果超市欢迎页已保存", "success");
     await renderDeploy();
   } catch (err) {
     setStatus($("deployStatus"), err.message, "error");
@@ -5606,11 +5873,22 @@ $("deployWelcome").addEventListener("click", async () => {
   }
 });
 $("deployContent").addEventListener("click", async () => {
-  const projectId = $("deployProject").value;
-  const pageIds = (state.deploySelectedPageIds || []).map((value) => Number(value)).filter(Boolean);
+  const pageId = Number($("marketCandidate").value || 0);
+  if (!pageId) {
+    setStatus($("deployStatus"), "请选择一个已审核通过的展示项目", "error");
+    return;
+  }
   try {
-    await jsonApi("/api/deploy/content", body({ projectId, pageIds }));
-    setStatus($("deployStatus"), "已发布到扫码大屏", "success");
+    await jsonApi("/api/achievement-market/items", body({
+      pageId,
+      categoryKey: $("marketItemCategory").value,
+      intro: $("marketItemIntro").value,
+      sortOrder: $("marketItemSort").value,
+      enabled: true,
+    }));
+    $("marketItemIntro").value = "";
+    $("marketItemSort").value = "";
+    setStatus($("deployStatus"), "已加入成果超市，并同步扫码范围", "success");
     await renderDeploy();
   } catch (err) {
     setStatus($("deployStatus"), err.message, "error");

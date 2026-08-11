@@ -117,9 +117,10 @@ body.inline-edit-mode [data-inline-edit-field]:focus {
   top: 18px;
   right: 18px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  max-width: min(760px, calc(100vw - 36px));
+  gap: 8px;
+  max-width: min(820px, calc(100vw - 36px));
   padding: 10px 12px;
   border: 1px solid rgba(196, 228, 255, 0.42);
   border-radius: 8px;
@@ -134,6 +135,8 @@ body.inline-edit-mode [data-inline-edit-field]:focus {
 }
 .inline-edit-toolbar span {
   min-width: 0;
+  max-width: 260px;
+  flex-shrink: 1;
   overflow: hidden;
   color: #c4dbf1;
   text-overflow: ellipsis;
@@ -152,6 +155,7 @@ body.inline-edit-mode [data-inline-edit-field]:focus {
   background: #ffb11a;
   color: #06294d;
   font: 700 13px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
 }
@@ -178,6 +182,334 @@ body.inline-edit-mode [data-inline-edit-field]:focus {
 }
 .fusion-card.inline-edit-focused {
   box-shadow: 0 0 0 5px rgba(255, 209, 102, 0.64), 0 26px 70px rgba(0, 0, 0, 0.42);
+}
+
+/* ================= 二级页可视化编辑 ================= */
+.inline-edit-section-button,
+.inline-edit-cover-button {
+  border: 1px solid rgba(255, 209, 102, 0.55);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #ffb11a;
+  color: #06294d;
+  font: 700 12px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+.inline-edit-section-button {
+  position: absolute;
+  z-index: 30;
+  top: 10px;
+  right: 10px;
+}
+.inline-edit-cover-button {
+  position: absolute;
+  z-index: 30;
+  top: 14px;
+  left: 14px;
+}
+.showcase-card-wrap {
+  position: relative;
+}
+.showcase-card-wrap:hover .inline-edit-section-button,
+.topic-section-heading:hover .inline-edit-section-button,
+.topic-showcase-mini:hover .inline-edit-section-button,
+.topic-showcase-partner:hover .inline-edit-section-button,
+.showcase-media:hover .inline-edit-cover-button,
+.topic-showcase-video-box:hover .inline-edit-cover-button,
+.topic-showcase-photo:hover .inline-edit-cover-button,
+.topic-section-media:hover .inline-edit-cover-button {
+  opacity: 1;
+}
+.topic-section-heading {
+  position: relative;
+}
+.topic-showcase-mini,
+.topic-showcase-partner,
+.showcase-media,
+.topic-showcase-video-box,
+.topic-showcase-photo,
+.topic-section-media {
+  position: relative;
+}
+.inline-edit-add-section {
+  display: block;
+  margin: 28px auto 12px;
+  border: 1px dashed rgba(255, 209, 102, 0.75);
+  border-radius: 10px;
+  padding: 10px 22px;
+  background: rgba(255, 177, 26, 0.14);
+  color: #ffd166;
+  font: 700 14px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.inline-edit-add-section:hover {
+  background: rgba(255, 177, 26, 0.26);
+}
+.section-editor-overlay {
+  position: fixed;
+  z-index: 30000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(2, 18, 38, 0.62);
+  backdrop-filter: blur(3px);
+}
+.section-editor-panel {
+  width: min(640px, 94vw);
+  max-height: 86vh;
+  overflow: auto;
+  border: 1px solid rgba(196, 228, 255, 0.42);
+  border-radius: 12px;
+  padding: 20px;
+  background: #06294d;
+  color: #f7fbff;
+  font: 14px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+.section-editor-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.section-editor-panel header strong {
+  color: #ffd166;
+}
+.section-editor-close {
+  border: none;
+  background: transparent;
+  color: #c4dbf1;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.section-editor-field {
+  display: block;
+  margin-bottom: 12px;
+}
+.section-editor-field > span {
+  display: block;
+  margin-bottom: 6px;
+  color: #c4dbf1;
+  font-size: 13px;
+}
+.section-editor-title,
+.section-editor-body,
+.section-editor-image-row input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(196, 228, 255, 0.35);
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f7fbff;
+  font: 14px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+.section-editor-title:focus,
+.section-editor-body:focus,
+.section-editor-image-row input:focus {
+  outline: none;
+  border-color: #ffb11a;
+}
+.section-editor-body {
+  resize: vertical;
+}
+.section-editor-image-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.section-editor-image-row input {
+  flex: 1;
+}
+.section-editor-image-remove {
+  flex: none;
+  border: 1px solid rgba(255, 139, 139, 0.72);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #ff6b6b;
+  color: #fff;
+  font: 700 13px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.section-editor-image-add {
+  border: 1px dashed rgba(255, 209, 102, 0.6);
+  border-radius: 8px;
+  padding: 7px 14px;
+  background: transparent;
+  color: #ffd166;
+  font: 700 13px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.section-editor-note {
+  margin: 4px 0 10px;
+  color: #8fb3d4;
+  font-size: 12px;
+}
+.section-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.section-editor-delete {
+  border: 1px solid rgba(255, 139, 139, 0.72);
+  border-radius: 8px;
+  padding: 9px 14px;
+  background: rgba(255, 107, 107, 0.12);
+  color: #ff8b8b;
+  font: 700 13px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.section-editor-save {
+  margin-left: auto;
+  border: 1px solid rgba(255, 209, 102, 0.55);
+  border-radius: 8px;
+  padding: 9px 18px;
+  background: #ffb11a;
+  color: #06294d;
+  font: 700 13px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.section-editor-status {
+  color: #ffd166;
+  font-size: 12px;
+}
+.section-editor-status[data-kind="error"] {
+  color: #ff8b8b;
+}
+
+/* ================= 所见即所得编辑（二级页） ================= */
+.inline-edit-mode [contenteditable="true"] {
+  border-radius: 4px;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+  cursor: text;
+}
+.inline-edit-mode [contenteditable="true"]:hover {
+  box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.55);
+  background: rgba(255, 209, 102, 0.08);
+}
+.inline-edit-mode [contenteditable="true"]:focus {
+  box-shadow: 0 0 0 2px #ffb11a;
+  background: rgba(255, 209, 102, 0.12);
+  outline: none;
+}
+.inline-edit-delete-section {
+  position: absolute;
+  z-index: 30;
+  top: 10px;
+  right: 10px;
+  border: 1px solid rgba(255, 139, 139, 0.72);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #ff6b6b;
+  color: #fff;
+  font: 700 12px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+.topic-section-heading .inline-edit-delete-section {
+  right: auto;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+.inline-edit-media-button {
+  position: absolute;
+  z-index: 30;
+  top: 14px;
+  left: 14px;
+  border: 1px solid rgba(255, 209, 102, 0.55);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #ffb11a;
+  color: #06294d;
+  font: 700 12px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+.topic-section-media {
+  position: relative;
+}
+.topic-section-media .inline-edit-media-button {
+  top: 64px;
+}
+.topic-point-item {
+  position: relative;
+  list-style: none;
+  padding-right: 34px;
+}
+.topic-section-points .topic-point-item {
+  list-style: none;
+}
+.inline-edit-point-remove {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 139, 139, 0.72);
+  border-radius: 50%;
+  background: rgba(255, 107, 107, 0.85);
+  color: #fff;
+  font: 700 13px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.inline-edit-add-point {
+  display: inline-block;
+  margin: 10px 0 0;
+  border: 1px dashed rgba(255, 209, 102, 0.75);
+  border-radius: 8px;
+  padding: 7px 14px;
+  background: rgba(255, 177, 26, 0.14);
+  color: #ffd166;
+  font: 700 12px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.inline-edit-add-point:hover {
+  background: rgba(255, 177, 26, 0.26);
+}
+.inline-edit-placeholder {
+  color: rgba(255, 209, 102, 0.55);
+}
+.section-add-menu {
+  position: fixed;
+  z-index: 31000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid rgba(196, 228, 255, 0.42);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(4, 31, 63, 0.96);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+}
+.section-add-menu strong {
+  padding: 2px 6px 6px;
+  color: #ffd166;
+  font: 700 13px/1.4 "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+.section-add-menu button {
+  border: none;
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f7fbff;
+  font: 14px/1.4 "Microsoft YaHei", "PingFang SC", sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.section-add-menu button:hover {
+  background: rgba(255, 177, 26, 0.22);
+  color: #ffd166;
 }
 
 /* ================= 顶部品牌栏 ================= */
@@ -2807,7 +3139,13 @@ body.inline-edit-mode [data-inline-edit-field]:focus {
   overflow: hidden;
 }
 .topic-showcase-mini p {
-  -webkit-line-clamp: 3;
+  height: 75.84px !important;
+  margin: 0 !important;
+  display: block !important;
+  overflow: hidden !important;
+}
+.inline-edit-mode .topic-showcase-mini p {
+  overflow-y: auto !important;
 }
 .topic-showcase-partner p {
   -webkit-line-clamp: 2;
@@ -2896,6 +3234,73 @@ body.inline-edit-mode [data-inline-edit-field]:focus {
 .topic-showcase-result span {
   font: 800 12px/1.12 "Microsoft YaHei UI", "PingFang SC", sans-serif;
   max-width: 100%;
+}
+/* ===== 产教融合校企合作成果（简洁数据驱动布局） ===== */
+.topic-showcase-coop-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+}
+.topic-showcase-coop-photo {
+  flex: 0 0 38%;
+  min-height: 220px;
+  margin: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(101, 135, 87, 0.16), rgba(197, 157, 72, 0.14));
+}
+.topic-showcase-coop-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.topic-showcase-coop-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.topic-showcase-coop-title {
+  color: var(--topic-green);
+  font: 900 24px/1.25 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  overflow-wrap: anywhere;
+}
+.topic-showcase-coop-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  color: #485248;
+  font: 700 15px/1.7 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.topic-showcase-coop-body p {
+  margin: 0 0 10px;
+}
+.topic-showcase-coop-body p:last-child {
+  margin-bottom: 0;
+}
+.topic-showcase-coop-empty {
+  color: #9aa18c;
+  font: 700 13px/1.5 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.inline-edit-mode .topic-showcase-coop-title,
+.inline-edit-mode .topic-showcase-coop-body {
+  border: 1px dashed rgba(255, 209, 102, 0.6);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.55);
+  overflow: visible;
+}
+.inline-edit-mode .topic-showcase-coop-body {
+  min-height: 140px;
+  overflow: auto;
 }
 .topic-showcase-achievement {
   padding-left: 22px;
@@ -4715,4 +5120,577 @@ body[data-portal-kind="topics"] .screen.topic-loop-mode {
   border-color: #8d793d;
   background: #f1f0e9;
   color: #243f2d;
+}
+
+/* ================= 板块详情：标题框 + 正文框 + 项目列表 ================= */
+
+
+/* ================= 板块详情：标题框 + 正文框 + 项目列表 ================= */
+.section-manager-title {
+  margin: 14px 0 10px;
+  color: #243f2d;
+  font: 900 26px/1.3 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.section-manager-body {
+  margin: 0 0 12px;
+  color: #485248;
+  font: 700 15px/1.7 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.section-manager-body p {
+  margin: 0 0 10px;
+}
+.section-manager-body p:last-child {
+  margin-bottom: 0;
+}
+.section-manager-empty {
+  color: #9aa18c;
+  font: 700 13px/1.5 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.inline-edit-mode .section-manager-title,
+.inline-edit-mode .section-manager-body {
+  border: 1px dashed rgba(255, 209, 102, 0.6);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.inline-edit-mode .section-manager-body {
+  min-height: 90px;
+}
+.section-manager-items {
+  margin-top: 6px;
+}
+.section-manager-items-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.section-manager-items-head strong {
+  color: #3f5c33;
+  font: 900 18px/1.2 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.section-manager-items-head em {
+  color: #8b937f;
+  font: normal 700 13px/1 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.section-manager-add {
+  margin-left: auto;
+  border: 1px dashed rgba(49, 79, 58, 0.5);
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: rgba(49, 79, 58, 0.08);
+  color: #315a3d;
+  font: 700 13px/1 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.section-manager-add:hover {
+  background: rgba(49, 79, 58, 0.16);
+}
+.section-manager-item-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+.section-manager-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(49, 79, 58, 0.16);
+  border-radius: 14px;
+  background: #e9ebe5;
+  color: #304b38;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(27, 43, 32, 0.08);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.section-manager-item:hover,
+.section-manager-item:focus-visible {
+  transform: translateY(-4px);
+  border-color: rgba(49, 79, 58, 0.42);
+  box-shadow: 0 14px 28px rgba(27, 43, 32, 0.14);
+  outline: none;
+}
+.section-manager-item-photo {
+  display: block;
+  width: 100%;
+  height: 130px;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid rgba(49, 79, 58, 0.14);
+  background: #e2e5de;
+}
+.section-manager-item-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.section-manager-item-photo-empty {
+  display: grid;
+  place-items: center;
+  color: rgba(48, 75, 56, 0.45);
+  font: 900 28px/1 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.section-manager-item-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.section-manager-item-copy strong {
+  color: #304b38;
+  font: 800 14px/1.5 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.section-manager-item-list > .section-manager-empty {
+  grid-column: 1 / -1;
+  padding: 18px;
+  border: 1px dashed rgba(218, 205, 177, 0.6);
+  border-radius: 12px;
+  text-align: center;
+}
+
+/* ================= 添加项目面板 ================= */
+.item-editor-overlay,
+.item-detail-overlay {
+  position: fixed;
+  z-index: 32000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(2, 18, 38, 0.62);
+  backdrop-filter: blur(3px);
+}
+.item-editor-panel {
+  width: min(560px, 94vw);
+  border: 1px solid rgba(196, 228, 255, 0.42);
+  border-radius: 12px;
+  padding: 20px;
+  background: #06294d;
+  color: #f7fbff;
+  font: 14px/1.5 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+.item-editor-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.item-editor-panel header strong {
+  color: #ffd166;
+  font-size: 16px;
+}
+.item-editor-close {
+  border: none;
+  background: transparent;
+  color: #c4dbf1;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.item-editor-field {
+  display: block;
+  margin-bottom: 12px;
+}
+.item-editor-field > span {
+  display: block;
+  margin-bottom: 6px;
+  color: #c4dbf1;
+  font-size: 13px;
+}
+.item-editor-image-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.item-editor-preview {
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.item-editor-upload,
+.item-editor-save {
+  border: 1px solid rgba(255, 209, 102, 0.55);
+  border-radius: 8px;
+  padding: 9px 16px;
+  background: #ffb11a;
+  color: #06294d;
+  font: 700 13px/1 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.item-editor-url,
+.item-editor-summary {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(196, 228, 255, 0.35);
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f7fbff;
+  font: 14px/1.5 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  resize: vertical;
+}
+.item-editor-url:focus,
+.item-editor-summary:focus {
+  outline: none;
+  border-color: #ffb11a;
+}
+.item-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.item-editor-save {
+  margin-left: auto;
+}
+.item-editor-status {
+  color: #ffd166;
+  font-size: 12px;
+}
+.item-editor-status[data-kind="error"] {
+  color: #ff8b8b;
+}
+.item-editor-status[data-kind="ok"] {
+  color: #51d6a7;
+}
+
+/* ================= 项目详情层（富文本编辑器） ================= */
+.item-detail-panel {
+  position: relative;
+  width: min(820px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+  border: 1px solid rgba(49, 79, 58, 0.2);
+  border-radius: 14px;
+  background: #f7f6f0;
+  color: #1f2c23;
+  font: 15px/1.7 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  box-shadow: 0 24px 80px rgba(20, 29, 23, 0.3);
+}
+.item-detail-heading {
+  margin: 0;
+  padding: 20px 64px 12px 24px;
+  color: #315a3d;
+  font: 900 20px/1.3 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.item-detail-toolbar {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 24px;
+  border-bottom: 1px solid rgba(49, 79, 58, 0.14);
+  background: rgba(247, 246, 240, 0.96);
+}
+.item-detail-toolbar button {
+  min-width: 34px;
+  border: 1px solid rgba(49, 79, 58, 0.24);
+  border-radius: 7px;
+  padding: 6px 10px;
+  background: #ffffff;
+  color: #304b38;
+  font: 700 13px/1.2 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.item-detail-toolbar button:hover {
+  border-color: #315a3d;
+  background: #e9ebe5;
+}
+.item-detail-toolbar-sep {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: rgba(49, 79, 58, 0.2);
+}
+.item-detail-editor {
+  min-height: 260px;
+  padding: 20px 24px;
+  outline: none;
+  color: #1f2c23;
+}
+.item-detail-editor p {
+  margin: 0 0 10px;
+}
+.item-detail-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 6px 0;
+}
+.item-detail-editor h2,
+.item-detail-editor h3,
+.item-detail-editor h4 {
+  margin: 14px 0 8px;
+  color: #315a3d;
+  line-height: 1.35;
+}
+.item-detail-editor ul,
+.item-detail-editor ol {
+  margin: 0 0 10px;
+  padding-left: 26px;
+}
+.item-detail-editor blockquote {
+  margin: 0 0 10px;
+  padding: 6px 14px;
+  border-left: 3px solid #8d9b8f;
+  color: #59655d;
+  background: #e9ebe5;
+}
+.item-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px 18px;
+}
+.item-detail-status {
+  color: #315a3d;
+  font-size: 12px;
+}
+.item-detail-status[data-kind="error"] {
+  color: #b34a3a;
+}
+.item-detail-status[data-kind="ok"] {
+  color: #3f7d4e;
+}
+.item-detail-delete {
+  border: 1px solid rgba(179, 74, 58, 0.55);
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: rgba(179, 74, 58, 0.08);
+  color: #b34a3a;
+  font: 700 13px/1 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.item-detail-save,
+.item-detail-close-bottom {
+  margin-left: auto;
+  border: 1px solid #315a3d;
+  border-radius: 8px;
+  padding: 8px 18px;
+  background: #315a3d;
+  color: #fff;
+  font: 700 13px/1 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.item-detail-close-bottom {
+  border: 1px solid rgba(49, 79, 58, 0.3);
+  background: transparent;
+  color: #304b38;
+}
+.item-detail-close {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(49, 79, 58, 0.28);
+  border-radius: 50%;
+  background: rgba(255, 255, 251, 0.94);
+  color: #2d4935;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(27, 43, 32, 0.12);
+}
+.rich-img-active {
+  outline: 2px dashed #315a3d;
+  outline-offset: 2px;
+}
+.rich-img-handle {
+  position: absolute;
+  z-index: 6;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff;
+  border-radius: 4px;
+  background: #315a3d;
+  box-shadow: 0 2px 8px rgba(20, 29, 23, 0.35);
+}
+.rich-img-resize {
+  cursor: nwse-resize;
+}
+.rich-img-rotate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font: 700 12px/1 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+/* ================= 视频资源面板（真实视频播放） ================= */
+.topic-showcase-video-box.topic-showcase-video-real {
+  display: block;
+  overflow: hidden;
+}
+.topic-showcase-video-box.topic-showcase-video-real .video-player {
+  width: 100%;
+  height: 100%;
+}
+.topic-showcase-video-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 180px;
+}
+.topic-showcase-video-upload {
+  top: auto;
+  bottom: 14px;
+  left: 14px;
+}
+/* ================= 产教融合面板：进入详情提示 ================= */
+.topic-showcase-coop-enter {
+  margin-top: auto;
+  padding-top: 8px;
+  color: #8d9b8f;
+  font: 700 12px/1.4 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.topic-showcase-coop-manage-row {
+  margin-top: auto;
+  padding-top: 8px;
+}
+.topic-showcase-coop-manage {
+  border: 1px solid rgba(49, 79, 58, 0.35);
+  border-radius: 8px;
+  padding: 7px 14px;
+  background: rgba(49, 79, 58, 0.08);
+  color: #315a3d;
+  font: 700 13px/1 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.topic-showcase-coop-manage:hover {
+  background: rgba(49, 79, 58, 0.16);
+}
+/* ================= 视频列表（更多） ================= */
+.topic-showcase-panel-head em[data-video-more] {
+  cursor: pointer;
+  padding: 6px 10px;
+  border: 1px solid rgba(49, 79, 58, 0.3);
+  border-radius: 8px;
+  background: rgba(49, 79, 58, 0.06);
+  transition: background 160ms ease;
+}
+.topic-showcase-panel-head em[data-video-more]:hover {
+  background: rgba(49, 79, 58, 0.14);
+}
+.video-manager-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.video-manager-item {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(49, 79, 58, 0.16);
+  border-radius: 12px;
+  background: #e9ebe5;
+  color: #304b38;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.video-manager-item:hover,
+.video-manager-item:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(49, 79, 58, 0.42);
+  box-shadow: 0 10px 22px rgba(27, 43, 32, 0.12);
+  outline: none;
+}
+.video-manager-thumb {
+  position: relative;
+  flex: 0 0 200px;
+  height: 112px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0;
+  background: #d8d2bd;
+}
+.video-manager-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.video-manager-thumb-empty {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #d8d2bd, #b9b49f);
+}
+.video-manager-play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(4, 31, 63, 0.55) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 5.5v13l10-6.5-10-6.5z' fill='%23fff'/%3E%3C/svg%3E") center / 55% no-repeat;
+}
+.video-manager-copy {
+  flex: 1;
+  min-width: 0;
+}
+.video-manager-copy strong {
+  color: #304b38;
+  font: 800 15px/1.5 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.video-manager-delete {
+  flex: none;
+  border: 1px solid rgba(179, 74, 58, 0.55);
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: rgba(179, 74, 58, 0.08);
+  color: #b34a3a;
+  font: 700 12px/1 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.item-editor-video-preview {
+  width: 100%;
+  max-height: 200px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+/* 视频详情播放层 */
+.video-detail-panel {
+  width: min(900px, 94vw);
+}
+.video-detail-stage {
+  padding: 24px 24px 0;
+}
+.video-detail-copy {
+  padding: 14px 24px 20px;
+  color: #304b38;
+  font: 800 16px/1.5 "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+.inline-edit-admin-link {
+  border-color: rgba(255, 209, 102, 0.55) !important;
+  background: #ffb11a !important;
+  color: #06294d !important;
 }

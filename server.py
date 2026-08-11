@@ -102,7 +102,7 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 MAX_JSON_BYTES = env_int("MAX_JSON_BYTES", 8 * 1024 * 1024)
-MAX_UPLOAD_BYTES = env_int("MAX_UPLOAD_BYTES", 5 * 1024 * 1024)
+MAX_UPLOAD_BYTES = env_int("MAX_UPLOAD_BYTES", 200 * 1024 * 1024)
 ALLOW_SVG_UPLOADS = env_bool("ALLOW_SVG_UPLOADS", False)
 ASSET_KEY_PREFIX = os.environ.get("ASSET_KEY_PREFIX", "").strip().strip("/")
 LOGIN_RATE_LIMIT = env_int("LOGIN_RATE_LIMIT", 10)
@@ -694,6 +694,51 @@ DEFAULT_DISPLAY_CONFIG = {
         },
     ],
 }
+ACHIEVEMENT_MARKET_CATEGORIES = [
+    {
+        "key": "masters",
+        "label": "名师名匠",
+        "theme": "blue",
+        "color": "#2563eb",
+        "description": "教学名师、技能大师、双师团队和大师工作室。",
+    },
+    {
+        "key": "alumni",
+        "label": "优秀校友",
+        "theme": "green",
+        "color": "#16a34a",
+        "description": "校友人物、成长经历、就业典型和行业贡献。",
+    },
+    {
+        "key": "students",
+        "label": "优秀学生",
+        "theme": "yellow",
+        "color": "#d97706",
+        "description": "学生风采、技能成长、竞赛经历和榜样故事。",
+    },
+    {
+        "key": "innovation",
+        "label": "创新成果",
+        "theme": "orange",
+        "color": "#ea580c",
+        "description": "教学成果、创新项目、实践案例和建设成效。",
+    },
+    {
+        "key": "honors",
+        "label": "荣誉资质",
+        "theme": "red",
+        "color": "#dc2626",
+        "description": "证书、奖项、资质认定和荣誉成果。",
+    },
+]
+ACHIEVEMENT_MARKET_CATEGORY_MAP = {item["key"]: item for item in ACHIEVEMENT_MARKET_CATEGORIES}
+ACHIEVEMENT_MARKET_DEFAULT_CONFIG = {
+    "welcomeTitle": "成果超市",
+    "welcomeSubtitle": "欢迎进入校园成果展示现场",
+    "welcomeIntro": "选择一个主题展区，查看名师名匠、优秀校友、优秀学生、创新成果与荣誉资质。每个展示项目都可生成二维码，扫码后进入对应展示详情。",
+    "welcomeImageUrl": "",
+    "welcomeNote": "现场扫码进入项目详情 · 后台审核通过后方可发布",
+}
 DEFAULT_QUALITY_RULES = {
     "minBodyChars": 80,
     "requireSummary": True,
@@ -1087,6 +1132,8 @@ def init_db():
         if not RESET_MARKER_PATH.exists():
             ensure_blueprint_content_items(conn)
         migrate_lowcode_tables(conn)
+        migrate_assignment_tables(conn)
+        migrate_achievement_market_tables(conn)
         if not RESET_MARKER_PATH.exists():
             ensure_special_experience_links(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at)")
@@ -1126,6 +1173,8 @@ def init_mysql_db():
         ensure_page_extra_columns(conn)
         migrate_content_tables(conn)
         migrate_lowcode_tables(conn)
+        migrate_assignment_tables(conn)
+        migrate_achievement_market_tables(conn)
         upsert_admin_credentials(conn)
         ensure_default_user(conn)
         if not RESET_MARKER_PATH.exists():
@@ -2348,6 +2397,174 @@ def migrate_lowcode_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_record_assets_record ON lowcode_record_assets(record_id, sort_order)")
 
 
+def migrate_assignment_tables(conn):
+    if DATABASE_BACKEND == "mysql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS content_assignments (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              project_id BIGINT NOT NULL,
+              teacher_username VARCHAR(64) NOT NULL,
+              module_key VARCHAR(80) NOT NULL,
+              content_type VARCHAR(32) NOT NULL DEFAULT 'article',
+              title VARCHAR(255) NOT NULL,
+              description VARCHAR(1024) NOT NULL DEFAULT '',
+              status VARCHAR(32) NOT NULL DEFAULT 'assigned',
+              latest_record_id BIGINT NULL,
+              content_item_id BIGINT NULL,
+              created_by VARCHAR(64) NOT NULL DEFAULT '',
+              created_at VARCHAR(40) NOT NULL,
+              updated_at VARCHAR(40) NOT NULL,
+              INDEX idx_content_assignments_project (project_id, module_key, status),
+              INDEX idx_content_assignments_teacher (teacher_username, status),
+              CONSTRAINT fk_content_assignments_project
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_content_assignments_teacher
+                FOREIGN KEY (teacher_username) REFERENCES users(username)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_content_assignments_record
+                FOREIGN KEY (latest_record_id) REFERENCES lowcode_records(id)
+                ON DELETE SET NULL,
+              CONSTRAINT fk_content_assignments_item
+                FOREIGN KEY (content_item_id) REFERENCES content_items(id)
+                ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            teacher_username TEXT NOT NULL,
+            module_key TEXT NOT NULL,
+            content_type TEXT NOT NULL DEFAULT 'article',
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'assigned',
+            latest_record_id INTEGER,
+            content_item_id INTEGER,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_assignments_project ON content_assignments(project_id, module_key, status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_assignments_teacher ON content_assignments(teacher_username, status)")
+
+
+def migrate_achievement_market_tables(conn):
+    if DATABASE_BACKEND == "mysql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS achievement_market_config (
+              id TINYINT PRIMARY KEY DEFAULT 1,
+              welcome_title VARCHAR(255) NOT NULL DEFAULT '成果超市',
+              welcome_subtitle VARCHAR(255) NOT NULL DEFAULT '',
+              welcome_intro TEXT NOT NULL,
+              welcome_image_url VARCHAR(1024) NOT NULL DEFAULT '',
+              welcome_note VARCHAR(255) NOT NULL DEFAULT '',
+              updated_at VARCHAR(40) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS achievement_market_items (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              project_id BIGINT NOT NULL,
+              page_id BIGINT NOT NULL,
+              category_key VARCHAR(40) NOT NULL,
+              intro VARCHAR(512) NOT NULL DEFAULT '',
+              sort_order INT NOT NULL DEFAULT 0,
+              enabled TINYINT(1) NOT NULL DEFAULT 1,
+              created_at VARCHAR(40) NOT NULL,
+              updated_at VARCHAR(40) NOT NULL,
+              UNIQUE KEY uq_achievement_market_page (page_id),
+              INDEX idx_achievement_market_project (project_id, enabled, sort_order),
+              INDEX idx_achievement_market_category (category_key, enabled, sort_order),
+              CONSTRAINT fk_achievement_market_project
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_achievement_market_page
+                FOREIGN KEY (page_id) REFERENCES pages(id)
+                ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO achievement_market_config (
+                id, welcome_title, welcome_subtitle, welcome_intro,
+                welcome_image_url, welcome_note, updated_at
+            )
+            VALUES (1, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE id = id
+            """,
+            (
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeTitle"],
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeSubtitle"],
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeIntro"],
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeImageUrl"],
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeNote"],
+                now_iso(),
+            ),
+        )
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS achievement_market_config (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            welcome_title TEXT NOT NULL DEFAULT '成果超市',
+            welcome_subtitle TEXT NOT NULL DEFAULT '',
+            welcome_intro TEXT NOT NULL,
+            welcome_image_url TEXT NOT NULL DEFAULT '',
+            welcome_note TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS achievement_market_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            page_id INTEGER NOT NULL UNIQUE,
+            category_key TEXT NOT NULL,
+            intro TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_achievement_market_project ON achievement_market_items(project_id, enabled, sort_order)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_achievement_market_category ON achievement_market_items(category_key, enabled, sort_order)")
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO achievement_market_config (
+            id, welcome_title, welcome_subtitle, welcome_intro,
+            welcome_image_url, welcome_note, updated_at
+        )
+        VALUES (1, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeTitle"],
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeSubtitle"],
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeIntro"],
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeImageUrl"],
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeNote"],
+            now_iso(),
+        ),
+    )
+
+
 def seed_lowcode_forms(conn):
     now = now_iso()
     for form in builtin_lowcode_forms():
@@ -2705,6 +2922,210 @@ def list_users():
         user["pageCount"] = int(row["page_count"] or 0)
         users.append(user)
     return users
+
+
+def assignment_status_label(status):
+    return {
+        "assigned": "待填写",
+        "draft": "草稿",
+        "pending": "待审核",
+        "approved": "已通过",
+        "rejected": "已驳回",
+        "deleted": "已删除",
+    }.get(status or "", status or "待填写")
+
+
+def row_to_assignment(row):
+    if not row:
+        return None
+    portal_type = normalize_portal_type(row["portal_type"] if "portal_type" in row.keys() else "department")
+    module = module_meta_for_key(row["module_key"], portal_type) or {"key": row["module_key"], "label": row["module_key"]}
+    content_type = normalize_content_type(row["content_type"])
+    return {
+        "id": row["id"],
+        "projectId": row["project_id"],
+        "projectName": row["project_name"] if "project_name" in row.keys() else "",
+        "projectPortalType": portal_type,
+        "teacherUsername": row["teacher_username"],
+        "teacherDisplayName": row["teacher_display_name"] if "teacher_display_name" in row.keys() else row["teacher_username"],
+        "teacherDepartment": row["teacher_department"] if "teacher_department" in row.keys() else "",
+        "moduleKey": row["module_key"],
+        "moduleLabel": module.get("label") or row["module_key"],
+        "contentType": content_type,
+        "contentTypeLabel": content_type_label(content_type),
+        "title": row["title"],
+        "description": row["description"],
+        "status": row["status"],
+        "statusLabel": assignment_status_label(row["status"]),
+        "latestRecordId": row["latest_record_id"],
+        "contentItemId": row["content_item_id"],
+        "createdBy": row["created_by"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def get_assignment(assignment_id):
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT ca.*, p.name AS project_name, p.portal_type,
+                   users.display_name AS teacher_display_name,
+                   users.department AS teacher_department
+            FROM content_assignments ca
+            JOIN projects p ON p.id = ca.project_id
+            LEFT JOIN users ON users.username = ca.teacher_username
+            WHERE ca.id = ?
+            """,
+            (assignment_id,),
+        ).fetchone()
+    return row_to_assignment(row)
+
+
+def assignment_accessible(assignment, user, write=False):
+    if not assignment or not user:
+        return False
+    project = get_project(assignment["projectId"])
+    if not project or not project_accessible(project, user):
+        return False
+    if can_review_user(user):
+        return True
+    return not write and assignment.get("teacherUsername") == user.get("username")
+
+
+def list_assignments(user, project_id=0):
+    where = []
+    params = []
+    if project_id:
+        where.append("ca.project_id = ?")
+        params.append(project_id)
+    if not can_review_user(user):
+        where.append("ca.teacher_username = ?")
+        params.append(user.get("username", ""))
+    owner_join = ""
+    if can_review_user(user):
+        owner_join, owner_where, owner_params = project_scope_sql(user, "p", "project_owners")
+        if owner_where:
+            where.append(owner_where.removeprefix("WHERE ").strip())
+            params.extend(owner_params)
+    where_sql = f"WHERE {' AND '.join(f'({item})' for item in where)}" if where else ""
+    with db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT ca.*, p.name AS project_name, p.portal_type,
+                   users.display_name AS teacher_display_name,
+                   users.department AS teacher_department
+            FROM content_assignments ca
+            JOIN projects p ON p.id = ca.project_id
+            LEFT JOIN users ON users.username = ca.teacher_username
+            {owner_join}
+            {where_sql}
+            ORDER BY
+              CASE ca.status WHEN 'rejected' THEN 0 WHEN 'assigned' THEN 1 WHEN 'draft' THEN 2
+                WHEN 'pending' THEN 3 WHEN 'approved' THEN 4 ELSE 5 END,
+              ca.updated_at DESC, ca.id DESC
+            """,
+            params,
+        ).fetchall()
+    return [row_to_assignment(row) for row in rows]
+
+
+def save_assignment(data, actor, assignment_id=0):
+    if not can_review_user(actor):
+        raise ValueError("只有管理员可以分配资料任务")
+    project_id = int_value(data.get("projectId") or data.get("project_id"))
+    project = get_project(project_id)
+    if not project or not project_accessible(project, actor):
+        raise ValueError("门户不存在或无权分配")
+    teacher_username = str(data.get("teacherUsername") or data.get("teacher_username") or "").strip()
+    teacher = get_user(teacher_username)
+    if not teacher or teacher.get("role") != ROLE_TEACHER or not teacher.get("enabled"):
+        raise ValueError("请选择已启用的老师账号")
+    module_key = str(data.get("moduleKey") or data.get("module_key") or "").strip()
+    portal_type = normalize_portal_type(project.get("portalType"))
+    if not module_meta_for_key(module_key, portal_type):
+        raise ValueError("请选择有效板块")
+    title = str(data.get("title") or "").strip()
+    if not title:
+        raise ValueError("请填写分配标题")
+    description = str(data.get("description") or "").strip()
+    content_type = normalize_content_type(data.get("contentType") or default_content_type_for_module(module_key))
+    now = now_iso()
+    with db_connect() as conn:
+        if assignment_id:
+            row = conn.execute("SELECT * FROM content_assignments WHERE id = ?", (assignment_id,)).fetchone()
+            if not row:
+                return None
+            current = row_to_assignment({**dict(row), "project_name": project.get("name", ""), "portal_type": portal_type})
+            if not assignment_accessible(current, actor, write=True):
+                raise ValueError("无权修改该任务")
+            conn.execute(
+                """
+                UPDATE content_assignments SET project_id = ?, teacher_username = ?, module_key = ?,
+                    content_type = ?, title = ?, description = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (project_id, teacher_username, module_key, content_type, title[:255], description[:1024], now, assignment_id),
+            )
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO content_assignments (
+                    project_id, teacher_username, module_key, content_type, title, description,
+                    status, latest_record_id, content_item_id, created_by, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'assigned', NULL, NULL, ?, ?, ?)
+                """,
+                (project_id, teacher_username, module_key, content_type, title[:255], description[:1024], actor.get("username", ""), now, now),
+            )
+            assignment_id = cursor.lastrowid
+    return get_assignment(assignment_id)
+
+
+def delete_assignment(assignment_id, actor):
+    assignment = get_assignment(assignment_id)
+    if not assignment:
+        return None
+    if not assignment_accessible(assignment, actor, write=True):
+        raise ValueError("无权删除该任务")
+    with db_connect() as conn:
+        conn.execute("DELETE FROM content_assignments WHERE id = ?", (assignment_id,))
+    return assignment
+
+
+def assignment_for_submission(project_id, assignment_id, form, submitted, actor):
+    if not assignment_id:
+        return None
+    assignment = get_assignment(assignment_id)
+    if not assignment:
+        raise ValueError("资料任务不存在")
+    if assignment.get("projectId") != project_id:
+        raise ValueError("资料任务不属于当前门户")
+    if assignment.get("teacherUsername") != actor.get("username") and not can_review_user(actor):
+        raise ValueError("只能提交分配给自己的资料任务")
+    if assignment.get("status") == "approved" and not can_review_user(actor):
+        raise ValueError("任务已审核通过，如需修改请联系管理员")
+    if assignment.get("moduleKey") != form.get("targetModuleKey"):
+        raise ValueError("资料任务与当前模板板块不一致")
+    submitted.setdefault("title", assignment.get("title") or "")
+    submitted.setdefault("summary", assignment.get("description") or assignment.get("title") or "")
+    return assignment
+
+
+def update_assignment_progress(assignment_id, status, record_id=None, content_item_id=None):
+    if not assignment_id:
+        return
+    with db_connect() as conn:
+        conn.execute(
+            """
+            UPDATE content_assignments SET status = ?,
+                latest_record_id = COALESCE(?, latest_record_id),
+                content_item_id = COALESCE(?, content_item_id),
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (status, record_id, content_item_id, now_iso(), assignment_id),
+        )
 
 
 def upsert_user(data, actor="admin"):
@@ -3077,6 +3498,13 @@ def project_accessible(project, user):
         if not owner_department:
             owner_department = str(project_owner_department(project.get("ownerUsername")) or "").strip()
         return bool(department and owner_department and department == owner_department)
+    with db_connect() as conn:
+        row = conn.execute(
+            "SELECT id FROM content_assignments WHERE project_id = ? AND teacher_username = ? LIMIT 1",
+            (project.get("id"), user.get("username", "")),
+        ).fetchone()
+    if row:
+        return True
     return False
 
 
@@ -3092,7 +3520,16 @@ def project_scope_sql(user, project_alias="projects", owner_alias="project_owner
                 f"WHERE ({project_alias}.owner_username = ? OR {owner_alias}.department = ?)",
                 [username, department],
             )
-    return "", f"WHERE {project_alias}.owner_username = ?", [username]
+    return (
+        "",
+        f"""WHERE ({project_alias}.owner_username = ?
+            OR EXISTS (
+                SELECT 1 FROM content_assignments scope_assignments
+                WHERE scope_assignments.project_id = {project_alias}.id
+                  AND scope_assignments.teacher_username = ?
+            ))""",
+        [username, username],
+    )
 
 
 def get_deployed_project():
@@ -3166,8 +3603,17 @@ def list_projects(user=None):
             owner_filter = "WHERE p.owner_username = ?"
             params.append(user.get("username", ""))
     elif not is_admin_user(user):
-        owner_filter = "WHERE p.owner_username = ?"
-        params.append(user.get("username", ""))
+        owner_filter = """
+            WHERE (
+                p.owner_username = ?
+                OR EXISTS (
+                    SELECT 1 FROM content_assignments scope_assignments
+                    WHERE scope_assignments.project_id = p.id
+                      AND scope_assignments.teacher_username = ?
+                )
+            )
+        """
+        params.extend([user.get("username", ""), user.get("username", "")])
     with db_connect() as conn:
         rows = conn.execute(
             f"""
@@ -5525,6 +5971,8 @@ def save_lowcode_record_draft(project_id, form_id, data, actor):
     _, form, version_id = ensure_lowcode_form_for_project(project_id, form_id)
     data = data if isinstance(data, dict) else {}
     submitted = lowcode_submitted_data(data)
+    assignment_id = int_value(data.get("assignmentId"))
+    assignment_for_submission(project_id, assignment_id, form, submitted, actor)
     payload = lowcode_record_payload(form, submitted, validate_required=False)
     validate_content_asset_access(payload.get("coverAssetId"), payload.get("assets", []), actor)
     now = now_iso()
@@ -5579,6 +6027,7 @@ def save_lowcode_record_draft(project_id, form_id, data, actor):
             )
             record_id = cursor.lastrowid
         replace_lowcode_record_assets(conn, record_id, payload.get("assets", []), now)
+    update_assignment_progress(assignment_id, "draft", record_id=record_id)
     return lowcode_record_result(project_id, record_id)
 
 
@@ -5616,6 +6065,8 @@ def submit_lowcode_record(project_id, form_id, data, actor):
     _, form, version_id = ensure_lowcode_form_for_project(project_id, form_id)
     data = data if isinstance(data, dict) else {}
     submitted = lowcode_submitted_data(data)
+    assignment_id = int_value(data.get("assignmentId"))
+    assignment_for_submission(project_id, assignment_id, form, submitted, actor)
     draft_record_id = int_value(data.get("draftRecordId"))
     content_item_id = None
     if draft_record_id:
@@ -5681,6 +6132,7 @@ def submit_lowcode_record(project_id, form_id, data, actor):
             )
             record_id = cursor.lastrowid
         replace_lowcode_record_assets(conn, record_id, payload.get("assets", []), now)
+    update_assignment_progress(assignment_id, status, record_id=record_id, content_item_id=item["id"])
     return lowcode_record_result(project_id, record_id, item)
 
 
@@ -5758,10 +6210,12 @@ def content_item_payload_from_data(data, current=None, project=None):
         data.get("contentType") or current.get("contentType") or default_content_type_for_module(module_key)
     )
     title = field("title")
-    body_json = content_body_json_from_data(
-        data.get("bodyJson") if "bodyJson" in data else current.get("bodyJson"),
-        data.get("body") or current.get("body") or "",
-    )
+    if "bodyJson" in data:
+        body_json = content_body_json_from_data(data.get("bodyJson"), data.get("body") or "")
+    elif data.get("body"):
+        body_json = content_body_json_from_data(None, data.get("body"))
+    else:
+        body_json = current.get("bodyJson", [])
     meta_json = data.get("metaJson") if "metaJson" in data else data.get("meta")
     if meta_json is None:
         meta_json = current.get("metaJson", {})
@@ -6263,6 +6717,10 @@ def approve_content_item_version(version_id, actor, note=""):
             """,
             (actor["username"], now_iso(), note, now_iso(), item_id),
         )
+        conn.execute(
+            "UPDATE content_assignments SET status = 'approved', updated_at = ? WHERE content_item_id = ?",
+            (now_iso(), item_id),
+        )
     return get_content_item_by_id(item_id)
 
 
@@ -6296,6 +6754,15 @@ def reject_content_item_version(version_id, actor, note=""):
             )
             """,
             (actor["username"], now_iso(), note, now_iso(), version_id),
+        )
+        conn.execute(
+            """
+            UPDATE content_assignments SET status = 'rejected', updated_at = ?
+            WHERE content_item_id IN (
+                SELECT content_item_id FROM content_item_versions WHERE id = ?
+            )
+            """,
+            (now_iso(), version_id),
         )
     return row_to_content_item_version(row)
 
@@ -8211,6 +8678,541 @@ def deployed_page_records(project_id):
     return [{"pageId": row["page_id"], "updatedAt": row["updated_at"]} for row in rows]
 
 
+def achievement_market_default_config():
+    return dict(ACHIEVEMENT_MARKET_DEFAULT_CONFIG)
+
+
+def normalize_achievement_market_config(data):
+    source = data if isinstance(data, dict) else {}
+    fallback = achievement_market_default_config()
+    return {
+        "welcomeTitle": clean_config_text(source.get("welcomeTitle", fallback["welcomeTitle"]))[:120],
+        "welcomeSubtitle": clean_config_text(source.get("welcomeSubtitle", fallback["welcomeSubtitle"]))[:160],
+        "welcomeIntro": clean_config_text(source.get("welcomeIntro", fallback["welcomeIntro"]))[:800],
+        "welcomeImageUrl": clean_config_text(source.get("welcomeImageUrl", fallback["welcomeImageUrl"]))[:600],
+        "welcomeNote": clean_config_text(source.get("welcomeNote", fallback["welcomeNote"]))[:160],
+    }
+
+
+def row_to_achievement_market_config(row):
+    if not row:
+        return achievement_market_default_config()
+    return normalize_achievement_market_config(
+        {
+            "welcomeTitle": row["welcome_title"],
+            "welcomeSubtitle": row["welcome_subtitle"],
+            "welcomeIntro": row["welcome_intro"],
+            "welcomeImageUrl": row["welcome_image_url"],
+            "welcomeNote": row["welcome_note"],
+        }
+    ) | {"updatedAt": row["updated_at"] if "updated_at" in row.keys() else ""}
+
+
+def get_achievement_market_config(conn=None):
+    own_conn = conn is None
+    if own_conn:
+        conn = db_connect()
+    try:
+        row = conn.execute("SELECT * FROM achievement_market_config WHERE id = 1").fetchone()
+        return row_to_achievement_market_config(row)
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def save_achievement_market_config(data):
+    config = normalize_achievement_market_config(data)
+    now = now_iso()
+    with db_connect() as conn:
+        if DATABASE_BACKEND == "mysql":
+            conn.execute(
+                """
+                INSERT INTO achievement_market_config (
+                    id, welcome_title, welcome_subtitle, welcome_intro,
+                    welcome_image_url, welcome_note, updated_at
+                )
+                VALUES (1, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    welcome_title = VALUES(welcome_title),
+                    welcome_subtitle = VALUES(welcome_subtitle),
+                    welcome_intro = VALUES(welcome_intro),
+                    welcome_image_url = VALUES(welcome_image_url),
+                    welcome_note = VALUES(welcome_note),
+                    updated_at = VALUES(updated_at)
+                """,
+                (
+                    config["welcomeTitle"],
+                    config["welcomeSubtitle"],
+                    config["welcomeIntro"],
+                    config["welcomeImageUrl"],
+                    config["welcomeNote"],
+                    now,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO achievement_market_config (
+                    id, welcome_title, welcome_subtitle, welcome_intro,
+                    welcome_image_url, welcome_note, updated_at
+                )
+                VALUES (1, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    welcome_title = excluded.welcome_title,
+                    welcome_subtitle = excluded.welcome_subtitle,
+                    welcome_intro = excluded.welcome_intro,
+                    welcome_image_url = excluded.welcome_image_url,
+                    welcome_note = excluded.welcome_note,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    config["welcomeTitle"],
+                    config["welcomeSubtitle"],
+                    config["welcomeIntro"],
+                    config["welcomeImageUrl"],
+                    config["welcomeNote"],
+                    now,
+                ),
+            )
+    return get_achievement_market_config()
+
+
+def infer_achievement_market_category(row):
+    portal_type = normalize_portal_type(row["project_portal_type"] if "project_portal_type" in row.keys() else "topic")
+    module_key = module_key_for_category(row["category"] if "category" in row.keys() else "", portal_type)
+    content_type = normalize_content_type(row["content_type"] if "content_type" in row.keys() else "")
+    category_text = " ".join(
+        str(row[field] if field in row.keys() else "")
+        for field in ("category", "title", "subtitle")
+    )
+    if module_key in {"masters", "alumni", "students", "honors"}:
+        return module_key
+    if content_type == "honor" or any(word in category_text for word in ("荣誉", "资质", "证书", "奖项")):
+        return "honors"
+    if any(word in category_text for word in ("名师", "名匠", "大师", "教师")):
+        return "masters"
+    if any(word in category_text for word in ("校友", "毕业生")):
+        return "alumni"
+    if any(word in category_text for word in ("学生", "竞赛", "大赛")):
+        return "students"
+    return "innovation"
+
+
+def normalize_market_category(value):
+    key = str(value or "").strip()
+    return key if key in ACHIEVEMENT_MARKET_CATEGORY_MAP else "innovation"
+
+
+def achievement_market_item_url(project_id, code):
+    return f"/display?project={project_id}&code={code}&source=achievement-market"
+
+
+def row_to_achievement_market_item(row):
+    if not row:
+        return None
+    project_id = int(row["project_id"])
+    code = row["code"]
+    category_key = normalize_market_category(row["category_key"])
+    return {
+        "id": row["id"],
+        "projectId": project_id,
+        "projectName": row["project_name"] if "project_name" in row.keys() else "",
+        "pageId": row["page_id"],
+        "code": code,
+        "categoryKey": category_key,
+        "categoryLabel": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["label"],
+        "theme": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["theme"],
+        "color": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["color"],
+        "intro": row["intro"] if "intro" in row.keys() else "",
+        "sortOrder": int(row["sort_order"] if "sort_order" in row.keys() else 0),
+        "enabled": bool(row["enabled"]),
+        "title": row["title"],
+        "subtitle": row["subtitle"],
+        "summary": row["intro"] or row["subtitle"] or re.sub(r"<[^>]+>", "", row["body"] or "")[:120],
+        "moduleKey": module_key_for_category(row["category"] if "category" in row.keys() else "", row["project_portal_type"] if "project_portal_type" in row.keys() else "topic"),
+        "contentType": normalize_content_type(row["content_type"] if "content_type" in row.keys() else "article"),
+        "imageUrl": row["image_url"],
+        "accent": row["accent"],
+        "qrPath": achievement_market_item_url(project_id, code),
+        "updatedAt": row["updated_at"],
+    }
+
+
+def achievement_market_categories_with_items(items):
+    grouped = {category["key"]: [] for category in ACHIEVEMENT_MARKET_CATEGORIES}
+    for item in items:
+        grouped.setdefault(item["categoryKey"], []).append(item)
+    return [
+        {
+            **category,
+            "items": grouped.get(category["key"], []),
+            "count": len(grouped.get(category["key"], [])),
+            "url": f"/display?market={category['key']}",
+        }
+        for category in ACHIEVEMENT_MARKET_CATEGORIES
+    ]
+
+
+def list_achievement_market_items(project_id=0, enabled_only=False):
+    params = []
+    where = ["pages.review_status = 'approved'", "pages.enabled = 1"]
+    if project_id:
+        where.append("ami.project_id = ?")
+        params.append(project_id)
+    if enabled_only:
+        where.append("ami.enabled = 1")
+    with db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT ami.*, pages.code, pages.category, pages.title, pages.subtitle, pages.body,
+                   pages.image_url, pages.content_type, pages.accent,
+                   projects.name AS project_name, projects.portal_type AS project_portal_type
+            FROM achievement_market_items ami
+            JOIN pages ON pages.id = ami.page_id
+            JOIN projects ON projects.id = ami.project_id
+            WHERE {' AND '.join(where)}
+            ORDER BY ami.category_key, ami.sort_order, pages.updated_at DESC, ami.id DESC
+            """,
+            params,
+        ).fetchall()
+    return [row_to_achievement_market_item(row) for row in rows]
+
+
+def list_achievement_market_candidates(project_id):
+    if not project_id:
+        return []
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT pages.*, projects.name AS project_name, projects.portal_type AS project_portal_type
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            LEFT JOIN achievement_market_items ami ON ami.page_id = pages.id
+            WHERE pages.project_id = ?
+              AND pages.review_status = 'approved'
+              AND pages.enabled = 1
+              AND ami.id IS NULL
+            ORDER BY pages.updated_at DESC, pages.id DESC
+            """,
+            (project_id,),
+        ).fetchall()
+    candidates = []
+    for row in rows:
+        category_key = infer_achievement_market_category(row)
+        candidates.append(
+            {
+                "pageId": row["id"],
+                "projectId": row["project_id"],
+                "projectName": row["project_name"],
+                "code": row["code"],
+                "title": row["title"],
+                "subtitle": row["subtitle"],
+                "category": row["category"],
+                "categoryKey": category_key,
+                "categoryLabel": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["label"],
+                "imageUrl": row["image_url"],
+                "updatedAt": row["updated_at"],
+            }
+        )
+    return candidates
+
+
+def achievement_market_active_project_id(conn):
+    row = conn.execute(
+        """
+        SELECT project_id
+        FROM achievement_market_items
+        WHERE enabled = 1
+        GROUP BY project_id
+        ORDER BY COUNT(*) DESC, MAX(updated_at) DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if row:
+        return int(row["project_id"])
+    project = get_deployed_content_project()
+    return int(project["id"]) if project else 0
+
+
+def sync_achievement_market_deployment(conn, project_id):
+    rows = conn.execute(
+        """
+        SELECT page_id FROM achievement_market_items
+        WHERE project_id = ? AND enabled = 1
+        ORDER BY sort_order, id
+        """,
+        (project_id,),
+    ).fetchall()
+    page_ids = [row["page_id"] for row in rows]
+    if not page_ids:
+        return
+    now = now_iso()
+    conn.execute(
+        """
+        UPDATE projects
+        SET content_deployed = CASE WHEN id = ? THEN 1 ELSE 0 END,
+            content_deployed_at = CASE WHEN id = ? THEN ? ELSE content_deployed_at END
+        """,
+        (project_id, project_id, now),
+    )
+    conn.execute("DELETE FROM deployed_pages")
+    for page_id in page_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO deployed_pages (project_id, page_id, updated_at) VALUES (?, ?, ?)",
+            (project_id, page_id, now),
+        )
+
+
+def achievement_market_payload(project_id=0, include_candidates=False):
+    with db_connect() as conn:
+        active_project_id = int(project_id or achievement_market_active_project_id(conn))
+    items = list_achievement_market_items(active_project_id if active_project_id else 0)
+    payload = {
+        "config": get_achievement_market_config(),
+        "categories": achievement_market_categories_with_items(items),
+        "items": items,
+        "activeProjectId": active_project_id,
+    }
+    if include_candidates:
+        payload["candidates"] = list_achievement_market_candidates(active_project_id)
+    return payload
+
+
+def public_achievement_market_payload(category_key=""):
+    payload = achievement_market_payload(0, include_candidates=False)
+    if category_key:
+        key = normalize_market_category(category_key)
+        payload["categories"] = [category for category in payload["categories"] if category["key"] == key]
+        payload["items"] = [item for item in payload["items"] if item["categoryKey"] == key and item["enabled"]]
+    else:
+        payload["items"] = [item for item in payload["items"] if item["enabled"]]
+        payload["categories"] = [
+            {**category, "items": [item for item in category["items"] if item["enabled"]], "count": len([item for item in category["items"] if item["enabled"]])}
+            for category in payload["categories"]
+        ]
+    return payload
+
+
+def save_achievement_market_item(data):
+    page_id = int_value(data.get("pageId") or data.get("page_id"), 0)
+    if not page_id:
+        raise ValueError("请选择展示项目")
+    category_key = normalize_market_category(data.get("categoryKey") or data.get("category_key"))
+    intro = clean_config_text(data.get("intro", ""))[:240]
+    sort_order = int_value(data.get("sortOrder") or data.get("sort_order"), 0)
+    enabled = 1 if data.get("enabled", True) else 0
+    now = now_iso()
+    with db_connect() as conn:
+        page = conn.execute(
+            """
+            SELECT id, project_id, title, review_status, enabled
+            FROM pages
+            WHERE id = ?
+            """,
+            (page_id,),
+        ).fetchone()
+        if not page or page["review_status"] != "approved" or not bool(page["enabled"]):
+            raise ValueError("只能加入已审核通过且启用的展示项目")
+        project_id = int(page["project_id"])
+        if DATABASE_BACKEND == "mysql":
+            conn.execute(
+                """
+                INSERT INTO achievement_market_items (
+                    project_id, page_id, category_key, intro, sort_order,
+                    enabled, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    project_id = VALUES(project_id),
+                    category_key = VALUES(category_key),
+                    intro = VALUES(intro),
+                    sort_order = VALUES(sort_order),
+                    enabled = VALUES(enabled),
+                    updated_at = VALUES(updated_at)
+                """,
+                (project_id, page_id, category_key, intro, sort_order, enabled, now, now),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO achievement_market_items (
+                    project_id, page_id, category_key, intro, sort_order,
+                    enabled, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(page_id) DO UPDATE SET
+                    project_id = excluded.project_id,
+                    category_key = excluded.category_key,
+                    intro = excluded.intro,
+                    sort_order = excluded.sort_order,
+                    enabled = excluded.enabled,
+                    updated_at = excluded.updated_at
+                """,
+                (project_id, page_id, category_key, intro, sort_order, enabled, now, now),
+            )
+        sync_achievement_market_deployment(conn, project_id)
+        item_id = conn.execute("SELECT id FROM achievement_market_items WHERE page_id = ?", (page_id,)).fetchone()["id"]
+    return get_achievement_market_item(item_id)
+
+
+def achievement_market_content_type(category_key):
+    if category_key in {"masters", "alumni", "students"}:
+        return "person"
+    if category_key == "honors":
+        return "honor"
+    return "achievement"
+
+
+def achievement_market_code_prefix(category_key):
+    return {
+        "masters": "AM-MASTER",
+        "alumni": "AM-ALUMNI",
+        "students": "AM-STUDENT",
+        "innovation": "AM-INNOV",
+        "honors": "AM-HONOR",
+    }.get(category_key, "AM-ITEM")
+
+
+def html_from_market_body(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if "<" in text and ">" in text:
+        return text
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n|\n", text) if part.strip()]
+    return "".join(f"<p>{xml_escape(part)}</p>" for part in paragraphs)
+
+
+def create_achievement_market_item(data, actor):
+    project_id = int_value(data.get("projectId") or data.get("project_id"), 0)
+    if not project_id:
+        with db_connect() as conn:
+            project_id = achievement_market_active_project_id(conn)
+    if not project_id:
+        raise ValueError("请先选择内容来源")
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("内容来源不存在")
+
+    title = clean_config_text(data.get("title", ""))[:120]
+    if not title:
+        raise ValueError("请填写展示项目标题")
+    category_key = normalize_market_category(data.get("categoryKey") or data.get("category_key"))
+    category = ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["label"]
+    subtitle = clean_config_text(data.get("subtitle", ""))[:200]
+    intro = clean_config_text(data.get("intro", "") or subtitle)[:240]
+    body_text = str(data.get("body", "") or "").strip()
+    body_html = html_from_market_body(body_text or intro or subtitle)
+    image_url = clean_config_text(data.get("imageUrl") or data.get("image_url") or "")[:600]
+    source = clean_config_text(data.get("source", "") or project.get("name") or DEFAULT_PAGE_SOURCE)[:120]
+    custom_code = clean_config_text(data.get("code", ""))[:80]
+
+    with db_connect() as conn:
+        code = unique_page_code(conn, custom_code or f"{achievement_market_code_prefix(category_key)}-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}")
+
+    page = save_page(
+        project_id,
+        code,
+        {
+            "category": category,
+            "source": source,
+            "publishedAt": datetime.now().strftime("%Y-%m-%d"),
+            "title": title,
+            "subtitle": subtitle or intro,
+            "body": body_html,
+            "imageUrl": image_url,
+            "contentType": achievement_market_content_type(category_key),
+            "accent": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["color"],
+            "enabled": True,
+        },
+        actor,
+        approve_now=True,
+    )
+    return save_achievement_market_item(
+        {
+            "pageId": page["id"],
+            "categoryKey": category_key,
+            "intro": intro or subtitle,
+            "sortOrder": data.get("sortOrder") or data.get("sort_order") or 0,
+            "enabled": data.get("enabled", True),
+        }
+    )
+
+
+def get_achievement_market_item(item_id):
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT ami.*, pages.code, pages.category, pages.title, pages.subtitle, pages.body,
+                   pages.image_url, pages.content_type, pages.accent,
+                   projects.name AS project_name, projects.portal_type AS project_portal_type
+            FROM achievement_market_items ami
+            JOIN pages ON pages.id = ami.page_id
+            JOIN projects ON projects.id = ami.project_id
+            WHERE ami.id = ?
+            """,
+            (item_id,),
+        ).fetchone()
+    return row_to_achievement_market_item(row)
+
+
+def update_achievement_market_item(item_id, data):
+    category_key = normalize_market_category(data.get("categoryKey") or data.get("category_key"))
+    intro = clean_config_text(data.get("intro", ""))[:240]
+    sort_order = int_value(data.get("sortOrder") or data.get("sort_order"), 0)
+    enabled = 1 if data.get("enabled", True) else 0
+    with db_connect() as conn:
+        row = conn.execute("SELECT id, project_id FROM achievement_market_items WHERE id = ?", (item_id,)).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            """
+            UPDATE achievement_market_items
+            SET category_key = ?, intro = ?, sort_order = ?, enabled = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (category_key, intro, sort_order, enabled, now_iso(), item_id),
+        )
+        sync_achievement_market_deployment(conn, int(row["project_id"]))
+    return get_achievement_market_item(item_id)
+
+
+def delete_achievement_market_item(item_id):
+    with db_connect() as conn:
+        row = conn.execute("SELECT id, project_id FROM achievement_market_items WHERE id = ?", (item_id,)).fetchone()
+        if not row:
+            return None
+        item = get_achievement_market_item(item_id)
+        project_id = int(row["project_id"])
+        conn.execute("DELETE FROM achievement_market_items WHERE id = ?", (item_id,))
+        sync_achievement_market_deployment(conn, project_id)
+    return item
+
+
+def publish_achievement_market(project_id=0):
+    with db_connect() as conn:
+        active_project_id = int(project_id or achievement_market_active_project_id(conn))
+        if not active_project_id:
+            return {
+                "ok": False,
+                "activeProjectId": 0,
+                "publishedCount": 0,
+                "message": "当前没有可发布的成果超市项目",
+            }
+        enabled_count = conn.execute(
+            "SELECT COUNT(*) AS value FROM achievement_market_items WHERE project_id = ? AND enabled = 1",
+            (active_project_id,),
+        ).fetchone()["value"]
+        if int(enabled_count or 0):
+            sync_achievement_market_deployment(conn, active_project_id)
+        return {
+            "ok": True,
+            "activeProjectId": active_project_id,
+            "publishedCount": int(enabled_count or 0),
+            "message": "成果超市已发布",
+        }
+
+
 def extract_code(value):
     text = str(value or "").strip()
     if not text:
@@ -9709,6 +10711,12 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.send_json(200, {"ok": True, **get_public_portal_home()})
             return
 
+        if path == "/api/achievement-market/public":
+            query = parse_qs(parsed.query)
+            category_key = (query.get("category") or [""])[0]
+            self.send_json(200, {"ok": True, **public_achievement_market_payload(category_key)})
+            return
+
         if path.startswith("/api/portal/"):
             parts = path.strip("/").split("/")
             if len(parts) == 4 and parts[0] == "api" and parts[1] == "portal":
@@ -9829,6 +10837,15 @@ class ExpoHandler(BaseHTTPRequestHandler):
             project_id_text = path.rsplit("/", 1)[-1]
             project_id = int(project_id_text) if project_id_text.isdigit() else 0
             self.send_json(200, {"ok": True, "check": deploy_content_check(project_id)})
+            return
+
+        if path == "/api/achievement-market":
+            if not self.require_admin():
+                return
+            query = parse_qs(parsed.query)
+            project_id_text = (query.get("projectId") or ["0"])[0]
+            project_id = int(project_id_text) if str(project_id_text).isdigit() else 0
+            self.send_json(200, {"ok": True, **achievement_market_payload(project_id, include_candidates=True)})
             return
 
         if path == "/api/projects":
@@ -9977,6 +10994,14 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
                 self.send_json(200, {"ok": True, "project": project, "records": list_lowcode_records(project_id, user)})
+                return
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "assignments":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "assignments": list_assignments(user, project_id)})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "report":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
@@ -10312,6 +11337,52 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.send_json(200, {"ok": True, "project": project, "pageIds": deployed_page_ids(project_id), "records": deployed_page_records(project_id)})
             return
 
+        if path == "/api/achievement-market/config":
+            actor = self.require_admin()
+            if not actor:
+                return
+            config = save_achievement_market_config(self.read_json())
+            self.log_admin("save_achievement_market_config", "achievement_market", "config", "成果超市欢迎页", "update config")
+            self.send_json(200, {"ok": True, "config": config})
+            return
+
+        if path == "/api/achievement-market/items/new":
+            actor = self.require_admin()
+            if not actor:
+                return
+            try:
+                item = create_achievement_market_item(self.read_json(), actor)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.log_admin("create_achievement_market_item", "achievement_market_item", item["id"], item["title"], "create item")
+            self.send_json(200, {"ok": True, "item": item, **achievement_market_payload(item["projectId"], include_candidates=True)})
+            return
+
+        if path == "/api/achievement-market/items":
+            actor = self.require_admin()
+            if not actor:
+                return
+            try:
+                item = save_achievement_market_item(self.read_json())
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.log_admin("save_achievement_market_item", "achievement_market_item", item["id"], item["title"], "add/update item")
+            self.send_json(200, {"ok": True, "item": item, **achievement_market_payload(item["projectId"], include_candidates=True)})
+            return
+
+        if path == "/api/achievement-market/publish":
+            actor = self.require_admin()
+            if not actor:
+                return
+            data = self.read_json()
+            project_id = int_value(data.get("projectId"), 0)
+            result = publish_achievement_market(project_id)
+            self.log_admin("publish_achievement_market", "achievement_market", str(result["activeProjectId"]), "成果超市", result["message"])
+            self.send_json(200, {"ok": True, "result": result, **achievement_market_payload(result["activeProjectId"], include_candidates=True)})
+            return
+
         if path.startswith("/api/reviews/"):
             actor = self.require_reviewer()
             if not actor:
@@ -10352,6 +11423,18 @@ class ExpoHandler(BaseHTTPRequestHandler):
             if not user:
                 return
             parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "assignments":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                data = self.read_json()
+                data["projectId"] = project_id
+                try:
+                    assignment = save_assignment(data, user)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self.log_admin("save_assignment", "assignment", assignment["id"], assignment["title"], f"project {project_id}")
+                self.send_json(200, {"ok": True, "assignment": assignment})
+                return
             if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
                 project = get_project(project_id)
@@ -10631,6 +11714,42 @@ class ExpoHandler(BaseHTTPRequestHandler):
         if not self.require_csrf(path):
             return
 
+        if path.startswith("/api/achievement-market/items/"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            item_id_text = path.rsplit("/", 1)[-1]
+            item_id = int(item_id_text) if item_id_text.isdigit() else 0
+            try:
+                item = update_achievement_market_item(item_id, self.read_json())
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            if not item:
+                self.send_json(404, {"ok": False, "error": "成果超市项目不存在"})
+                return
+            self.log_admin("update_achievement_market_item", "achievement_market_item", item["id"], item["title"], "update item")
+            self.send_json(200, {"ok": True, "item": item, **achievement_market_payload(item["projectId"], include_candidates=True)})
+            return
+
+        if path.startswith("/api/content-assignments/"):
+            user = self.require_auth()
+            if not user:
+                return
+            assignment_id_text = path.rsplit("/", 1)[-1]
+            assignment_id = int(assignment_id_text) if assignment_id_text.isdigit() else 0
+            try:
+                assignment = save_assignment(self.read_json(), user, assignment_id)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            if not assignment:
+                self.send_json(404, {"ok": False, "error": "任务不存在"})
+                return
+            self.log_admin("update_assignment", "assignment", assignment["id"], assignment["title"], "update assignment")
+            self.send_json(200, {"ok": True, "assignment": assignment})
+            return
+
         if path.startswith("/api/projects/"):
             user = self.require_auth()
             if not user:
@@ -10772,6 +11891,38 @@ class ExpoHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
         if not self.require_csrf(path):
+            return
+
+        if path.startswith("/api/achievement-market/items/"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            item_id_text = path.rsplit("/", 1)[-1]
+            item_id = int(item_id_text) if item_id_text.isdigit() else 0
+            item = delete_achievement_market_item(item_id)
+            if not item:
+                self.send_json(404, {"ok": False, "error": "成果超市项目不存在"})
+                return
+            self.log_admin("delete_achievement_market_item", "achievement_market_item", item["id"], item["title"], "delete item")
+            self.send_json(200, {"ok": True, "item": item, **achievement_market_payload(item["projectId"], include_candidates=True)})
+            return
+
+        if path.startswith("/api/content-assignments/"):
+            user = self.require_auth()
+            if not user:
+                return
+            assignment_id_text = path.rsplit("/", 1)[-1]
+            assignment_id = int(assignment_id_text) if assignment_id_text.isdigit() else 0
+            try:
+                assignment = delete_assignment(assignment_id, user)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            if not assignment:
+                self.send_json(404, {"ok": False, "error": "任务不存在"})
+                return
+            self.log_admin("delete_assignment", "assignment", assignment["id"], assignment["title"], "delete assignment")
+            self.send_json(200, {"ok": True, "assignment": assignment})
             return
 
         if path.startswith("/api/projects/"):

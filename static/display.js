@@ -1,5 +1,6 @@
 const app = document.getElementById("app");
 const idleView = document.getElementById("idleView");
+const marketView = document.getElementById("marketView");
 const pageView = document.getElementById("pageView");
 
 const brandLogo = document.getElementById("brandLogo");
@@ -53,6 +54,12 @@ const detailSubtitle = document.getElementById("detailSubtitle");
 const detailBody = document.getElementById("detailBody");
 const detailContentPanel = document.querySelector(".content-panel");
 const returnHome = document.getElementById("returnHome");
+const returnMarketHome = document.getElementById("returnMarketHome");
+const marketLabel = document.getElementById("marketLabel");
+const marketTitle = document.getElementById("marketTitle");
+const marketIntro = document.getElementById("marketIntro");
+const marketCategoryNav = document.getElementById("marketCategoryNav");
+const marketItems = document.getElementById("marketItems");
 
 const defaultDisplayConfig = {
   logoImageUrl: "",
@@ -97,6 +104,13 @@ const defaultDisplayConfig = {
       visual: "students",
     },
   ],
+};
+const marketThemeMap = {
+  masters: { label: "名师名匠", color: "#2563eb" },
+  alumni: { label: "优秀校友", color: "#16a34a" },
+  students: { label: "优秀学生", color: "#d97706" },
+  innovation: { label: "创新成果", color: "#ea580c" },
+  honors: { label: "荣誉资质", color: "#dc2626" },
 };
 
 let activeProject = null;
@@ -515,6 +529,84 @@ function renderCarousel(slides) {
   restartCarousel();
 }
 
+function marketItemUrl(item) {
+  return item.qrPath || `/display?project=${encodeURIComponent(item.projectId)}&code=${encodeURIComponent(item.code)}&source=achievement-market`;
+}
+
+function renderMarketHomeLinks(categories) {
+  if (!carouselScanSlot || !categories || !categories.length) return;
+  let links = carouselScanSlot.querySelector(".market-home-links");
+  if (!links) {
+    links = document.createElement("div");
+    links.className = "market-home-links";
+    carouselScanSlot.appendChild(links);
+  }
+  links.innerHTML = categories.map((category) => `
+    <a style="--color:${category.color || "#47b7ff"}" href="/display?market=${encodeURIComponent(category.key)}">
+      <span>${escapeHtml(category.label)}</span>
+      <strong>${Number(category.count || 0)}</strong>
+    </a>
+  `).join("");
+}
+
+async function loadMarketSummary() {
+  try {
+    const res = await fetch("/api/achievement-market/public", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.ok) renderMarketHomeLinks(data.categories || []);
+  } catch {
+    // The display page remains usable even if the market layer is not configured yet.
+  }
+}
+
+function renderMarketCategoryPage(data, activeKey) {
+  const config = data.config || {};
+  const categories = data.categories || [];
+  const category = categories[0] || marketThemeMap[activeKey] || {};
+  const theme = marketThemeMap[category.key] || category || {};
+  const color = category.color || theme.color || "#2563eb";
+  document.documentElement.style.setProperty("--accent", color);
+  setText(marketLabel, category.label || theme.label || "成果超市");
+  setText(marketTitle, category.label ? `${category.label}展示页` : (config.welcomeTitle || "成果超市"));
+  setText(marketIntro, category.description || config.welcomeIntro || "选择展示项目，扫码或点击进入详情页。");
+  marketCategoryNav.innerHTML = Object.entries(marketThemeMap).map(([key, item]) => `
+    <a class="${key === activeKey ? "active" : ""}" style="--color:${item.color}" href="/display?market=${encodeURIComponent(key)}">${item.label}</a>
+  `).join("");
+  const items = data.items || [];
+  marketItems.innerHTML = items.length ? items.map((item) => {
+    const url = new URL(marketItemUrl(item), window.location.origin).toString();
+    const qr = `/api/qr-public?data=${encodeURIComponent(url)}`;
+    return `
+      <article class="market-card" style="--color:${item.color || color}">
+        <figure>${item.imageUrl ? `<img src="${escapeHtml(item.imageUrl)}" alt="" />` : `<span>${escapeHtml(item.categoryLabel || category.label || "成果")}</span>`}</figure>
+        <div class="market-card-copy">
+          <span>${escapeHtml(item.code || "")}</span>
+          <h2>${escapeHtml(item.title || "")}</h2>
+          <p>${escapeHtml(item.intro || item.subtitle || "")}</p>
+        </div>
+        <a class="market-card-qr" href="${escapeHtml(marketItemUrl(item))}">
+          <img src="${escapeHtml(qr)}" alt="" />
+          <strong>扫码进入</strong>
+        </a>
+      </article>
+    `;
+  }).join("") : `<div class="market-empty">当前主题暂无已发布展示项目</div>`;
+  show("market");
+}
+
+async function loadMarketCategory() {
+  const activeKey = initialParams.get("market") || "";
+  if (!activeKey) return false;
+  const key = marketThemeMap[activeKey] ? activeKey : "innovation";
+  const res = await fetch(`/api/achievement-market/public?category=${encodeURIComponent(key)}`, { cache: "no-store" });
+  if (!res.ok) return false;
+  const data = await res.json();
+  if (!data.ok) return false;
+  renderMarketCategoryPage(data, key);
+  return true;
+}
+
 function applyProject(project) {
   activeProject = project || {};
   const config = normalizeDisplayConfig(activeProject.displayConfig);
@@ -627,9 +719,10 @@ function show(view) {
   if (view !== "page") stopDetailAutoScroll();
   app.className = `screen ${view}`;
   idleView.hidden = view !== "idle";
+  marketView.hidden = view !== "market";
   pageView.hidden = view !== "page";
 
-  const active = view === "idle" ? idleView : pageView;
+  const active = view === "idle" ? idleView : view === "market" ? marketView : pageView;
   active.classList.remove("fade-in");
   void active.offsetWidth;
   active.classList.add("fade-in");
@@ -873,16 +966,21 @@ async function init() {
   } catch {
     applyProject(null);
   }
-  show("idle");
+  const marketLoaded = await loadMarketCategory();
+  if (!marketLoaded) {
+    show("idle");
+    loadMarketSummary();
+  }
   if (previewMode) {
     if (connectionState) connectionState.textContent = "预览模式";
   } else {
     connect();
     setInterval(pollLatestScan, 1200);
   }
-  loadInitialCode();
+  if (!marketLoaded) loadInitialCode();
 }
 
 returnHome.addEventListener("click", goHome);
+returnMarketHome.addEventListener("click", goHome);
 
 init();

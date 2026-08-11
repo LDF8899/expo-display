@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>数字门户后台</title>
-    <link rel="stylesheet" href="/static/admin.css?v=nav-restore-20260805a" />
+    <link rel="stylesheet" href="/static/admin.css?v=achievement-market-editor-20260811e" />
   </head>
   <body>
     <aside class="sidebar">
@@ -23,13 +23,13 @@
     <main class="main">
       <header class="topbar">
         <div>
-          <p id="consoleEyebrow" class="eyebrow">Portal Exhibition Console</p>
+          <p id="consoleEyebrow" class="eyebrow">Management & Achievement Market</p>
           <h1 id="viewTitle">后台</h1>
           <p id="viewIntro">正在加载</p>
         </div>
         <div class="topbar-actions">
           <a class="button ghost" href="/departments">门户官网</a>
-          <a class="button ghost" href="/display">扫码大屏</a>
+          <a class="button ghost" href="/display">成果超市</a>
           <button id="refreshData" class="button ghost" type="button">刷新</button>
         </div>
       </header>
@@ -40,7 +40,7 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-              <h2>账号管理</h2>
+              <h2>人员管理</h2>
               <p>创建老师、专题管理员和管理员账号，维护部门、角色和启用状态。</p>
             </div>
           </div>
@@ -90,8 +90,8 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-               <h2 id="projectsHeading">门户官网管理</h2>
-               <p id="projectsIntro">统一维护学校门户和专题门户；系部按专题门户管理。</p>
+               <h2 id="projectsHeading">门户系部专题管理</h2>
+               <p id="projectsIntro">维护学校门户、系部门户和专题门户；在这里分配老师资料任务并进入板块资料管理。</p>
             </div>
             <div class="toolbar">
               <input id="projectSearch" placeholder="搜索门户、归属、路由" />
@@ -107,7 +107,6 @@
                 <option value="pending">配置待审核</option>
                 <option value="unpublished">未发布</option>
               </select>
-              <button id="newProject" class="button primary admin-only" type="button">新建门户</button>
             </div>
           </div>
           <div class="table-wrap">
@@ -249,6 +248,25 @@
             </div>
           </div>
           <div id="currentPortalStrip" class="current-portal-strip"></div>
+          <section id="assignmentPanel" class="assignment-panel">
+            <div class="panel-subhead">
+              <div>
+                <strong id="assignmentPanelTitle">资料任务</strong>
+                <span id="assignmentPanelIntro">管理员分配老师、标题和板块；老师按任务填写后提交审核。</span>
+              </div>
+              <span id="assignmentSummary" class="badge">0 项</span>
+            </div>
+            <form id="assignmentForm" class="form-grid assignment-form">
+              <select id="assignmentTeacher"></select>
+              <select id="assignmentModule"></select>
+              <select id="assignmentContentType"></select>
+              <input id="assignmentTitle" placeholder="分配标题，如 优秀学生案例：张三" />
+              <input id="assignmentDescription" placeholder="填写要求/摘要提示" />
+              <button class="button primary" type="submit">分配任务</button>
+            </form>
+            <p id="assignmentStatus" class="status-text"></p>
+            <div id="assignmentList" class="assignment-list"></div>
+          </section>
           <section id="contentWorkspaceNav" class="content-workspace-nav" aria-label="内容工作台分区">
             <div>
               <strong id="contentWorkspaceModeTitle">栏目看板</strong>
@@ -282,7 +300,7 @@
                 </div>
               </div>
               <div id="moduleLibrary" class="module-library"></div>
-              <p class="module-coverage-hint">已通过资料会进入对应门户页；扫码大屏管理用于控制大屏可打开的资料范围。</p>
+              <p class="module-coverage-hint">已通过资料会进入对应门户页；成果超市用于控制现场展示可打开的资料范围。</p>
               <section class="structured-panel cms-main-list" data-content-section="content" aria-label="结构化资料">
                 <div class="panel-subhead">
                   <div>
@@ -745,21 +763,111 @@
 
       <section id="deployView" class="view admin-only">
         <section class="panel">
-          <div class="panel-head"><div><h2>扫码大屏管理</h2><p>管理 /display 欢迎页、扫码内容池和现场大屏发布范围；内容来源复用门户资料库。</p></div></div>
-          <div class="form-grid two">
-            <select id="deployProject"></select>
-            <button id="deployWelcome" class="button ghost" type="button">发布欢迎页</button>
+          <div class="panel-head">
+            <div><h2>成果超市</h2><p>配置欢迎页、五类主题展示页和每个展示项目的二维码简介；内容来源复用已审核资料。</p></div>
+            <div class="toolbar">
+              <a class="button ghost" target="_blank" href="/display">预览欢迎页</a>
+              <button id="marketPreviewTheme" class="button ghost" type="button">预览当前主题</button>
+              <button id="marketPublish" class="button primary" type="button">发布成果超市</button>
+            </div>
           </div>
-          <div id="deployCheck" class="deploy-check"></div>
+          <section class="market-command-strip">
+            <article>
+              <strong>编辑</strong>
+              <span>维护欢迎页、主题归类、项目简介和排序。</span>
+            </article>
+            <article>
+              <strong>预览</strong>
+              <span>右侧嵌入实际 /display 页面，所见即前台效果。</span>
+            </article>
+            <article>
+              <strong>发布</strong>
+              <span>把启用项目同步到扫码器可进入范围。</span>
+            </article>
+          </section>
+          <section class="market-editor-grid">
+            <article class="market-editor-card">
+              <div class="field-head">
+                <span>欢迎页</span>
+                <small>/display 的入口文案，先进入欢迎页，再进入五类主题展示页。</small>
+              </div>
+              <div class="form-grid two">
+                <input id="marketWelcomeTitle" placeholder="欢迎页标题，如 成果超市" />
+                <input id="marketWelcomeSubtitle" placeholder="副标题，如 欢迎进入校园成果展示现场" />
+              </div>
+              <textarea id="marketWelcomeIntro" rows="4" placeholder="欢迎页介绍"></textarea>
+              <div class="form-grid two">
+                <input id="marketWelcomeImageUrl" placeholder="欢迎页图片 /uploads/..." />
+                <input id="marketWelcomeNote" placeholder="底部提示文字" />
+              </div>
+              <div class="actions">
+                <button id="selectMarketWelcomeAsset" class="button ghost" type="button">选择图片</button>
+                <button id="deployWelcome" class="button primary" type="button">保存欢迎页草稿</button>
+              </div>
+            </article>
+            <article class="market-live-preview">
+              <header>
+                <div>
+                  <strong>实时预览</strong>
+                  <span id="marketPreviewLabel">欢迎页</span>
+                </div>
+                <a id="marketPreviewOpen" class="button small" target="_blank" href="/display">新窗口打开</a>
+              </header>
+              <div class="market-preview-viewport">
+                <iframe id="marketPreviewFrame" title="成果超市预览" src="/display"></iframe>
+              </div>
+            </article>
+          </section>
+          <section class="market-source-row">
+            <label class="stack">
+              <span>内容来源</span>
+              <select id="deployProject"></select>
+            </label>
+            <div id="deployCheck" class="deploy-check"></div>
+          </section>
+          <section class="market-add-panel">
+            <div class="field-head">
+              <span>加入展示项目</span>
+              <small>只显示当前内容来源中“已审核通过且启用”的资料；加入后会同步为扫码器可进入内容。</small>
+            </div>
+            <div class="form-grid five">
+              <select id="marketCandidate"></select>
+              <select id="marketItemCategory"></select>
+              <input id="marketItemIntro" placeholder="二维码上方简介，建议 30-80 字" />
+              <input id="marketItemSort" type="number" step="1" placeholder="排序" />
+              <button id="deployContent" class="button primary" type="button">加入成果超市</button>
+            </div>
+          </section>
+          <section class="market-add-panel market-create-panel">
+            <div class="field-head">
+              <span>新建展示项目</span>
+              <small>直接创建成果超市展示页，自动审核通过、加入当前主题，并同步为扫码器可进入内容。</small>
+            </div>
+            <div class="form-grid four">
+              <select id="marketNewCategory"></select>
+              <input id="marketNewTitle" placeholder="展示项目标题" />
+              <input id="marketNewSubtitle" placeholder="副标题/身份/荣誉说明" />
+              <input id="marketNewSort" type="number" step="1" placeholder="排序" />
+            </div>
+            <div class="form-grid two">
+              <input id="marketNewIntro" placeholder="二维码上方简介，建议 30-80 字" />
+              <input id="marketNewImageUrl" placeholder="封面图片 /uploads/..." />
+            </div>
+            <textarea id="marketNewBody" rows="5" placeholder="展示正文，可直接输入段落，也可粘贴简单 HTML"></textarea>
+            <div class="actions">
+              <button id="selectMarketNewAsset" class="button ghost" type="button">选择封面</button>
+              <button id="createMarketItem" class="button primary" type="button">创建并加入成果超市</button>
+            </div>
+          </section>
+          <div id="marketCategoryTabs" class="market-category-tabs"></div>
           <div class="list-controls">
-            <input id="deployPageSearch" placeholder="搜索可进入大屏的资料编号、标题、板块" />
+            <input id="deployPageSearch" placeholder="搜索展示项目、编号、简介" />
             <select id="deployPageModuleFilter">
-              <option value="">全部板块</option>
+              <option value="">全部主题</option>
             </select>
           </div>
-          <div id="deployPages" class="check-list"></div>
+          <div id="deployPages" class="market-item-grid"></div>
           <div id="deployPagesPager" class="list-pager"></div>
-          <button id="deployContent" class="button primary" type="button">发布到扫码大屏</button>
           <p id="deployStatus" class="status-text"></p>
         </section>
       </section>
@@ -794,12 +902,12 @@
             <article>
               <strong>账号与权限</strong>
               <span>维护管理员、专题管理员和老师账号，分配门户归属。</span>
-              <button class="button small primary" type="button" data-settings-view="users">进入账号管理</button>
+              <button class="button small primary" type="button" data-settings-view="users">进入人员管理</button>
             </article>
             <article>
-              <strong>扫码大屏</strong>
-              <span>配置欢迎页和扫码内容池，查看影响范围与可进入大屏内容。</span>
-              <button class="button small primary" type="button" data-settings-view="deploy">进入扫码大屏</button>
+              <strong>成果超市</strong>
+              <span>配置欢迎页和成果内容池，查看影响范围与可进入成果超市内容。</span>
+              <button class="button small primary" type="button" data-settings-view="deploy">进入成果超市</button>
             </article>
             <article>
               <strong>操作日志</strong>
@@ -830,6 +938,6 @@
     </main>
 
     <template id="emptyTpl"><div class="empty">暂无数据</div></template>
-    <script src="/static/admin.js?v=visual-preview-20260810a"></script>
+    <script src="/static/admin.js?v=achievement-market-editor-20260811e"></script>
   </body>
 </html>

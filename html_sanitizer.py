@@ -1,6 +1,7 @@
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
+import re
 
 
 ALLOWED_TAGS = {
@@ -25,6 +26,7 @@ ALLOWED_TAGS = {
     "strong",
     "u",
     "ul",
+    "video",
 }
 VOID_TAGS = {"br", "hr", "img"}
 DROP_CONTENT_TAGS = {"script", "style", "iframe", "object", "embed"}
@@ -35,10 +37,35 @@ ALLOWED_IMAGE_DATA_PREFIXES = (
 )
 
 
+_INLINE_STYLE_RULES = {
+    "width": re.compile(r"^\d+(\.\d+)?px$"),
+    "max-width": re.compile(r"^(\d+(\.\d+)?px|100%)$"),
+    "transform": re.compile(r"^rotate\(-?\d+(\.\d+)?deg\)$"),
+    "text-align": re.compile(r"^(left|center|right)$"),
+}
+
+
+def safe_inline_style(tag, value):
+    """只允许白名单内的内联样式属性（图片尺寸/旋转、文本对齐），防止样式注入。"""
+    keep = []
+    for part in str(value or "").split(";"):
+        if ":" not in part:
+            continue
+        prop, _, val = part.partition(":")
+        prop = prop.strip().lower()
+        val = val.strip().lower()
+        rule = _INLINE_STYLE_RULES.get(prop)
+        if not rule or not rule.match(val):
+            continue
+        if prop == "text-align" and tag not in ("p", "div", "span", "h2", "h3", "h4", "li"):
+            continue
+        keep.append(f"{prop}: {val}")
+    return "; ".join(keep)
+
+
 def safe_url(value, allow_data_image=False):
     text = str(value or "").strip()
-    if not text:
-        return ""
+    if not text:        return ""
     lowered = text.lower()
     if allow_data_image and lowered.startswith(ALLOWED_IMAGE_DATA_PREFIXES):
         return text
@@ -70,7 +97,7 @@ class RichHtmlSanitizer(HTMLParser):
         for name, value in attrs:
             name = str(name or "").lower()
             value = str(value or "")
-            if name.startswith("on") or name == "style":
+            if name.startswith("on"):
                 continue
             if tag == "a" and name == "href":
                 href = safe_url(value)
@@ -84,8 +111,18 @@ class RichHtmlSanitizer(HTMLParser):
                 if src:
                     clean_attrs.append(("src", src))
                 continue
+            if tag == "video" and name in ("src", "poster"):
+                src = safe_url(value, allow_data_image=True)
+                if src:
+                    clean_attrs.append((name, src))
+                continue
             if tag == "img" and name == "alt":
                 clean_attrs.append(("alt", value))
+                continue
+            if name == "style":
+                style = safe_inline_style(tag, value)
+                if style:
+                    clean_attrs.append(("style", style))
                 continue
             if name == "class":
                 clean_attrs.append(("class", value))

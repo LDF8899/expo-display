@@ -51,15 +51,15 @@ docker compose -f docker-compose.online.yml --env-file .env up -d --build
 ## Open
 
 ```text
-http://localhost:8080/display
-http://localhost:8080/admin
+http://localhost:18080/display
+http://localhost:18080/admin
 ```
 
 ## Check
 
 ```bash
 docker compose -f docker-compose.online.yml --env-file .env ps
-curl http://localhost:8080/api/ready
+curl http://localhost:18080/api/ready
 ```
 
 ## Stop
