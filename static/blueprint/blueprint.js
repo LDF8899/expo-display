@@ -42,7 +42,7 @@
     uploadTargetProjectId: ""
   };
   var ORDER = {
-    departments: ["mining-construction", "finance", "information", "medical-nursing", "tourism"],
+    departments: [],
     topics: [
       "modern-agriculture",
       "digital-tourism",
@@ -54,13 +54,7 @@
       "campus-culture"
     ]
   };
-  var DEPT_SUMMARY = {
-    "mining-construction": "智慧矿山、智能制造与现代建造",
-    "finance": "数字商贸、智慧物流与财务实践",
-    "information": "人工智能、网络安全与数字技术",
-    "medical-nursing": "临床护理、康养服务与急救教育",
-    "tourism": "数字文旅、酒店运营与烹饪技艺"
-  };
+  var DEPT_SUMMARY = {};
   var TOPIC_SUMMARY = {
     "modern-agriculture": "山地特色农业、乡村振兴与数字化生产服务",
     "digital-tourism": "数字文旅、酒店运营、烹饪技艺与服务场景",
@@ -279,6 +273,8 @@
 
     HOME_CARDS = [];
     (payload.cards || []).forEach(function (card) {
+      // 系部已由专题页面取代，仅保留专题卡片
+      if (card.kind === "departments") return;
       var kind = card.kind === "departments" ? "departments" : "topics";
       var id = String(card.id || "").trim();
       if (!id) return;
@@ -2576,8 +2572,8 @@
         '<span class="fusion-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
       var go = function () { openDetail(kind, id, 0); };
       article.addEventListener("click", function (e) {
+        // 编辑模式下仅拦截编辑字段/控件点击；卡片空白处仍可进入专题页
         if (INLINE_EDIT.enabled && e.target.closest("[data-inline-edit-field], .inline-edit-control")) return;
-        if (INLINE_EDIT.enabled && e.target.closest(".fusion-card")) return;
         if (e.target.closest(".dept-chip")) return;
         go();
       });
@@ -4404,10 +4400,6 @@
   /* ---------- 事件委托 ---------- */
   function bindDelegates() {
     $("backHome").addEventListener("click", function (e) { e.preventDefault(); goHome(); });
-    $("homeDepartmentSwitch").addEventListener("change", function (e) {
-      var id = e.target.value;
-      if (id) openDetail("departments", id, 0);
-    });
     $("departmentSwitch").addEventListener("change", function (e) {
       var id = e.target.value;
       var kind = e.target.dataset.kind || "departments";

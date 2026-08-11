@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], assignments: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", activeAssignmentId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", reviewStatusFilter: "pending", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], achievementMarket: null, activeMarketCategory: "", marketPendingWelcomeImageUrl: "", marketPreviewUrl: "/display", activeView: "dashboard", contentWorkspaceMode: "content", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "", deploySelectionProjectId: "", deploySelectedPageIds: [] };
+const state = { user: null, csrfToken: "", projects: [], users: [], pages: [], contentItems: [], assignments: [], lowcodeForms: [], lowcodeRecords: [], lowcodeVersions: [], lowcodeAssetDrafts: [], portalCompletionRows: [], activeLowcodeFormId: "", activeLowcodeDraftId: "", activeAssignmentId: "", editingLowcodeFormId: "", viewingLowcodeFormId: "", lowcodeFieldDrafts: [], lowcodeRecordStatusFilter: "all", reviewStatusFilter: "pending", qualityModuleRuleDrafts: {}, assets: [], contentAssetDrafts: [], achievementMarket: null, marketWorkspace: "overview", activeMarketCategory: "", editingMarketItemId: "", marketPendingWelcomeImageUrl: "", marketWelcomeCarouselImages: [], marketWelcomeCarouselSlides: [], marketCarouselDirty: false, marketPreviewUrl: "/display", activeView: "dashboard", contentWorkspaceMode: "content", editingProjectId: "", editingCode: "", editingContentItemId: "", assetTargetInput: "", assetReturnView: "", previewImageObjectUrl: "", moduleCoverage: null, contentQualityReport: null, assetArchiveReport: null, lowcodeReport: null, lowcodeTemplateQualityReport: null, generatedCode: "", preferredProjectId: "", preferredModuleKey: "", deploySelectionProjectId: "", deploySelectedPageIds: [] };
 const listState = {
   users: { page: 1, pageSize: 10 },
   projects: { page: 1, pageSize: 10 },
@@ -63,11 +63,11 @@ const contentAssetRoles = [
 ];
 const contentAssetRoleLabels = Object.fromEntries(contentAssetRoles.map((item) => [item.key, item.label]));
 const achievementMarketCategories = [
-  { key: "masters", label: "名师名匠", color: "#2563eb", theme: "blue" },
-  { key: "alumni", label: "优秀校友", color: "#16a34a", theme: "green" },
-  { key: "students", label: "优秀学生", color: "#d97706", theme: "yellow" },
-  { key: "innovation", label: "创新成果", color: "#ea580c", theme: "orange" },
-  { key: "honors", label: "荣誉资质", color: "#dc2626", theme: "red" },
+  { key: "masters", label: "名师名匠", color: "#2563eb", theme: "blue", description: "教学名师、技能大师与优秀教师团队" },
+  { key: "alumni", label: "优秀校友", color: "#16835b", theme: "green", description: "校友人物、成长经历与就业创业成果" },
+  { key: "students", label: "优秀学生", color: "#b7791f", theme: "yellow", description: "学生风采、竞赛经历与成长故事" },
+  { key: "innovation", label: "创新成果", color: "#c65d21", theme: "orange", description: "教学成果、创新项目与实践案例" },
+  { key: "honors", label: "荣誉资质", color: "#c2414b", theme: "red", description: "证书、奖项、资质认定与荣誉成果" },
 ];
 const achievementMarketCategoryLabels = Object.fromEntries(achievementMarketCategories.map((item) => [item.key, item.label]));
 const lowcodeMappingPresets = [
@@ -3850,9 +3850,41 @@ function renderDashboardBarChart(title, items, caption) {
   `;
 }
 
+function dashboardPortalTypeItems(portalRows) {
+  const counts = (portalRows || []).reduce((acc, row) => {
+    const key = normalizePortalType(row.project && row.project.portalType);
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  return [
+    { label: "学校门户", value: counts.school || 0, color: "#2563eb" },
+    { label: "系部门户", value: counts.department || 0, color: "#0891b2" },
+    { label: "专题门户", value: counts.topic || 0, color: "#7c3aed" },
+  ];
+}
+
+function dashboardLowcodeSummary(portalRows) {
+  return (portalRows || []).reduce((acc, row) => {
+    const stats = row.lowcodeStats || {};
+    ["draft", "pending", "approved", "rejected", "total"].forEach((key) => { acc[key] += dashboardNumber(stats[key]); });
+    return acc;
+  }, { draft: 0, pending: 0, approved: 0, rejected: 0, total: 0 });
+}
+
+function dashboardMarketCategoryItems(management) {
+  const values = Object.fromEntries(((management.achievementMarket || {}).categories || []).map((item) => [item.key, item]));
+  return achievementMarketCategories.map((category) => ({
+    label: category.label,
+    value: values[category.key] ? values[category.key].count : 0,
+    color: category.color,
+  }));
+}
+
 function renderDashboardVisualization(dashboard, portalRows) {
   const summary = dashboard.summary || {};
-  const categories = dashboard.categories || [];
+  const management = dashboard.management || {};
+  const content = management.contentItems || {};
+  const market = management.achievementMarket || {};
   const rows = portalRows || [];
   const portalStatus = rows.reduce((acc, row) => {
     const total = dashboardNumber(row.coverage && row.coverage.total);
@@ -3863,62 +3895,121 @@ function renderDashboardVisualization(dashboard, portalRows) {
     else acc.missing += 1;
     return acc;
   }, { ready: 0, review: 0, missing: 0 });
-  const portalTypeCounts = rows.reduce((acc, row) => {
-    const key = normalizePortalType(row.project && row.project.portalType);
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-  const lowcode = rows.reduce((acc, row) => {
-    const stats = row.lowcodeStats || {};
-    ["draft", "pending", "approved", "rejected", "total"].forEach((key) => { acc[key] += dashboardNumber(stats[key]); });
-    return acc;
-  }, { draft: 0, pending: 0, approved: 0, rejected: 0, total: 0 });
-  const pageTotal = dashboardNumber(summary.pages);
-  const enabledPages = dashboardNumber(summary.enabledPages);
-  const pendingPages = dashboardNumber(summary.pendingPages);
-  const rejectedPages = dashboardNumber(summary.rejectedPages);
-  const otherPages = Math.max(0, pageTotal - enabledPages - pendingPages - rejectedPages);
-  const typeItems = ["school", "department", "topic"].map((key, index) => ({
-    label: portalTypeLabel(key),
-    value: portalTypeCounts[key] || 0,
-    color: ["#1e6bb8", "#14746f", "#8a5a16"][index],
-  }));
-  const categoryItems = categories.map((item, index) => ({
-    label: item.name || "未分类",
-    value: item.count || 0,
-    color: ["#1e6bb8", "#14746f", "#8a5a16", "#8b5cf6", "#c94848", "#0f766e", "#64748b", "#b45309"][index % 8],
-  }));
+  const lowcode = dashboardLowcodeSummary(rows);
+  const contentTotal = dashboardNumber(content.total || summary.pages);
+  const contentPublished = dashboardNumber(content.published || summary.enabledPages);
+  const contentPending = dashboardNumber(content.pending || summary.pendingPages);
+  const contentRejected = dashboardNumber(content.rejected || summary.rejectedPages);
+  const contentDraft = Math.max(0, dashboardNumber(content.draft) || contentTotal - contentPublished - contentPending - contentRejected);
   return `
-    <section class="panel dashboard-visual-panel">
+    <section class="panel dashboard-visual-panel dashboard-management-visuals">
       <div class="panel-head">
         <div>
-          <h2>数据可视化看板</h2>
-          <p>把门户建设、资料审核、分类分布和模板填报进度集中到一屏，便于快速判断当前后台状态。</p>
+          <h2>管理数据分布</h2>
+          <p>按管理端现有项目、内容、成果超市、采集记录和扫码数据实时汇总。</p>
         </div>
         <div class="dashboard-visual-kpis">
-          <span>扫码 ${dashboardNumber(summary.scans)}</span>
-          <span>今日 ${dashboardNumber(summary.todayScans)}</span>
-          <span>在线 ${dashboardNumber(summary.clients)}</span>
+          <span>累计扫码 ${dashboardNumber(summary.scans)}</span>
+          <span>今日访问 ${dashboardNumber(summary.todayScans)}</span>
+          <span>大屏连接 ${dashboardNumber(summary.clients)}</span>
         </div>
       </div>
       <div class="dashboard-chart-grid">
-        ${renderDashboardDonut("资料发布率", enabledPages, pageTotal, "已通过并启用的板块资料", "#1e6bb8")}
-        ${renderDashboardDonut("门户就绪率", portalStatus.ready, rows.length, "标准板块全部通过的门户", "#14746f")}
-        ${renderDashboardStackedChart("板块审核状态", [
-          { label: "已发布", value: enabledPages, color: "#1e6bb8" },
-          { label: "待审核", value: pendingPages, color: "#d8a11f" },
-          { label: "已驳回", value: rejectedPages, color: "#c94848" },
-          { label: "其他", value: otherPages, color: "#94a3b8" },
-        ], "按当前权限范围统计")}
-        ${renderDashboardStackedChart("低代码填报", [
+        ${renderDashboardDonut("内容发布率", contentPublished, contentTotal, "已审核通过并启用的栏目内容", "#2563eb")}
+        ${renderDashboardDonut("成果上线率", market.enabled, market.total, "成果超市中已启用的展示项目", "#c65d21")}
+        ${renderDashboardDonut("门户完整率", portalStatus.ready, rows.length, "标准栏目已全部发布的门户", "#16835b")}
+        ${renderDashboardStackedChart("内容审核状态", [
+          { label: "已发布", value: contentPublished, color: "#2563eb" },
+          { label: "待审核", value: contentPending, color: "#d8a11f" },
+          { label: "已驳回", value: contentRejected, color: "#c2414b" },
+          { label: "草稿/其他", value: contentDraft, color: "#94a3b8" },
+        ], `共 ${contentTotal} 条栏目内容`)}
+        ${renderDashboardBarChart("成果超市分类", dashboardMarketCategoryItems(management), "与成果超市五类管理卡片颜色一致")}
+        ${renderDashboardBarChart("门户项目构成", dashboardPortalTypeItems(rows), "学校、系部与专题项目数量")}
+        ${renderDashboardStackedChart("资料采集状态", [
           { label: "草稿", value: lowcode.draft, color: "#94a3b8" },
           { label: "待审", value: lowcode.pending, color: "#d8a11f" },
-          { label: "通过", value: lowcode.approved, color: "#14746f" },
-          { label: "驳回", value: lowcode.rejected, color: "#c94848" },
-        ], `共 ${lowcode.total} 条模板记录`)}
-        ${renderDashboardBarChart("门户类型分布", typeItems, "学校门户和专题门户数量")}
-        ${renderDashboardBarChart("资料分类 Top 8", categoryItems, "按板块资料分类统计")}
+          { label: "通过", value: lowcode.approved, color: "#16835b" },
+          { label: "驳回", value: lowcode.rejected, color: "#c2414b" },
+        ], `共 ${lowcode.total} 条采集记录`)}
       </div>
+    </section>
+  `;
+}
+
+function renderDashboardModuleOverview(dashboard) {
+  const summary = dashboard.summary || {};
+  const management = dashboard.management || {};
+  const content = management.contentItems || {};
+  const market = management.achievementMarket || {};
+  const users = management.users || {};
+  const operations = dashboard.operations || {};
+  const pending = operations.pending || {};
+  const allowed = new Set(allowedViewOrder());
+  const modules = [
+    { view: "projects", label: "门户项目", value: summary.projects, copy: "学校、系部与专题门户", color: "#2563eb" },
+    { view: "pages", label: "栏目内容", value: content.total || summary.pages, copy: `${content.published || summary.enabledPages || 0} 条已发布`, color: "#0891b2" },
+    { view: "deploy", label: "成果超市", value: market.total, copy: `${market.enabled || 0} 个项目已上线`, color: "#c65d21" },
+    { view: "assets", label: "素材中心", value: operations.assets?.count || 0, copy: "图片、视频与附件", color: "#7c3aed" },
+    { view: "reviews", label: "审核中心", value: dashboardNumber(pending.pages) + dashboardNumber(pending.projects), copy: "当前待处理申请", color: "#d8a11f" },
+    { view: "users", label: "人员账号", value: users.total, copy: `${users.enabled || 0} 个账号启用`, color: "#16835b" },
+    { view: "logs", label: "操作日志", value: (dashboard.logs || []).length, copy: "最近管理操作", color: "#64748b" },
+  ].filter((item) => allowed.has(item.view));
+  return `
+    <section class="panel dashboard-module-panel">
+      <div class="panel-head">
+        <div>
+          <h2>管理模块总览</h2>
+          <p>数字来自当前账号可以管理的功能范围，点击卡片直接进入对应模块。</p>
+        </div>
+      </div>
+      <div class="dashboard-module-grid">
+        ${modules.map((item) => `
+          <button type="button" class="dashboard-module-card" style="--module-color:${item.color}" data-dashboard-view="${item.view}">
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${dashboardNumber(item.value)}</strong>
+            <small>${escapeHtml(item.copy)}</small>
+            <i aria-hidden="true">进入管理</i>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderDashboardStatusOverview(dashboard) {
+  const summary = dashboard.summary || {};
+  const operations = dashboard.operations || {};
+  const ready = operations.ready || {};
+  const checks = ready.checks || {};
+  const deployed = operations.deployed || {};
+  const pending = operations.pending || {};
+  const config = operations.config || {};
+  return `
+    <section class="dashboard-status-grid">
+      <article class="panel dashboard-status-card">
+        <span>待处理工作</span>
+        <strong>${dashboardNumber(pending.pages) + dashboardNumber(pending.projects)}</strong>
+        <p>内容待审 ${dashboardNumber(pending.pages)} · 门户配置待审 ${dashboardNumber(pending.projects)}</p>
+        ${allowedViewOrder().includes("reviews") ? `<button class="button small primary" type="button" data-dashboard-view="reviews">进入审核</button>` : ""}
+      </article>
+      <article class="panel dashboard-status-card">
+        <span>成果超市发布</span>
+        <strong>${deployed.contentProjectId ? "已发布" : "未发布"}</strong>
+        <p>${escapeHtml(deployed.contentProjectName || summary.contentDeployed || "尚未选择成果内容池")}</p>
+        ${allowedViewOrder().includes("deploy") ? `<button class="button small" type="button" data-dashboard-view="deploy">查看成果超市</button>` : ""}
+      </article>
+      <article class="panel dashboard-status-card">
+        <span>系统服务</span>
+        <strong>${ready.ok ? "运行正常" : "需要检查"}</strong>
+        <p>数据库 ${checks.database?.ok ? "正常" : "异常"} · 存储 ${checks.storage?.ok ? "正常" : "异常"} · ${checks.runtime?.onlineMode ? "线上模式" : "本地模式"}</p>
+      </article>
+      <article class="panel dashboard-status-card ${config.ok ? "" : "warn"}">
+        <span>上线配置</span>
+        <strong>${config.ok ? "可用" : "需处理"}</strong>
+        <p>${dashboardNumber((config.errors || []).length)} 个错误 · ${dashboardNumber((config.warnings || []).length)} 个提醒</p>
+        ${isAdmin() ? `<a class="button small" href="/api/admin/acceptance-report.json">导出验收报告</a>` : ""}
+      </article>
     </section>
   `;
 }
@@ -3929,81 +4020,51 @@ async function renderDashboard() {
     jsonApi("/api/admin/dashboard"),
     loadPortalCompletionRows(),
   ]);
+  const dashboard = data.dashboard || {};
+  const summary = dashboard.summary || {};
+  const management = dashboard.management || {};
+  const content = management.contentItems || {};
+  const market = management.achievementMarket || {};
+  const operations = dashboard.operations || {};
   const portalCompletionHtml = renderPortalCompletionOverview(portalRows);
   const portalPriorityHtml = renderPortalPriorityTasks(portalRows);
   const lowcodeTodoHtml = renderDashboardLowcodeTodos(portalRows);
-  const recentUpdatesHtml = renderDashboardRecentUpdates(data.dashboard || {});
-  const visualizationHtml = renderDashboardVisualization(data.dashboard || {}, portalRows);
-  const s = data.dashboard.summary || {};
-  const ops = data.dashboard.operations || {};
-  const ready = ops.ready || {};
-  const checks = ready.checks || {};
-  const deployed = ops.deployed || {};
-  const pending = ops.pending || {};
-  const config = ops.config || {};
-  const configIssues = [...(config.errors || []), ...(config.warnings || [])];
-  const readyOk = Boolean(ready.ok);
+  const recentUpdatesHtml = renderDashboardRecentUpdates(dashboard);
+  const visualizationHtml = renderDashboardVisualization(dashboard, portalRows);
+  const moduleOverviewHtml = renderDashboardModuleOverview(dashboard);
+  const statusOverviewHtml = renderDashboardStatusOverview(dashboard);
+  const pendingTotal = dashboardNumber(operations.pending?.pages) + dashboardNumber(operations.pending?.projects);
   $("dashboardView").innerHTML = `
-    <section class="panel portal-map">
-      <div class="panel-head">
+    <section class="dashboard-command-hero">
+      <div>
+        <p>MANAGEMENT OVERVIEW</p>
+        <h2>数字门户管理驾驶舱</h2>
+        <span>汇总当前管理端的门户项目、栏目内容、成果超市、素材、审核、发布与访问数据。</span>
+      </div>
+      <div class="dashboard-command-state">
+        <strong>${operations.ready?.ok ? "系统运行正常" : "系统需要检查"}</strong>
+        <span>数据更新时间 ${formatTime(operations.ready?.time || new Date().toISOString())}</span>
         <div>
-          <h2>展厅页面逻辑</h2>
-          <p>先维护学校门户，再维护各专题门户，最后补充每个板块的资料和特色入口。</p>
+          <a class="button" href="/departments">查看门户</a>
+          <a class="button" href="/display">查看成果超市</a>
         </div>
-        <a class="button ghost" href="/departments">预览学校门户</a>
-      </div>
-      <div class="portal-flow">
-        <article><span>1</span><strong>学校门户</strong><p>/departments：学校总入口，负责进入各专题门户。</p></article>
-        <article><span>2</span><strong>专题门户</strong><p>/departments/原系部 或 /topics/专题：展示专题概览、核心数据和板块入口。</p></article>
-        <article><span>3</span><strong>板块资料</strong><p>基本情况、专业设置、实训基地、产教融合、教学成果、视频资源。</p></article>
-        <article><span>4</span><strong>特色功能</strong><p>特色系统入口、特色数字资源、专题内容和扫码联动。</p></article>
-      </div>
-      <div class="portal-rules">
-        <article><strong>二维码边界</strong><p>只有 /display 欢迎页和 /departments 学校门户展示学校官网二维码；专题和扫码详情页保持内容沉浸。</p></article>
-        <article><strong>顶部栏统一</strong><p>学校标识、四个学校级栏目和二级页切换入口保持一致，减少观众在不同页面间的认知跳转。</p></article>
       </div>
     </section>
-    <div class="metric-grid">
-      <article class="metric"><span>门户</span><strong>${s.projects || 0}</strong></article>
-      <article class="metric"><span>板块资料</span><strong>${s.pages || 0}</strong></article>
-      <article class="metric"><span>待审核</span><strong>${s.pendingPages || 0}</strong></article>
-      <article class="metric"><span>已驳回</span><strong>${s.rejectedPages || 0}</strong></article>
+    <div class="dashboard-kpi-grid">
+      <article class="dashboard-kpi-card blue"><span>门户项目</span><strong>${dashboardNumber(summary.projects)}</strong><small>学校、系部和专题</small></article>
+      <article class="dashboard-kpi-card cyan"><span>栏目内容</span><strong>${dashboardNumber(content.total || summary.pages)}</strong><small>${dashboardNumber(content.published || summary.enabledPages)} 条已发布</small></article>
+      <article class="dashboard-kpi-card orange"><span>成果超市</span><strong>${dashboardNumber(market.total)}</strong><small>${dashboardNumber(market.enabled)} 个项目已上线</small></article>
+      <article class="dashboard-kpi-card purple"><span>素材资源</span><strong>${dashboardNumber(operations.assets?.count)}</strong><small>图片、视频和附件</small></article>
+      <article class="dashboard-kpi-card amber"><span>待处理</span><strong>${pendingTotal}</strong><small>内容与门户审核</small></article>
+      <article class="dashboard-kpi-card green"><span>扫码访问</span><strong>${dashboardNumber(summary.scans)}</strong><small>今日 ${dashboardNumber(summary.todayScans)} 次</small></article>
     </div>
     ${visualizationHtml}
+    ${moduleOverviewHtml}
+    ${statusOverviewHtml}
     ${portalPriorityHtml}
     ${lowcodeTodoHtml}
     ${recentUpdatesHtml}
     ${portalCompletionHtml}
-    <section class="panel ops-panel">
-      <div class="panel-head"><div><h2>运行状态</h2><p>${formatTime(ready.time)}</p></div><span class="badge ${readyOk ? "success" : "danger"}">${readyOk ? "Ready" : "异常"}</span></div>
-      <div class="ops-grid">
-        <article><span>数据库</span><strong>${checks.database && checks.database.ok ? "正常" : "异常"}</strong><small>${escapeHtml((checks.database && checks.database.backend) || "-")}</small></article>
-        <article><span>资源存储</span><strong>${checks.storage && checks.storage.ok ? "正常" : "异常"}</strong><small>${escapeHtml((checks.storage && checks.storage.backend) || "-")}</small></article>
-        <article><span>运行模式</span><strong>${checks.runtime && checks.runtime.onlineMode ? "线上" : "本地"}</strong><small>${escapeHtml((checks.runtime && checks.runtime.publicBaseUrl) || checks.runtime && checks.runtime.host || "-")}</small></article>
-        <article><span>资源数</span><strong>${ops.assets ? ops.assets.count : 0}</strong><small>${canReview() ? "权限范围" : "我的资源"}</small></article>
-      </div>
-    </section>
-    <section class="panel ops-panel">
-      <div class="panel-head">
-        <div><h2>上线配置</h2><p>公网部署前需要处理的配置项</p></div>
-        <div class="toolbar"><a class="button ghost" href="/api/admin/acceptance-report.json">导出验收报告</a><span class="badge ${config.ok ? "success" : "danger"}">${config.ok ? "可用" : "需处理"}</span></div>
-      </div>
-      ${configIssues.length ? `<div class="config-issue-list">${configIssues.map((item) => `
-        <article class="config-issue ${item.level === "error" ? "danger" : "warn"}">
-          <strong>${escapeHtml(item.code)}</strong>
-          <span>${escapeHtml(item.message)}</span>
-        </article>
-      `).join("")}</div>` : `<div class="empty">暂无上线配置风险</div>`}
-    </section>
-    <section class="panel ops-panel">
-      <div class="panel-head"><div><h2>成果超市状态</h2><p>当前 /display 欢迎页和成果内容池</p></div></div>
-      <div class="ops-grid">
-        <article><span>欢迎页项目</span><strong>${escapeHtml(deployed.welcomeProjectName || s.welcomeDeployed || "未部署")}</strong><small>ID ${deployed.welcomeProjectId || "-"} · ${formatTime(deployed.welcomeDeployedAt)}</small></article>
-        <article><span>成果内容池</span><strong>${escapeHtml(deployed.contentProjectName || s.contentDeployed || "未部署")}</strong><small>ID ${deployed.contentProjectId || "-"} · ${formatTime(deployed.contentDeployedAt)}</small></article>
-        <article><span>资料待审</span><strong>${pending.pages || 0}</strong><small>提交后需审核</small></article>
-        <article><span>门户待审</span><strong>${pending.projects || 0}</strong><small>配置变更</small></article>
-      </div>
-    </section>
   `;
 }
 function renderUsers() {
@@ -4051,9 +4112,9 @@ function renderProjects() {
       <td><span class="badge">${escapeHtml(portalTypeLabel(p.portalType))}</span> ${badge(p.configStatus || "approved")} ${p.deployed ? `<span class="badge success">欢迎页已发布</span><div class="muted">欢迎页发布时间：${formatTime(p.deployedAt)}</div>` : ""} ${p.contentDeployed ? `<span class="badge success">资料已发布</span><div class="muted">资料发布时间：${formatTime(p.contentDeployedAt)}</div>` : ""}</td>
       <td>${p.pageCount || 0} / 待审 ${p.pendingPageCount || 0}</td>
       <td><div class="actions">
-        ${canReview() ? `<button class="button small primary" type="button" data-project-assignments="${p.id}">分配老师任务</button>` : `<button class="button small primary" type="button" data-project-assignments="${p.id}">我的资料任务</button>`}
-        <button class="button small" type="button" data-project-pages="${p.id}">板块资料</button>
+        ${canReview() ? `<button class="button small primary" type="button" data-project-assignments="${p.id}">分配任务</button>` : `<button class="button small primary" type="button" data-project-assignments="${p.id}">我的资料任务</button>`}
         ${portalPreviewUrl(p) ? `<a class="button small" href="${escapeHtml(portalPreviewUrl(p))}">前台预览</a>` : ""}
+        <button class="button small" type="button" data-project-logs="${p.id}">修改日志</button>
         ${portalPreviewUrl(p) ? `<a class="button small primary" href="${escapeHtml(portalVisualEditUrl(p))}">可视化编辑</a>` : ""}
       </div></td>
     </tr>`).join("") : `<tr><td colspan="5" class="empty">${escapeHtml(emptyText)}</td></tr>`;
@@ -4312,12 +4373,39 @@ function renderVersionHistory(containerId, versions, type) {
     </article>
   `).join("") : `<div class="empty">暂无版本历史</div>`;
 }
+async function showProjectLogs(projectId) {
+  const data = await jsonApi(`/api/admin/project-logs?projectId=${encodeURIComponent(projectId)}`);
+  $("projectHistoryTitle").textContent = `修改日志：${data.project ? data.project.name : projectId}`;
+  const actionLabels = {
+    create_project: "新建项目",
+    copy_project: "复制项目",
+    update_project: "更新项目配置",
+    submit_project_config: "提交项目配置",
+    deploy_welcome: "部署欢迎页",
+    deploy_content: "部署内容",
+    delete_project: "删除项目",
+    submit_version: "提交版本",
+  };
+  const list = $("projectHistory");
+  const logs = data.logs || [];
+  list.innerHTML = logs.length ? logs.map((item) => `
+    <article class="history-item">
+      <div class="history-head">
+        <strong>${escapeHtml(actionLabels[item.action] || item.action)}</strong>
+        <span>${escapeHtml(item.username || "-")} · ${formatTime(item.createdAt)}</span>
+      </div>
+      ${item.detail ? `<p class="muted">${escapeHtml(item.detail)}</p>` : ""}
+      ${item.kind === "version" && item.reviewedBy ? `<div class="muted">审核：${escapeHtml(item.reviewedBy)} / ${formatTime(item.reviewedAt)}</div>` : ""}
+      ${item.ip ? `<div class="muted">IP ${escapeHtml(item.ip)}</div>` : ""}
+    </article>
+  `).join("") : `<div class="empty">暂无修改记录</div>`;
+  $("projectHistoryPanel").hidden = false;
+}
 async function showProjectHistory(projectId) {
   const data = await jsonApi(`/api/projects/${projectId}/versions`);
   $("projectHistoryTitle").textContent = `门户历史：${data.project ? data.project.name : projectId}`;
   renderVersionHistory("projectHistory", data.versions || [], "project");
   $("projectHistoryPanel").hidden = false;
-  $("projectHistoryPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 async function showPageHistory(code) {
   const projectId = $("projectSelect").value;
@@ -4325,7 +4413,6 @@ async function showPageHistory(code) {
   $("pageHistoryTitle").textContent = `板块资料历史：${code}`;
   renderVersionHistory("pageHistory", data.versions || [], "page");
   $("pageHistoryPanel").hidden = false;
-  $("pageHistoryPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 function reviewLowcodeSourceHtml(record) {
   if (!record || !record.recordId) return "";
@@ -4388,19 +4475,21 @@ async function renderDeploy() {
   const project = selectedDeployProject() || state.projects.find((item) => String(item.id) === String(projectId)) || null;
   const data = await jsonApi(`/api/achievement-market?projectId=${encodeURIComponent(projectId || 0)}`);
   state.achievementMarket = data;
-  if (!state.activeMarketCategory && data.categories && data.categories.length) state.activeMarketCategory = "";
   renderMarketWelcome(data.config || {});
   renderMarketSource(project, data);
   renderMarketAddPanel(data);
   renderMarketCategoryTabs(data.categories || []);
+  renderMarketOverview(data);
+  renderMarketWorkspace(data);
   const query = inputValue("deployPageSearch");
-  const categoryFilter = inputValue("deployPageModuleFilter") || state.activeMarketCategory;
+  const categoryFilter = state.activeMarketCategory;
   const items = (data.items || []).filter((item) => {
     if (categoryFilter && item.categoryKey !== categoryFilter) return false;
     return includesQuery([item.code, item.title, item.subtitle, item.intro, item.categoryLabel, item.projectName], query);
   });
   const page = pagedList("deployPages", items);
   renderPager("deployPagesPager", "deployPages", items.length, "个成果超市项目");
+  setText($("marketCategoryCount"), `${items.length} 个项目`);
   $("deployPages").innerHTML = page.items.length ? page.items.map(renderMarketItemCard).join("") : `<div class="empty">当前主题下暂无展示项目</div>`;
 }
 function marketCategoryOptions(selected = "") {
@@ -4413,7 +4502,67 @@ function renderMarketWelcome(config) {
   $("marketWelcomeIntro").value = config.welcomeIntro || "";
   $("marketWelcomeImageUrl").value = imageUrl;
   $("marketWelcomeNote").value = config.welcomeNote || "";
+  if (!state.marketCarouselDirty) {
+    state.marketWelcomeCarouselImages = Array.isArray(config.welcomeCarouselImages)
+      ? config.welcomeCarouselImages.map((url) => String(url || "").trim()).filter(Boolean)
+      : [];
+    state.marketWelcomeCarouselSlides = Array.isArray(config.welcomeCarouselSlides)
+      ? config.welcomeCarouselSlides.map((slide) => ({
+          imageUrl: String(slide?.imageUrl || slide?.url || "").trim(),
+          meta: String(slide?.meta || ""),
+          title: String(slide?.title || ""),
+          body: String(slide?.body || ""),
+          customText: Boolean(slide?.customText),
+        })).filter((slide) => slide.imageUrl)
+      : [];
+  }
+  renderMarketWelcomeImage(imageUrl);
+  renderMarketCarouselList();
   renderMarketPreview();
+}
+function renderMarketWelcomeImage(url = "") {
+  const preview = $("marketWelcomeImagePreview");
+  if (!preview) return;
+  preview.innerHTML = url
+    ? `<img src="${escapeHtml(url)}" alt="欢迎页图片预览" />`
+    : `<span>尚未选择左侧大图</span>`;
+}
+function cleanMarketCarouselImages(images = state.marketWelcomeCarouselImages) {
+  return Array.from(new Set((images || []).map((url) => String(url || "").trim()).filter(Boolean))).slice(0, 30);
+}
+function cleanMarketCarouselSlides() {
+  const byUrl = new Map((state.marketWelcomeCarouselSlides || []).map((slide) => [String(slide.imageUrl || "").trim(), slide]));
+  return cleanMarketCarouselImages().map((imageUrl) => {
+    const slide = byUrl.get(imageUrl);
+    return slide ? { ...slide, imageUrl } : { imageUrl, meta: "", title: "", body: "", customText: false };
+  });
+}
+function renderMarketCarouselList() {
+  const images = state.marketWelcomeCarouselImages || [];
+  setText($("marketCarouselCount"), `${cleanMarketCarouselImages(images).length} 张`);
+  $("marketCarouselList").innerHTML = images.length ? images.map((url, index) => `
+    <article class="market-carousel-item">
+      <div class="market-carousel-thumb">${url ? `<img src="${escapeHtml(url)}" alt="轮播图 ${index + 1}" />` : `<span>${index + 1}</span>`}</div>
+      <label>
+        <span>第 ${index + 1} 张</span>
+        <input value="${escapeHtml(url)}" placeholder="图片地址 /uploads/..." data-market-carousel-url="${index}" />
+      </label>
+      <div class="actions">
+        <button class="button small" type="button" data-market-carousel-action="up" data-market-carousel-index="${index}" ${index === 0 ? "disabled" : ""}>上移</button>
+        <button class="button small" type="button" data-market-carousel-action="down" data-market-carousel-index="${index}" ${index === images.length - 1 ? "disabled" : ""}>下移</button>
+        <button class="button small danger" type="button" data-market-carousel-action="remove" data-market-carousel-index="${index}">删除</button>
+      </div>
+    </article>
+  `).join("") : `<div class="empty">尚未添加轮播图，前台暂时沿用当前项目的轮播内容。</div>`;
+}
+function addMarketCarouselImage(url = "") {
+  if (state.marketWelcomeCarouselImages.length >= 30) {
+    setStatus($("deployStatus"), "轮播图最多可添加 30 张", "error");
+    return;
+  }
+  state.marketWelcomeCarouselImages.push(String(url || "").trim());
+  state.marketCarouselDirty = true;
+  renderMarketCarouselList();
 }
 function setMarketPreview(url, label = "欢迎页") {
   state.marketPreviewUrl = url || "/display";
@@ -4422,10 +4571,64 @@ function setMarketPreview(url, label = "欢迎页") {
   if ($("marketPreviewLabel")) $("marketPreviewLabel").textContent = label;
 }
 function renderMarketPreview() {
-  const categoryKey = state.activeMarketCategory || "";
+  const categoryKey = state.marketWorkspace === "category" ? state.activeMarketCategory : "";
   const label = categoryKey ? `${achievementMarketCategoryLabels[categoryKey] || "主题"}展示页` : "欢迎页";
   const url = categoryKey ? `/display?market=${encodeURIComponent(categoryKey)}` : "/display";
   setMarketPreview(url, label);
+}
+function marketCategoryByKey(key) {
+  return achievementMarketCategories.find((category) => category.key === key) || null;
+}
+function marketCategoryCount(data, key) {
+  const category = (data.categories || []).find((item) => item.key === key);
+  return Number(category ? category.count : 0);
+}
+function renderMarketOverview(data) {
+  setText($("marketTotalCount"), `${(data.items || []).length} 个项目`);
+  $("marketCategoryGrid").innerHTML = achievementMarketCategories.map((category, index) => `
+    <button class="market-category-entry" type="button" style="--color:${category.color}" data-market-open="category" data-market-category="${category.key}">
+      <span class="market-category-number">0${index + 1}</span>
+      <span class="market-category-copy">
+        <strong>${category.label}</strong>
+        <span>${category.description}</span>
+      </span>
+      <span class="market-category-total">${marketCategoryCount(data, category.key)}<small>项目</small></span>
+    </button>
+  `).join("");
+}
+function syncMarketAdminUrl() {
+  const params = new URLSearchParams();
+  params.set("view", "deploy");
+  if (state.marketWorkspace === "welcome") params.set("market", "welcome");
+  if (state.marketWorkspace === "category" && state.activeMarketCategory) params.set("market", state.activeMarketCategory);
+  history.replaceState(null, "", `${appBasePath()}?${params.toString()}`);
+}
+function renderMarketWorkspace() {
+  const isWelcome = state.marketWorkspace === "welcome";
+  const isCategory = state.marketWorkspace === "category" && Boolean(marketCategoryByKey(state.activeMarketCategory));
+  $("marketOverview").hidden = isWelcome || isCategory;
+  $("marketWelcomeWorkspace").hidden = !isWelcome;
+  $("marketCategoryWorkspace").hidden = !isCategory;
+  if (isCategory) {
+    const category = marketCategoryByKey(state.activeMarketCategory);
+    setText($("marketCategoryEyebrow"), "成果超市分类");
+    setText($("marketCategoryHeading"), category.label);
+    setText($("marketCategoryIntro"), category.description);
+    setText($("marketCreateTitle"), `添加${category.label}项目`);
+    $("marketNewCategory").value = category.key;
+    $("marketItemCategory").value = category.key;
+  }
+  renderMarketPreview();
+  syncMarketAdminUrl();
+}
+function openMarketWorkspace(workspace, categoryKey = "") {
+  state.marketWorkspace = workspace;
+  if (workspace === "category") {
+    state.activeMarketCategory = marketCategoryByKey(categoryKey) ? categoryKey : achievementMarketCategories[0].key;
+    resetListPage("deployPages");
+  }
+  renderMarketWorkspace();
+  if (workspace === "category") renderDeploy();
 }
 function renderMarketSource(project, data) {
   const counts = achievementMarketCategories.map((category) => {
@@ -4441,9 +4644,10 @@ function renderMarketSource(project, data) {
   `;
 }
 function renderMarketAddPanel(data) {
-  $("marketItemCategory").innerHTML = marketCategoryOptions("innovation");
-  $("marketNewCategory").innerHTML = marketCategoryOptions(state.activeMarketCategory || "innovation");
-  $("deployPageModuleFilter").innerHTML = `<option value="">全部主题</option>${marketCategoryOptions(state.activeMarketCategory)}`;
+  const categoryKey = state.activeMarketCategory || "innovation";
+  $("marketItemCategory").innerHTML = marketCategoryOptions(categoryKey);
+  $("marketNewCategory").innerHTML = marketCategoryOptions(categoryKey);
+  $("deployPageModuleFilter").innerHTML = `<option value="">全部主题</option>${marketCategoryOptions(categoryKey)}`;
   const candidates = data.candidates || [];
   const noCandidateLabel = (data.items || []).length
     ? "可加入项目已全部加入，下方可直接编辑"
@@ -4453,7 +4657,11 @@ function renderMarketAddPanel(data) {
     : `<option value="">${escapeHtml(noCandidateLabel)}</option>`;
   $("deployContent").disabled = !candidates.length;
   const selected = candidates[0];
-  if (selected) $("marketItemCategory").value = selected.categoryKey || "innovation";
+  if (selected && !state.activeMarketCategory) $("marketItemCategory").value = selected.categoryKey || "innovation";
+  if (state.activeMarketCategory) {
+    $("marketItemCategory").value = state.activeMarketCategory;
+    $("marketNewCategory").value = state.activeMarketCategory;
+  }
 }
 function resetMarketCreateForm() {
   $("marketNewTitle").value = "";
@@ -4464,41 +4672,112 @@ function resetMarketCreateForm() {
   $("marketNewSort").value = "";
 }
 function renderMarketCategoryTabs(categories) {
-  $("marketCategoryTabs").innerHTML = [
-    `<button type="button" class="${!state.activeMarketCategory ? "active" : ""}" data-market-category="">全部</button>`,
-    ...achievementMarketCategories.map((category) => {
-      const found = categories.find((item) => item.key === category.key);
-      return `<button type="button" class="${state.activeMarketCategory === category.key ? "active" : ""}" style="--color:${category.color}" data-market-category="${category.key}">${category.label}<span>${found ? found.count : 0}</span></button>`;
-    })
-  ].join("");
+  $("marketCategoryTabs").innerHTML = achievementMarketCategories.map((category) => {
+    const found = categories.find((item) => item.key === category.key);
+    return `<button type="button" class="${state.activeMarketCategory === category.key ? "active" : ""}" style="--color:${category.color}" data-market-category="${category.key}">${category.label}<span>${found ? found.count : 0}</span></button>`;
+  }).join("");
 }
 function renderMarketItemCard(item) {
   const qrUrl = new URL(item.qrPath || buildQrUrl(item.projectId, item.code), location.origin).toString();
   const qrApi = `/api/qr?data=${encodeURIComponent(qrUrl)}`;
   const previewUrl = item.qrPath || buildQrUrl(item.projectId, item.code);
+  const detailEditUrl = `${previewUrl}${previewUrl.includes("?") ? "&" : "?"}edit=1&marketItem=${encodeURIComponent(item.id)}`;
   return `
     <article class="market-item-card" style="--color:${escapeHtml(item.color || "#2563eb")}">
       <div class="market-item-media">${item.imageUrl ? `<img src="${escapeHtml(item.imageUrl)}" alt="" />` : `<span>${escapeHtml(item.categoryLabel || "成果")}</span>`}</div>
       <div class="market-item-body">
         <header><span>${escapeHtml(item.categoryLabel)}</span><strong>${escapeHtml(item.title)}</strong></header>
-        <p>${escapeHtml(item.intro || item.subtitle || "可在这里填写二维码上方简介。")}</p>
+        <p>${escapeHtml(item.intro || item.subtitle || "可在详情中填写项目简介。")}</p>
         <small>${escapeHtml(item.projectName || "-")} · ${escapeHtml(item.code)} · 排序 ${Number(item.sortOrder || 0)}</small>
-        <div class="market-item-edit">
-          <select data-market-field="categoryKey" data-market-id="${item.id}">${marketCategoryOptions(item.categoryKey)}</select>
-          <input data-market-field="intro" data-market-id="${item.id}" value="${escapeHtml(item.intro || "")}" placeholder="二维码上方简介" />
-          <input data-market-field="sortOrder" data-market-id="${item.id}" type="number" step="1" value="${Number(item.sortOrder || 0)}" />
-          <label class="check-inline"><input data-market-field="enabled" data-market-id="${item.id}" type="checkbox" ${item.enabled ? "checked" : ""} /> 启用</label>
-        </div>
         <div class="actions">
+          <a class="button small primary" href="${escapeHtml(detailEditUrl)}">详情</a>
           <button class="button small" type="button" data-market-preview="${escapeHtml(previewUrl)}" data-market-preview-label="${escapeHtml(item.title)}">预览</button>
           <a class="button small" target="_blank" rel="noopener" href="${escapeHtml(qrApi)}">二维码</a>
-          <button class="button small primary" type="button" data-market-save="${item.id}">保存</button>
           <button class="button small danger" type="button" data-market-delete="${item.id}">移除</button>
         </div>
       </div>
     </article>
   `;
 }
+function marketItemById(id) {
+  return (state.achievementMarket && state.achievementMarket.items || []).find((item) => String(item.id) === String(id)) || null;
+}
+function setMarketRichBody(html) {
+  $("marketRichBody").innerHTML = html || "";
+  $("marketEditBody").value = $("marketRichBody").innerHTML;
+}
+function syncMarketRichBody() {
+  $("marketEditBody").value = $("marketRichBody").innerHTML;
+}
+function openMarketItemEditor(id) {
+  const item = marketItemById(id);
+  if (!item) return;
+  state.editingMarketItemId = String(id);
+  $("marketItemEditorTitle").textContent = `项目详情：${item.title || "未命名项目"}`;
+  $("marketEditTitle").value = item.title || "";
+  $("marketEditSubtitle").value = item.subtitle || "";
+  $("marketEditIntro").value = item.intro || "";
+  $("marketEditImageUrl").value = item.imageUrl || "";
+  $("marketEditCategory").innerHTML = marketCategoryOptions(item.categoryKey);
+  $("marketEditCategory").value = item.categoryKey || state.activeMarketCategory || "innovation";
+  $("marketEditSort").value = Number(item.sortOrder || 0);
+  $("marketEditEnabled").checked = Boolean(item.enabled);
+  setMarketRichBody(item.body || "");
+  $("marketItemEditorPanel").hidden = false;
+}
+$("closeMarketItemEditor").addEventListener("click", () => { $("marketItemEditorPanel").hidden = true; });
+$("marketItemEditorPanel").addEventListener("click", (event) => { if (event.target === $("marketItemEditorPanel")) $("marketItemEditorPanel").hidden = true; });
+$("selectMarketEditAsset").addEventListener("click", () => openAssetPicker("marketEditImageUrl"));
+$("marketRichBody").addEventListener("input", syncMarketRichBody);
+$("marketRichBody").addEventListener("paste", () => setTimeout(syncMarketRichBody, 0));
+document.querySelectorAll("[data-market-block]").forEach((button) => {
+  button.addEventListener("click", () => {
+    $("marketRichBody").focus();
+    document.execCommand("formatBlock", false, button.dataset.marketBlock);
+    syncMarketRichBody();
+  });
+});
+document.querySelectorAll("[data-market-command]").forEach((button) => {
+  button.addEventListener("click", () => {
+    $("marketRichBody").focus();
+    document.execCommand(button.dataset.marketCommand, false, null);
+    syncMarketRichBody();
+  });
+});
+document.querySelectorAll("[data-market-insert]").forEach((button) => {
+  button.addEventListener("click", () => {
+    $("marketRichBody").focus();
+    const type = button.dataset.marketInsert;
+    if (type === "quote") document.execCommand("insertHTML", false, "<blockquote>请输入引用内容</blockquote>");
+    if (type === "divider") document.execCommand("insertHTML", false, "<hr>");
+    if (type === "image") {
+      const url = prompt("请输入图片地址，例如 /uploads/example.jpg");
+      if (url) document.execCommand("insertHTML", false, `<figure><img src="${escapeHtml(url)}" alt=""><figcaption>图片说明</figcaption></figure>`);
+    }
+    syncMarketRichBody();
+  });
+});
+$("saveMarketItem").addEventListener("click", async () => {
+  const itemId = state.editingMarketItemId;
+  if (!itemId) return;
+  try {
+    await jsonApi(`/api/achievement-market/items/${itemId}`, putBody({
+      title: $("marketEditTitle").value,
+      subtitle: $("marketEditSubtitle").value,
+      intro: $("marketEditIntro").value,
+      imageUrl: $("marketEditImageUrl").value,
+      body: $("marketEditBody").value,
+      categoryKey: $("marketEditCategory").value,
+      sortOrder: $("marketEditSort").value,
+      enabled: $("marketEditEnabled").checked,
+    }));
+    $("marketItemEditorPanel").hidden = true;
+    setStatus($("deployStatus"), "项目详情已保存，并同步展示范围", "success");
+    await renderDeploy();
+  } catch (err) {
+    setStatus($("deployStatus"), err.message, "error");
+  }
+});
 async function loadAssets() {
   const data = await jsonApi("/api/assets");
   state.assets = data.assets || [];
@@ -4541,6 +4820,14 @@ async function openAssetPicker(inputId) {
 }
 function useAsset(asset) {
   if (!asset || !state.assetTargetInput) return;
+  if (state.assetTargetInput === "__marketCarouselManager") {
+    addMarketCarouselImage(asset.url);
+    const returnView = state.assetReturnView || "deploy";
+    state.assetTargetInput = "";
+    state.assetReturnView = "";
+    showView(returnView);
+    return;
+  }
   if (state.assetTargetInput === "__contentAssetManager") {
     const role = looksLikeAttachmentAsset(asset) ? "attachment" : looksLikeVideoAsset(asset) ? "video" : state.contentAssetDrafts.length ? "gallery" : "cover";
     addContentAsset({ assetId: asset.id, url: asset.url, caption: $("contentTitle")?.value.trim() || asset.originalFilename || "", role, mimeType: asset.mimeType || "" });
@@ -4932,7 +5219,6 @@ $("exportLowcodeReport").addEventListener("click", exportLowcodeReportCsv);
 $("exportLowcodeReminderReport").addEventListener("click", exportLowcodeReminderReportCsv);
 $("deployProject").addEventListener("change", () => {
   resetListPage("deployPages");
-  state.activeMarketCategory = "";
   renderDeploy();
 });
 $("filterLogs").addEventListener("click", () => {
@@ -5006,9 +5292,93 @@ $("settingsView").addEventListener("click", async (event) => {
 $("marketCandidate").addEventListener("change", (event) => {
   const option = event.target.selectedOptions && event.target.selectedOptions[0];
   const category = option ? option.dataset.category : "";
-  if (category) $("marketItemCategory").value = category;
+  if (category && !state.activeMarketCategory) $("marketItemCategory").value = category;
 });
+$("marketOverview").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-market-open]");
+  if (!button) return;
+  openMarketWorkspace(button.dataset.marketOpen, button.dataset.marketCategory || "");
+});
+document.querySelectorAll("[data-market-back]").forEach((button) => button.addEventListener("click", () => {
+  state.marketWorkspace = "overview";
+  state.activeMarketCategory = "";
+  renderMarketWorkspace();
+}));
+$("openMarketCreate").addEventListener("click", () => {
+  const category = marketCategoryByKey(state.activeMarketCategory);
+  if (!category) return;
+  resetMarketCreateForm();
+  $("marketNewCategory").value = category.key;
+  $("marketCreatePanel").hidden = false;
+  $("marketNewTitle").focus();
+});
+$("closeMarketCreate").addEventListener("click", () => { $("marketCreatePanel").hidden = true; });
+$("marketCreatePanel").addEventListener("click", (event) => {
+  if (event.target === $("marketCreatePanel")) $("marketCreatePanel").hidden = true;
+});
+function bindMarketImageUpload(buttonId, fileId, targetId, afterUpload = null) {
+  $(buttonId).addEventListener("click", () => $(fileId).click());
+  $(fileId).addEventListener("change", async () => {
+    const file = $(fileId).files && $(fileId).files[0];
+    if (!file) return;
+    try {
+      const url = await uploadImage(file, $("deployStatus"));
+      $(targetId).value = url;
+      $(fileId).value = "";
+      if (afterUpload) afterUpload(url);
+    } catch (err) {
+      setStatus($("deployStatus"), err.message, "error");
+    }
+  });
+}
+bindMarketImageUpload("uploadMarketWelcomeImage", "marketWelcomeImageFile", "marketWelcomeImageUrl", (url) => {
+  state.marketPendingWelcomeImageUrl = url;
+  renderMarketWelcomeImage(url);
+});
+bindMarketImageUpload("uploadMarketNewImage", "marketNewImageFile", "marketNewImageUrl");
+bindMarketImageUpload("uploadMarketEditImage", "marketEditImageFile", "marketEditImageUrl");
+$("marketWelcomeImageUrl").addEventListener("input", (event) => renderMarketWelcomeImage(event.target.value.trim()));
 $("selectMarketWelcomeAsset").addEventListener("click", () => openAssetPicker("marketWelcomeImageUrl"));
+$("addMarketCarouselImage").addEventListener("click", () => {
+  addMarketCarouselImage();
+  const inputs = $("marketCarouselList").querySelectorAll("[data-market-carousel-url]");
+  if (inputs.length) inputs[inputs.length - 1].focus();
+});
+$("uploadMarketCarouselImages").addEventListener("click", () => $("marketCarouselImageFiles").click());
+$("marketCarouselImageFiles").addEventListener("change", async () => {
+  const files = Array.from($("marketCarouselImageFiles").files || []);
+  if (!files.length) return;
+  try {
+    await uploadImages(files, $("deployStatus"), (url) => addMarketCarouselImage(url));
+    $("marketCarouselImageFiles").value = "";
+    setStatus($("deployStatus"), `已上传 ${files.length} 张轮播图，保存欢迎页后生效`, "success");
+  } catch (err) {
+    setStatus($("deployStatus"), err.message, "error");
+  }
+});
+$("selectMarketCarouselAsset").addEventListener("click", () => openAssetPicker("__marketCarouselManager"));
+$("marketCarouselList").addEventListener("input", (event) => {
+  const input = event.target.closest("[data-market-carousel-url]");
+  if (!input) return;
+  state.marketWelcomeCarouselImages[Number(input.dataset.marketCarouselUrl)] = input.value;
+  state.marketCarouselDirty = true;
+  setText($("marketCarouselCount"), `${cleanMarketCarouselImages().length} 张`);
+});
+$("marketCarouselList").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-market-carousel-action]");
+  if (!button) return;
+  const index = Number(button.dataset.marketCarouselIndex);
+  const action = button.dataset.marketCarouselAction;
+  if (action === "remove") state.marketWelcomeCarouselImages.splice(index, 1);
+  if (action === "up" && index > 0) {
+    [state.marketWelcomeCarouselImages[index - 1], state.marketWelcomeCarouselImages[index]] = [state.marketWelcomeCarouselImages[index], state.marketWelcomeCarouselImages[index - 1]];
+  }
+  if (action === "down" && index < state.marketWelcomeCarouselImages.length - 1) {
+    [state.marketWelcomeCarouselImages[index + 1], state.marketWelcomeCarouselImages[index]] = [state.marketWelcomeCarouselImages[index], state.marketWelcomeCarouselImages[index + 1]];
+  }
+  state.marketCarouselDirty = true;
+  renderMarketCarouselList();
+});
 $("selectMarketNewAsset").addEventListener("click", () => openAssetPicker("marketNewImageUrl"));
 $("createMarketItem").addEventListener("click", async () => {
   const projectId = $("deployProject").value || (state.achievementMarket && state.achievementMarket.activeProjectId) || 0;
@@ -5037,6 +5407,7 @@ $("createMarketItem").addEventListener("click", async () => {
     state.achievementMarket = data;
     const item = data.item || {};
     resetMarketCreateForm();
+    $("marketCreatePanel").hidden = true;
     setStatus($("deployStatus"), `已创建“${item.title || title}”，并加入成果超市`, "success");
     if (item.categoryKey) state.activeMarketCategory = item.categoryKey;
     if (item.qrPath) setMarketPreview(item.qrPath, item.title || title);
@@ -5046,13 +5417,8 @@ $("createMarketItem").addEventListener("click", async () => {
   }
 });
 $("marketPreviewTheme").addEventListener("click", () => {
-  if (!state.activeMarketCategory) {
-    const first = achievementMarketCategories[0];
-    state.activeMarketCategory = first ? first.key : "";
-    if ($("deployPageModuleFilter")) $("deployPageModuleFilter").value = state.activeMarketCategory;
-  }
-  renderMarketPreview();
-  renderDeploy();
+  const categoryKey = state.activeMarketCategory || achievementMarketCategories[0].key;
+  window.open(`/display?market=${encodeURIComponent(categoryKey)}`, "_blank", "noopener");
 });
 $("marketPublish").addEventListener("click", async () => {
   try {
@@ -5069,18 +5435,16 @@ $("marketPublish").addEventListener("click", async () => {
 $("marketCategoryTabs").addEventListener("click", (event) => {
   const button = event.target.closest("[data-market-category]");
   if (!button) return;
-  state.activeMarketCategory = button.dataset.marketCategory || "";
-  $("deployPageModuleFilter").value = state.activeMarketCategory;
-  resetListPage("deployPages");
-  renderMarketPreview();
-  renderDeploy();
+  openMarketWorkspace("category", button.dataset.marketCategory || "");
 });
 $("deployPages").addEventListener("click", async (event) => {
+  const editButton = event.target.closest("[data-market-edit]");
   const previewButton = event.target.closest("[data-market-preview]");
   const saveButton = event.target.closest("[data-market-save]");
   const deleteButton = event.target.closest("[data-market-delete]");
+  if (editButton) { openMarketItemEditor(editButton.dataset.marketEdit); return; }
   if (previewButton) {
-    setMarketPreview(previewButton.dataset.marketPreview, previewButton.dataset.marketPreviewLabel || "项目预览");
+    window.open(previewButton.dataset.marketPreview, "_blank", "noopener");
     return;
   }
   if (!saveButton && !deleteButton) return;
@@ -5225,6 +5589,11 @@ $("usersTable").addEventListener("click", async (event) => {
 });
 
 $("dashboardView").addEventListener("click", async (event) => {
+  const viewButton = event.target.closest("[data-dashboard-view]");
+  if (viewButton) {
+    await showView(viewButton.dataset.dashboardView);
+    return;
+  }
   const exportCompletion = event.target.closest("[data-export-portal-completion]");
   if (exportCompletion) {
     exportPortalCompletionCsv();
@@ -5271,6 +5640,7 @@ $("projectsTable").addEventListener("click", async (event) => {
   const pages = event.target.closest("[data-project-pages]");
   const assignments = event.target.closest("[data-project-assignments]");
   const historyButton = event.target.closest("[data-project-history]");
+  const logsButton = event.target.closest("[data-project-logs]");
   const del = event.target.closest("[data-project-delete]");
   if (edit) fillProject(state.projects.find((p) => String(p.id) === edit.dataset.projectEdit));
   if (pages) { state.preferredProjectId = pages.dataset.projectPages; await showView("pages"); }
@@ -5281,9 +5651,11 @@ $("projectsTable").addEventListener("click", async (event) => {
     setStatus($("assignmentStatus"), canReview() ? "在这里给老师分配标题和板块任务。" : "这里是分配给你的资料任务。", "");
   }
   if (historyButton) await showProjectHistory(historyButton.dataset.projectHistory);
+  if (logsButton) await showProjectLogs(logsButton.dataset.projectLogs);
   if (del && confirm("确定删除该门户及其板块资料？")) { await api(`/api/projects/${del.dataset.projectDelete}`, { method: "DELETE" }); await refreshView("projects"); }
 });
 $("closeProjectHistory").addEventListener("click", () => { $("projectHistoryPanel").hidden = true; });
+$("projectHistoryPanel").addEventListener("click", (event) => { if (event.target === $("projectHistoryPanel")) $("projectHistoryPanel").hidden = true; });
 
 $("newPage").addEventListener("click", () => {
   startContentItemDraft((modulesForPortalType()[0] || standardModules[0]).key);
@@ -5776,6 +6148,7 @@ $("pagesTable").addEventListener("click", async (event) => {
   if (del && confirm(canReview() ? "确定删除该板块资料？" : "确定提交删除该板块资料的审核申请？")) { await api(`/api/projects/${$("projectSelect").value}/pages/${encodeURIComponent(del.dataset.pageDelete)}`, { method: "DELETE" }); await loadPages(); }
 });
 $("closePageHistory").addEventListener("click", () => { $("pageHistoryPanel").hidden = true; });
+$("pageHistoryPanel").addEventListener("click", (event) => { if (event.target === $("pageHistoryPanel")) $("pageHistoryPanel").hidden = true; });
 
 $("refreshAssets").addEventListener("click", async () => {
   await loadAssets();
@@ -5862,9 +6235,12 @@ $("deployWelcome").addEventListener("click", async () => {
       welcomeSubtitle: $("marketWelcomeSubtitle").value,
       welcomeIntro: $("marketWelcomeIntro").value,
       welcomeImageUrl: $("marketWelcomeImageUrl").value,
+      welcomeCarouselImages: cleanMarketCarouselImages(),
+      welcomeCarouselSlides: cleanMarketCarouselSlides(),
       welcomeNote: $("marketWelcomeNote").value,
     }));
     state.marketPendingWelcomeImageUrl = "";
+    state.marketCarouselDirty = false;
     setStatus($("deployStatus"), "成果超市欢迎页已保存", "success");
     await renderDeploy();
   } catch (err) {
@@ -5910,7 +6286,14 @@ $("passwordForm").addEventListener("submit", async (event) => {
     setupNav();
     await loadUsers();
     await loadProjects();
-    const preferred = new URLSearchParams(location.search).get("view") || (canReview() ? "dashboard" : "pages");
+    const initialParams = new URLSearchParams(location.search);
+    const preferred = initialParams.get("view") || (canReview() ? "dashboard" : "pages");
+    const marketRoute = initialParams.get("market") || "";
+    if (preferred === "deploy" && marketRoute === "welcome") state.marketWorkspace = "welcome";
+    if (preferred === "deploy" && marketCategoryByKey(marketRoute)) {
+      state.marketWorkspace = "category";
+      state.activeMarketCategory = marketRoute;
+    }
     showView(preferred);
   } catch (err) {
     console.error(err);

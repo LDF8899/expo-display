@@ -40,9 +40,9 @@ ALLOWED_IMAGE_DATA_PREFIXES = (
 _INLINE_STYLE_RULES = {
     "width": re.compile(r"^\d+(\.\d+)?px$"),
     "max-width": re.compile(r"^(\d+(\.\d+)?px|100%)$"),
-    "transform": re.compile(r"^rotate\(-?\d+(\.\d+)?deg\)$"),
     "text-align": re.compile(r"^(left|center|right)$"),
 }
+_IMAGE_TRANSFORM = re.compile(r"^rotate\((-?\d+(?:\.\d+)?)deg\)\s+scale\((\d+(?:\.\d+)?)\)$")
 
 
 def safe_inline_style(tag, value):
@@ -54,6 +54,16 @@ def safe_inline_style(tag, value):
         prop, _, val = part.partition(":")
         prop = prop.strip().lower()
         val = val.strip().lower()
+        if prop == "transform":
+            if tag != "img":
+                continue
+            match = _IMAGE_TRANSFORM.match(val)
+            if not match:
+                continue
+            rotate = max(-360.0, min(360.0, float(match.group(1))))
+            scale = max(0.5, min(2.5, float(match.group(2))))
+            keep.append(f"transform: rotate({rotate:g}deg) scale({scale:g})")
+            continue
         rule = _INLINE_STYLE_RULES.get(prop)
         if not rule or not rule.match(val):
             continue

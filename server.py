@@ -304,41 +304,6 @@ BLUEPRINT_PORTALS = [
         "image": "/uploads/4fcaa6e34b5f40c7a7e2b58947b9de1c.jpg",
     },
     {
-        "name": "工矿建筑系",
-        "portal_type": "department",
-        "portal_slug": "mining-construction",
-        "summary": "智慧矿山、智能制造与现代建造。",
-        "image": "/uploads/blueprint/departments/mining-construction/images/img01.webp",
-    },
-    {
-        "name": "财政经济系",
-        "portal_type": "department",
-        "portal_slug": "finance",
-        "summary": "数字商贸、智慧物流与财务实践。",
-        "image": "/uploads/blueprint/departments/finance/images/img01.webp",
-    },
-    {
-        "name": "电子信息工程系",
-        "portal_type": "department",
-        "portal_slug": "information",
-        "summary": "人工智能、网络安全与数字技术。",
-        "image": "/uploads/blueprint/departments/information/images/img01.webp",
-    },
-    {
-        "name": "医学护理系",
-        "portal_type": "department",
-        "portal_slug": "medical-nursing",
-        "summary": "临床护理、康养服务与急救教育。",
-        "image": "/uploads/blueprint/departments/medical-nursing/images/img01.webp",
-    },
-    {
-        "name": "旅游管理系",
-        "portal_type": "department",
-        "portal_slug": "tourism",
-        "summary": "数字文旅、酒店运营与烹饪技艺。",
-        "image": "/uploads/blueprint/departments/tourism/images/img01.webp",
-    },
-    {
         "name": "现代农业",
         "portal_type": "topic",
         "portal_slug": "modern-agriculture",
@@ -737,6 +702,8 @@ ACHIEVEMENT_MARKET_DEFAULT_CONFIG = {
     "welcomeSubtitle": "欢迎进入校园成果展示现场",
     "welcomeIntro": "选择一个主题展区，查看名师名匠、优秀校友、优秀学生、创新成果与荣誉资质。每个展示项目都可生成二维码，扫码后进入对应展示详情。",
     "welcomeImageUrl": "",
+    "welcomeCarouselImages": [],
+    "welcomeCarouselSlides": [],
     "welcomeNote": "现场扫码进入项目详情 · 后台审核通过后方可发布",
 }
 DEFAULT_QUALITY_RULES = {
@@ -1524,7 +1491,7 @@ def ensure_blueprint_content_items(conn):
         """
         SELECT id, name, portal_type, portal_slug, default_image_url
         FROM projects
-        WHERE portal_type IN ('department', 'topic') AND portal_slug <> ''
+        WHERE portal_type = 'topic' AND portal_slug <> ''
         ORDER BY id
         """
     ).fetchall()
@@ -1585,7 +1552,7 @@ def ensure_blueprint_pages(conn):
         """
         SELECT id, name, portal_type, portal_slug, default_image_url
         FROM projects
-        WHERE portal_type IN ('department', 'topic') AND portal_slug <> ''
+        WHERE portal_type = 'topic' AND portal_slug <> ''
         ORDER BY id
         """
     ).fetchall()
@@ -1901,6 +1868,7 @@ def create_pages_table(conn):
             subtitle TEXT NOT NULL DEFAULT '',
             body TEXT NOT NULL DEFAULT '',
             image_url TEXT NOT NULL DEFAULT '',
+            image_transform_json TEXT NOT NULL DEFAULT '{}',
             content_type TEXT NOT NULL DEFAULT 'article',
             accent TEXT NOT NULL DEFAULT '#0f766e',
             enabled INTEGER NOT NULL DEFAULT 1,
@@ -1927,6 +1895,12 @@ def ensure_page_extra_columns(conn):
             conn.execute("ALTER TABLE pages ADD COLUMN content_type VARCHAR(32) NOT NULL DEFAULT 'article'")
         else:
             conn.execute("ALTER TABLE pages ADD COLUMN content_type TEXT NOT NULL DEFAULT 'article'")
+    if "image_transform_json" not in columns:
+        if DATABASE_BACKEND == "mysql":
+            conn.execute("ALTER TABLE pages ADD COLUMN image_transform_json TEXT NULL")
+            conn.execute("UPDATE pages SET image_transform_json = '{}' WHERE image_transform_json IS NULL")
+        else:
+            conn.execute("ALTER TABLE pages ADD COLUMN image_transform_json TEXT NOT NULL DEFAULT '{}'")
 
 
 def ensure_unique_page_codes(conn):
@@ -2467,11 +2441,16 @@ def migrate_achievement_market_tables(conn):
               welcome_subtitle VARCHAR(255) NOT NULL DEFAULT '',
               welcome_intro TEXT NOT NULL,
               welcome_image_url VARCHAR(1024) NOT NULL DEFAULT '',
+              welcome_carousel_json TEXT NOT NULL,
               welcome_note VARCHAR(255) NOT NULL DEFAULT '',
               updated_at VARCHAR(40) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """
         )
+        columns = set(table_columns(conn, "achievement_market_config"))
+        if "welcome_carousel_json" not in columns:
+            conn.execute("ALTER TABLE achievement_market_config ADD COLUMN welcome_carousel_json TEXT NULL")
+            conn.execute("UPDATE achievement_market_config SET welcome_carousel_json = '[]' WHERE welcome_carousel_json IS NULL")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS achievement_market_items (
@@ -2500,9 +2479,9 @@ def migrate_achievement_market_tables(conn):
             """
             INSERT INTO achievement_market_config (
                 id, welcome_title, welcome_subtitle, welcome_intro,
-                welcome_image_url, welcome_note, updated_at
+                welcome_image_url, welcome_carousel_json, welcome_note, updated_at
             )
-            VALUES (1, ?, ?, ?, ?, ?, ?)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE id = id
             """,
             (
@@ -2510,6 +2489,7 @@ def migrate_achievement_market_tables(conn):
                 ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeSubtitle"],
                 ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeIntro"],
                 ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeImageUrl"],
+                json.dumps(ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeCarouselImages"], ensure_ascii=False),
                 ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeNote"],
                 now_iso(),
             ),
@@ -2524,11 +2504,15 @@ def migrate_achievement_market_tables(conn):
             welcome_subtitle TEXT NOT NULL DEFAULT '',
             welcome_intro TEXT NOT NULL,
             welcome_image_url TEXT NOT NULL DEFAULT '',
+            welcome_carousel_json TEXT NOT NULL DEFAULT '[]',
             welcome_note TEXT NOT NULL DEFAULT '',
             updated_at TEXT NOT NULL
         )
         """
     )
+    columns = set(table_columns(conn, "achievement_market_config"))
+    if "welcome_carousel_json" not in columns:
+        conn.execute("ALTER TABLE achievement_market_config ADD COLUMN welcome_carousel_json TEXT NOT NULL DEFAULT '[]'")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS achievement_market_items (
@@ -2550,15 +2534,16 @@ def migrate_achievement_market_tables(conn):
         """
         INSERT OR IGNORE INTO achievement_market_config (
             id, welcome_title, welcome_subtitle, welcome_intro,
-            welcome_image_url, welcome_note, updated_at
+            welcome_image_url, welcome_carousel_json, welcome_note, updated_at
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeTitle"],
             ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeSubtitle"],
             ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeIntro"],
             ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeImageUrl"],
+            json.dumps(ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeCarouselImages"], ensure_ascii=False),
             ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeNote"],
             now_iso(),
         ),
@@ -4430,7 +4415,7 @@ def create_asset_record(user, original_filename, storage_key, url, mime_type, si
 
 
 def asset_usage_summary(url):
-    empty = {"projects": 0, "pages": 0, "contentItems": 0, "pendingPageVersions": 0, "pendingProjectVersions": 0, "total": 0}
+    empty = {"projects": 0, "pages": 0, "contentItems": 0, "achievementMarket": 0, "pendingPageVersions": 0, "pendingProjectVersions": 0, "total": 0}
     if not url:
         return empty
     pattern = f"%{url}%"
@@ -4463,6 +4448,14 @@ def asset_usage_summary(url):
             """,
             (url, url, url, pattern, pattern),
         ).fetchone()["value"] if table_exists(conn, "content_items") else 0
+        achievement_market = conn.execute(
+            """
+            SELECT COUNT(*) AS value
+            FROM achievement_market_config
+            WHERE welcome_image_url = ? OR welcome_carousel_json LIKE ?
+            """,
+            (url, pattern),
+        ).fetchone()["value"] if table_exists(conn, "achievement_market_config") else 0
         page_versions = conn.execute(
             """
             SELECT COUNT(*) AS value
@@ -4483,6 +4476,7 @@ def asset_usage_summary(url):
         "projects": int(projects or 0),
         "pages": int(pages or 0),
         "contentItems": int(content_items or 0),
+        "achievementMarket": int(achievement_market or 0),
         "pendingPageVersions": int(page_versions or 0),
         "pendingProjectVersions": int(project_versions or 0),
     }
@@ -4498,6 +4492,8 @@ def asset_usage_message(summary):
         parts.append(f"{summary['pages']} 个展示页")
     if summary.get("contentItems"):
         parts.append(f"{summary['contentItems']} 条结构化资料")
+    if summary.get("achievementMarket"):
+        parts.append("成果超市欢迎页")
     if summary.get("pendingPageVersions"):
         parts.append(f"{summary['pendingPageVersions']} 个待审核页面草稿")
     if summary.get("pendingProjectVersions"):
@@ -6994,6 +6990,58 @@ def admin_dashboard(user=None):
             """,
             recent_project_params,
         ).fetchall()
+        content_item_stats = conn.execute(
+            f"""
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN content_items.review_status = 'approved' AND content_items.enabled = 1 THEN 1 ELSE 0 END) AS published,
+                SUM(CASE WHEN content_items.review_status IN ('pending', 'pending_delete') THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN content_items.review_status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+                SUM(CASE WHEN content_items.review_status = 'draft' THEN 1 ELSE 0 END) AS draft
+            FROM content_items
+            JOIN projects ON projects.id = content_items.project_id
+            {owner_join}
+            {owner_where}
+            """,
+            owner_params,
+        ).fetchone()
+        market_stats = conn.execute(
+            f"""
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN achievement_market_items.enabled = 1 THEN 1 ELSE 0 END) AS enabled
+            FROM achievement_market_items
+            JOIN projects ON projects.id = achievement_market_items.project_id
+            {owner_join}
+            {owner_where}
+            """,
+            owner_params,
+        ).fetchone()
+        market_categories = conn.execute(
+            f"""
+            SELECT achievement_market_items.category_key, COUNT(*) AS count
+            FROM achievement_market_items
+            JOIN projects ON projects.id = achievement_market_items.project_id
+            {owner_join}
+            {owner_where}
+            GROUP BY achievement_market_items.category_key
+            """,
+            owner_params,
+        ).fetchall()
+        user_stats = {"total": 0, "enabled": 0, "teachers": 0, "reviewers": 0, "admins": 0}
+        if is_admin_user(user):
+            user_row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END) AS enabled,
+                    SUM(CASE WHEN role = 'teacher' THEN 1 ELSE 0 END) AS teachers,
+                    SUM(CASE WHEN role = 'department_admin' THEN 1 ELSE 0 END) AS reviewers,
+                    SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) AS admins
+                FROM users
+                """
+            ).fetchone()
+            user_stats = {key: int(user_row[key] or 0) for key in user_stats}
 
     return {
         "summary": {
@@ -7022,6 +7070,29 @@ def admin_dashboard(user=None):
         ],
         "recentProjects": [row_to_project(row) for row in recent_projects],
         "logs": list_admin_logs(8) if is_admin_user(user) else list_admin_logs(8, username=user.get("username", "")),
+        "management": {
+            "contentItems": {
+                "total": int(content_item_stats["total"] or 0),
+                "published": int(content_item_stats["published"] or 0),
+                "pending": int(content_item_stats["pending"] or 0),
+                "rejected": int(content_item_stats["rejected"] or 0),
+                "draft": int(content_item_stats["draft"] or 0),
+            },
+            "achievementMarket": {
+                "total": int(market_stats["total"] or 0),
+                "enabled": int(market_stats["enabled"] or 0),
+                "categories": [
+                    {
+                        "key": normalize_market_category(row["category_key"]),
+                        "label": ACHIEVEMENT_MARKET_CATEGORY_MAP[normalize_market_category(row["category_key"])]["label"],
+                        "color": ACHIEVEMENT_MARKET_CATEGORY_MAP[normalize_market_category(row["category_key"])]["color"],
+                        "count": int(row["count"] or 0),
+                    }
+                    for row in market_categories
+                ],
+            },
+            "users": user_stats,
+        },
         "operations": operations_summary(user),
     }
 
@@ -7710,6 +7781,23 @@ def copy_project(project_id, data=None):
     return copied
 
 
+def normalize_image_transform(value):
+    source = json_value(value, {})
+    if not isinstance(source, dict):
+        source = {}
+    try:
+        scale = float(source.get("scale", 1) or 1)
+    except (TypeError, ValueError):
+        scale = 1.0
+    try:
+        rotate = float(source.get("rotate", 0) or 0)
+    except (TypeError, ValueError):
+        rotate = 0.0
+    scale = min(2.5, max(0.5, scale))
+    rotate = min(360.0, max(-360.0, rotate))
+    return {"scale": round(scale, 3), "rotate": round(rotate, 2)}
+
+
 def row_to_page(row, portal_type=None):
     if not row:
         return None
@@ -7737,6 +7825,7 @@ def row_to_page(row, portal_type=None):
         "subtitle": row["subtitle"],
         "body": row["body"],
         "imageUrl": row["image_url"],
+        "imageTransform": normalize_image_transform(row["image_transform_json"] if "image_transform_json" in row.keys() else {}),
         "accent": row["accent"],
         "enabled": bool(row["enabled"]),
         "reviewStatus": row["review_status"] if "review_status" in row.keys() else "approved",
@@ -7747,6 +7836,17 @@ def row_to_page(row, portal_type=None):
         "qrAvailable": bool(row["enabled"]) and (row["review_status"] if "review_status" in row.keys() else "approved") == "approved",
         "updatedAt": row["updated_at"],
     }
+    if "market_category_key" in row.keys() and row["market_category_key"]:
+        market_category_key = normalize_market_category(row["market_category_key"])
+        market_category = ACHIEVEMENT_MARKET_CATEGORY_MAP[market_category_key]
+        page.update(
+            {
+                "marketCategoryKey": market_category_key,
+                "marketCategoryLabel": market_category["label"],
+                "marketTheme": market_category["theme"],
+                "marketColor": market_category["color"],
+            }
+        )
     draft = None
     if "draft_snapshot" in row.keys() and row["draft_snapshot"]:
         try:
@@ -7775,6 +7875,7 @@ def row_to_page(row, portal_type=None):
         "subtitle": row["subtitle"],
         "body": row["body"],
         "imageUrl": row["image_url"],
+        "imageTransform": normalize_image_transform(row["image_transform_json"] if "image_transform_json" in row.keys() else {}),
         "contentType": normalize_content_type(row["content_type"] if "content_type" in row.keys() else default_content_type_for_module(module_key)),
         "accent": row["accent"],
         "enabled": bool(row["enabled"]),
@@ -8467,10 +8568,14 @@ def get_display_project(project_id):
 def get_display_page(project_id, code, require_deployed=False):
     with db_connect() as conn:
         sql = """
-            SELECT pages.*, NULL AS draft_snapshot, projects.portal_type AS project_portal_type
+            SELECT pages.*, NULL AS draft_snapshot, projects.portal_type AS project_portal_type,
+                   achievement_market_items.category_key AS market_category_key
             FROM pages
             JOIN projects ON projects.id = pages.project_id
             LEFT JOIN users ON users.username = projects.owner_username
+            LEFT JOIN achievement_market_items
+              ON achievement_market_items.page_id = pages.id
+             AND achievement_market_items.project_id = pages.project_id
         """
         params = [project_id, code]
         where = """
@@ -8578,7 +8683,7 @@ def get_public_portal_home():
             SELECT p.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
             FROM projects p
             LEFT JOIN users ON users.username = p.owner_username
-            WHERE p.portal_type IN ('department', 'topic')
+            WHERE p.portal_type = 'topic'
               AND p.portal_slug <> ''
               AND p.config_status = 'approved'
               AND COALESCE(users.enabled, 1) = 1
@@ -8685,11 +8790,35 @@ def achievement_market_default_config():
 def normalize_achievement_market_config(data):
     source = data if isinstance(data, dict) else {}
     fallback = achievement_market_default_config()
+    carousel_value = source.get("welcomeCarouselSlides") if "welcomeCarouselSlides" in source else source.get("welcomeCarouselImages", fallback["welcomeCarouselImages"])
+    carousel_source = json_value(carousel_value, [])
+    carousel_images = []
+    carousel_slides = []
+    if isinstance(carousel_source, list):
+        for item in carousel_source:
+            is_slide = isinstance(item, dict)
+            url = clean_config_text((item.get("imageUrl") or item.get("url") or "") if is_slide else item)[:600]
+            if url and url not in carousel_images:
+                carousel_images.append(url)
+                custom_text = bool(item.get("customText", any(key in item for key in ("meta", "title", "body")))) if is_slide else False
+                carousel_slides.append(
+                    {
+                        "imageUrl": url,
+                        "meta": clean_config_text(item.get("meta", ""))[:80] if is_slide else "",
+                        "title": clean_config_text(item.get("title", ""))[:120] if is_slide else "",
+                        "body": clean_config_text(item.get("body", ""))[:400] if is_slide else "",
+                        "customText": custom_text,
+                    }
+                )
+            if len(carousel_images) >= 30:
+                break
     return {
         "welcomeTitle": clean_config_text(source.get("welcomeTitle", fallback["welcomeTitle"]))[:120],
         "welcomeSubtitle": clean_config_text(source.get("welcomeSubtitle", fallback["welcomeSubtitle"]))[:160],
         "welcomeIntro": clean_config_text(source.get("welcomeIntro", fallback["welcomeIntro"]))[:800],
         "welcomeImageUrl": clean_config_text(source.get("welcomeImageUrl", fallback["welcomeImageUrl"]))[:600],
+        "welcomeCarouselImages": carousel_images,
+        "welcomeCarouselSlides": carousel_slides,
         "welcomeNote": clean_config_text(source.get("welcomeNote", fallback["welcomeNote"]))[:160],
     }
 
@@ -8703,6 +8832,7 @@ def row_to_achievement_market_config(row):
             "welcomeSubtitle": row["welcome_subtitle"],
             "welcomeIntro": row["welcome_intro"],
             "welcomeImageUrl": row["welcome_image_url"],
+            "welcomeCarouselSlides": row["welcome_carousel_json"] if "welcome_carousel_json" in row.keys() else [],
             "welcomeNote": row["welcome_note"],
         }
     ) | {"updatedAt": row["updated_at"] if "updated_at" in row.keys() else ""}
@@ -8729,14 +8859,15 @@ def save_achievement_market_config(data):
                 """
                 INSERT INTO achievement_market_config (
                     id, welcome_title, welcome_subtitle, welcome_intro,
-                    welcome_image_url, welcome_note, updated_at
+                    welcome_image_url, welcome_carousel_json, welcome_note, updated_at
                 )
-                VALUES (1, ?, ?, ?, ?, ?, ?)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     welcome_title = VALUES(welcome_title),
                     welcome_subtitle = VALUES(welcome_subtitle),
                     welcome_intro = VALUES(welcome_intro),
                     welcome_image_url = VALUES(welcome_image_url),
+                    welcome_carousel_json = VALUES(welcome_carousel_json),
                     welcome_note = VALUES(welcome_note),
                     updated_at = VALUES(updated_at)
                 """,
@@ -8745,6 +8876,7 @@ def save_achievement_market_config(data):
                     config["welcomeSubtitle"],
                     config["welcomeIntro"],
                     config["welcomeImageUrl"],
+                    json.dumps(config["welcomeCarouselSlides"], ensure_ascii=False),
                     config["welcomeNote"],
                     now,
                 ),
@@ -8754,14 +8886,15 @@ def save_achievement_market_config(data):
                 """
                 INSERT INTO achievement_market_config (
                     id, welcome_title, welcome_subtitle, welcome_intro,
-                    welcome_image_url, welcome_note, updated_at
+                    welcome_image_url, welcome_carousel_json, welcome_note, updated_at
                 )
-                VALUES (1, ?, ?, ?, ?, ?, ?)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     welcome_title = excluded.welcome_title,
                     welcome_subtitle = excluded.welcome_subtitle,
                     welcome_intro = excluded.welcome_intro,
                     welcome_image_url = excluded.welcome_image_url,
+                    welcome_carousel_json = excluded.welcome_carousel_json,
                     welcome_note = excluded.welcome_note,
                     updated_at = excluded.updated_at
                 """,
@@ -8770,6 +8903,7 @@ def save_achievement_market_config(data):
                     config["welcomeSubtitle"],
                     config["welcomeIntro"],
                     config["welcomeImageUrl"],
+                    json.dumps(config["welcomeCarouselSlides"], ensure_ascii=False),
                     config["welcomeNote"],
                     now,
                 ),
@@ -8828,10 +8962,12 @@ def row_to_achievement_market_item(row):
         "enabled": bool(row["enabled"]),
         "title": row["title"],
         "subtitle": row["subtitle"],
+        "body": row["body"] if "body" in row.keys() else "",
         "summary": row["intro"] or row["subtitle"] or re.sub(r"<[^>]+>", "", row["body"] or "")[:120],
         "moduleKey": module_key_for_category(row["category"] if "category" in row.keys() else "", row["project_portal_type"] if "project_portal_type" in row.keys() else "topic"),
         "contentType": normalize_content_type(row["content_type"] if "content_type" in row.keys() else "article"),
         "imageUrl": row["image_url"],
+        "imageTransform": normalize_image_transform(row["image_transform_json"] if "image_transform_json" in row.keys() else {}),
         "accent": row["accent"],
         "qrPath": achievement_market_item_url(project_id, code),
         "updatedAt": row["updated_at"],
@@ -8865,7 +9001,7 @@ def list_achievement_market_items(project_id=0, enabled_only=False):
         rows = conn.execute(
             f"""
             SELECT ami.*, pages.code, pages.category, pages.title, pages.subtitle, pages.body,
-                   pages.image_url, pages.content_type, pages.accent,
+                   pages.image_url, pages.image_transform_json, pages.content_type, pages.accent,
                    projects.name AS project_name, projects.portal_type AS project_portal_type
             FROM achievement_market_items ami
             JOIN pages ON pages.id = ami.page_id
@@ -9144,7 +9280,7 @@ def get_achievement_market_item(item_id):
         row = conn.execute(
             """
             SELECT ami.*, pages.code, pages.category, pages.title, pages.subtitle, pages.body,
-                   pages.image_url, pages.content_type, pages.accent,
+                   pages.image_url, pages.image_transform_json, pages.content_type, pages.accent,
                    projects.name AS project_name, projects.portal_type AS project_portal_type
             FROM achievement_market_items ami
             JOIN pages ON pages.id = ami.page_id
@@ -9161,17 +9297,41 @@ def update_achievement_market_item(item_id, data):
     intro = clean_config_text(data.get("intro", ""))[:240]
     sort_order = int_value(data.get("sortOrder") or data.get("sort_order"), 0)
     enabled = 1 if data.get("enabled", True) else 0
+    title = clean_config_text(data.get("title", ""))[:200]
+    subtitle = clean_config_text(data.get("subtitle", ""))[:200]
+    image_url = clean_config_text(data.get("imageUrl") or data.get("image_url", ""))[:600]
+    image_transform = normalize_image_transform(data.get("imageTransform") or data.get("image_transform") or {})
+    body = sanitize_rich_html(html_from_market_body(data.get("body", "")))
+    now = now_iso()
     with db_connect() as conn:
-        row = conn.execute("SELECT id, project_id FROM achievement_market_items WHERE id = ?", (item_id,)).fetchone()
+        row = conn.execute("SELECT id, project_id, page_id FROM achievement_market_items WHERE id = ?", (item_id,)).fetchone()
         if not row:
             return None
+        page_fields_present = any(key in data for key in ("title", "subtitle", "imageUrl", "image_url", "imageTransform", "image_transform", "body"))
+        if page_fields_present:
+            conn.execute(
+                """
+                UPDATE pages
+                SET title = ?, subtitle = ?, image_url = ?, image_transform_json = ?, body = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    str(title or ""),
+                    str(subtitle or ""),
+                    str(image_url or ""),
+                    json.dumps(image_transform, ensure_ascii=False),
+                    str(body or ""),
+                    now,
+                    int(row["page_id"]),
+                ),
+            )
         conn.execute(
             """
             UPDATE achievement_market_items
             SET category_key = ?, intro = ?, sort_order = ?, enabled = ?, updated_at = ?
             WHERE id = ?
             """,
-            (category_key, intro, sort_order, enabled, now_iso(), item_id),
+            (category_key, intro, sort_order, enabled, now, item_id),
         )
         sync_achievement_market_deployment(conn, int(row["project_id"]))
     return get_achievement_market_item(item_id)
@@ -10675,6 +10835,63 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if path == "/api/admin/project-logs":
+            if not self.require_admin():
+                return
+            query = parse_qs(parsed.query)
+            project_id = int((query.get("projectId") or ["0"])[0] or 0)
+            project = get_project(project_id)
+            if not project:
+                self.send_json(404, {"ok": False, "error": "项目不存在"})
+                return
+            logs = []
+            with db_connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM admin_logs
+                    WHERE target_type = 'project' AND target_id = ?
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT 200
+                    """,
+                    (str(project_id),),
+                ).fetchall()
+                for row in rows:
+                    log = row_to_admin_log(row)
+                    logs.append({
+                        "kind": "log",
+                        "username": log["username"],
+                        "role": log["role"],
+                        "action": log["action"],
+                        "detail": log["detail"],
+                        "changes": log["changes"],
+                        "ip": log["ip"],
+                        "createdAt": log["createdAt"],
+                    })
+                version_rows = conn.execute(
+                    """
+                    SELECT * FROM project_versions
+                    WHERE project_id = ?
+                    ORDER BY submitted_at DESC, id DESC
+                    """,
+                    (project_id,),
+                ).fetchall()
+            for row in version_rows:
+                logs.append({
+                    "kind": "version",
+                    "username": row["submitted_by"],
+                    "role": "",
+                    "action": "submit_version",
+                    "detail": row["changes"] or "",
+                    "changes": "",
+                    "ip": "",
+                    "createdAt": row["submitted_at"],
+                    "reviewedBy": row["reviewed_by"],
+                    "reviewedAt": row["reviewed_at"],
+                })
+            logs.sort(key=lambda item: item["createdAt"] or "", reverse=True)
+            self.send_json(200, {"ok": True, "project": {"id": project["id"], "name": project["name"]}, "logs": logs})
             return
 
         if path == "/api/display/project":

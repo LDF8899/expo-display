@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS pages (
   subtitle VARCHAR(512) NOT NULL DEFAULT '',
   body MEDIUMTEXT NOT NULL,
   image_url VARCHAR(1024) NOT NULL DEFAULT '',
+  image_transform_json TEXT NULL,
   content_type VARCHAR(32) NOT NULL DEFAULT 'article',
   accent VARCHAR(32) NOT NULL DEFAULT '#0f766e',
   enabled TINYINT(1) NOT NULL DEFAULT 1,
@@ -167,6 +168,7 @@ CREATE TABLE IF NOT EXISTS achievement_market_config (
   welcome_subtitle VARCHAR(255) NOT NULL DEFAULT '',
   welcome_intro TEXT NOT NULL,
   welcome_image_url VARCHAR(1024) NOT NULL DEFAULT '',
+  welcome_carousel_json TEXT NOT NULL,
   welcome_note VARCHAR(255) NOT NULL DEFAULT '',
   updated_at VARCHAR(40) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

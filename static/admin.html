@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>数字门户后台</title>
-    <link rel="stylesheet" href="/static/admin.css?v=achievement-market-editor-20260811e" />
+    <link rel="stylesheet" href="/static/admin.css?v=management-dashboard-20260812" />
   </head>
   <body>
     <aside class="sidebar">
@@ -90,23 +90,8 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-               <h2 id="projectsHeading">门户系部专题管理</h2>
-               <p id="projectsIntro">维护学校门户、系部门户和专题门户；在这里分配老师资料任务并进入板块资料管理。</p>
-            </div>
-            <div class="toolbar">
-              <input id="projectSearch" placeholder="搜索门户、归属、路由" />
-              <select id="projectTypeFilter">
-                <option value="">全部门户</option>
-                <option value="school">学校门户</option>
-                <option value="content">专题门户</option>
-              </select>
-              <select id="projectPublishFilter">
-                <option value="">全部发布状态</option>
-                <option value="welcome">欢迎页已发布</option>
-                <option value="content">资料已发布</option>
-                <option value="pending">配置待审核</option>
-                <option value="unpublished">未发布</option>
-              </select>
+               <h2 id="projectsHeading">专题门户管理</h2>
+               <p id="projectsIntro">维护学校门户与创新育人专题；在这里分配老师资料任务并进入板块资料管理。</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -116,12 +101,14 @@
             </table>
           </div>
           <div id="projectsPager" class="list-pager"></div>
-          <section id="projectHistoryPanel" class="history-panel" hidden>
-            <div class="panel-head">
-              <div><h2 id="projectHistoryTitle">门户历史</h2><p>查看门户配置提交、审核结果和字段变化。</p></div>
-              <button id="closeProjectHistory" class="button ghost" type="button">关闭</button>
+          <section id="projectHistoryPanel" class="history-panel modal-backdrop" hidden>
+            <div class="modal-box">
+              <div class="panel-head">
+                <div><h2 id="projectHistoryTitle">门户历史</h2><p>查看项目修改记录：操作账号与操作时间。</p></div>
+                <button id="closeProjectHistory" class="button ghost" type="button">关闭</button>
+              </div>
+              <div id="projectHistory" class="history-list"></div>
             </div>
-            <div id="projectHistory" class="history-list"></div>
           </section>
         </section>
         <form id="projectForm" class="panel editor-panel" hidden>
@@ -415,12 +402,14 @@
             </table>
           </div>
           <div id="pagesPager" class="list-pager" data-content-section="advanced"></div>
-          <section id="pageHistoryPanel" class="history-panel" hidden>
-            <div class="panel-head">
-              <div><h2 id="pageHistoryTitle">板块资料历史</h2><p>查看资料草稿、删除申请、审核结果和字段变化。</p></div>
-              <button id="closePageHistory" class="button ghost" type="button">关闭</button>
+          <section id="pageHistoryPanel" class="history-panel modal-backdrop" hidden>
+            <div class="modal-box">
+              <div class="panel-head">
+                <div><h2 id="pageHistoryTitle">板块资料历史</h2><p>查看资料草稿、删除申请、审核结果和字段变化。</p></div>
+                <button id="closePageHistory" class="button ghost" type="button">关闭</button>
+              </div>
+              <div id="pageHistory" class="history-list"></div>
             </div>
-            <div id="pageHistory" class="history-list"></div>
           </section>
         </section>
         <form id="lowcodeRecordForm" class="panel editor-panel" hidden>
@@ -762,113 +751,221 @@
       </section>
 
       <section id="deployView" class="view admin-only">
-        <section class="panel">
+        <section class="panel market-shell">
           <div class="panel-head">
-            <div><h2>成果超市</h2><p>配置欢迎页、五类主题展示页和每个展示项目的二维码简介；内容来源复用已审核资料。</p></div>
+            <div><h2>成果超市管理</h2><p>先维护欢迎页，再按五个主题分类管理展示项目。</p></div>
             <div class="toolbar">
-              <a class="button ghost" target="_blank" href="/display">预览欢迎页</a>
-              <button id="marketPreviewTheme" class="button ghost" type="button">预览当前主题</button>
+              <a class="button ghost" target="_blank" rel="noopener" href="/display">预览成果超市</a>
               <button id="marketPublish" class="button primary" type="button">发布成果超市</button>
             </div>
           </div>
-          <section class="market-command-strip">
-            <article>
-              <strong>编辑</strong>
-              <span>维护欢迎页、主题归类、项目简介和排序。</span>
-            </article>
-            <article>
-              <strong>预览</strong>
-              <span>右侧嵌入实际 /display 页面，所见即前台效果。</span>
-            </article>
-            <article>
-              <strong>发布</strong>
-              <span>把启用项目同步到扫码器可进入范围。</span>
-            </article>
+
+          <section id="marketOverview" class="market-overview">
+            <a class="market-entry market-welcome-entry" href="/display?edit=1">
+              <span class="market-entry-icon" aria-hidden="true">首</span>
+              <span class="market-entry-copy">
+                <small>入口页面</small>
+                <strong>欢迎页</strong>
+                <span>直接进入真实前台页面，更换左侧大图并管理轮播图片</span>
+              </span>
+              <span class="market-entry-action">可视化编辑</span>
+            </a>
+            <div class="market-section-head">
+              <div>
+                <h3>内容分类</h3>
+                <p>点击分类进入汇总页，添加和维护该分类下的展示项目。</p>
+              </div>
+              <span id="marketTotalCount">0 个项目</span>
+            </div>
+            <div id="marketCategoryGrid" class="market-category-grid"></div>
           </section>
-          <section class="market-editor-grid">
-            <article class="market-editor-card">
-              <div class="field-head">
+
+          <section id="marketWelcomeWorkspace" class="market-workspace" hidden>
+            <div class="market-workspace-head">
+              <button class="button ghost" type="button" data-market-back>返回内容分类</button>
+              <div>
                 <span>欢迎页</span>
-                <small>/display 的入口文案，先进入欢迎页，再进入五类主题展示页。</small>
+                <h3>编辑成果超市入口</h3>
               </div>
-              <div class="form-grid two">
-                <input id="marketWelcomeTitle" placeholder="欢迎页标题，如 成果超市" />
-                <input id="marketWelcomeSubtitle" placeholder="副标题，如 欢迎进入校园成果展示现场" />
-              </div>
-              <textarea id="marketWelcomeIntro" rows="4" placeholder="欢迎页介绍"></textarea>
-              <div class="form-grid two">
-                <input id="marketWelcomeImageUrl" placeholder="欢迎页图片 /uploads/..." />
+            </div>
+            <section class="market-editor-grid">
+              <article class="market-editor-card">
+                <div class="field-head">
+                  <span>页面内容</span>
+                  <small>保存后可在右侧查看实际展示效果。</small>
+                </div>
+                <div class="form-grid two">
+                  <input id="marketWelcomeTitle" placeholder="欢迎页标题，如 成果超市" />
+                  <input id="marketWelcomeSubtitle" placeholder="副标题，如 欢迎进入校园成果展示现场" />
+                </div>
+                <textarea id="marketWelcomeIntro" rows="5" placeholder="欢迎页介绍"></textarea>
                 <input id="marketWelcomeNote" placeholder="底部提示文字" />
+                <div class="market-image-editor">
+                  <div id="marketWelcomeImagePreview" class="market-image-preview"><span>尚未选择左侧大图</span></div>
+                  <div>
+                    <strong>左侧大图</strong>
+                    <p>建议使用 16:9 横图，图片会显示在欢迎页左侧主舞台。</p>
+                    <input id="marketWelcomeImageUrl" placeholder="左侧大图地址 /uploads/..." />
+                    <input id="marketWelcomeImageFile" type="file" accept="image/*" hidden />
+                    <div class="actions">
+                      <button id="uploadMarketWelcomeImage" class="button ghost" type="button">上传左侧大图</button>
+                      <button id="selectMarketWelcomeAsset" class="button ghost" type="button">从素材库选择</button>
+                    </div>
+                  </div>
+                </div>
+                <section class="market-carousel-editor">
+                  <div class="market-carousel-head">
+                    <div>
+                      <strong>轮播图</strong>
+                      <p>图片越多，欢迎页轮播内容越丰富；拖动式排序暂不启用，可使用上移、下移调整顺序。</p>
+                    </div>
+                    <span id="marketCarouselCount">0 张</span>
+                  </div>
+                  <div class="actions">
+                    <input id="marketCarouselImageFiles" type="file" accept="image/*" multiple hidden />
+                    <button id="addMarketCarouselImage" class="button ghost" type="button">添加图片地址</button>
+                    <button id="uploadMarketCarouselImages" class="button ghost" type="button">上传轮播图</button>
+                    <button id="selectMarketCarouselAsset" class="button ghost" type="button">从素材库添加</button>
+                  </div>
+                  <div id="marketCarouselList" class="market-carousel-list"></div>
+                </section>
+                <div class="actions">
+                  <button id="deployWelcome" class="button primary" type="button">保存欢迎页</button>
+                </div>
+              </article>
+              <article class="market-live-preview">
+                <header>
+                  <div>
+                    <strong>页面预览</strong>
+                    <span id="marketPreviewLabel">欢迎页</span>
+                  </div>
+                  <a id="marketPreviewOpen" class="button small" target="_blank" rel="noopener" href="/display">新窗口打开</a>
+                </header>
+                <div class="market-preview-viewport">
+                  <iframe id="marketPreviewFrame" title="成果超市预览" src="/display"></iframe>
+                </div>
+              </article>
+            </section>
+          </section>
+
+          <section id="marketCategoryWorkspace" class="market-workspace" hidden>
+            <div class="market-workspace-head market-category-workspace-head">
+              <button class="button ghost" type="button" data-market-back>返回内容分类</button>
+              <div>
+                <span id="marketCategoryEyebrow">内容分类</span>
+                <h3 id="marketCategoryHeading">分类汇总</h3>
+                <p id="marketCategoryIntro"></p>
               </div>
               <div class="actions">
-                <button id="selectMarketWelcomeAsset" class="button ghost" type="button">选择图片</button>
-                <button id="deployWelcome" class="button primary" type="button">保存欢迎页草稿</button>
+                <button id="marketPreviewTheme" class="button ghost" type="button">预览分类页</button>
+                <button id="openMarketCreate" class="button primary" type="button">添加项目</button>
               </div>
-            </article>
-            <article class="market-live-preview">
-              <header>
-                <div>
-                  <strong>实时预览</strong>
-                  <span id="marketPreviewLabel">欢迎页</span>
-                </div>
-                <a id="marketPreviewOpen" class="button small" target="_blank" href="/display">新窗口打开</a>
-              </header>
-              <div class="market-preview-viewport">
-                <iframe id="marketPreviewFrame" title="成果超市预览" src="/display"></iframe>
+            </div>
+            <div id="marketCategoryTabs" class="market-category-tabs market-category-switcher"></div>
+            <section class="market-source-row">
+              <label class="stack">
+                <span>项目归属</span>
+                <select id="deployProject"></select>
+              </label>
+              <div id="deployCheck" class="deploy-check"></div>
+            </section>
+            <div class="list-controls market-list-controls">
+              <input id="deployPageSearch" placeholder="搜索项目名称、编号或简介" />
+              <select id="deployPageModuleFilter" hidden>
+                <option value="">全部主题</option>
+              </select>
+              <span id="marketCategoryCount">0 个项目</span>
+            </div>
+            <div id="deployPages" class="market-item-grid"></div>
+            <div id="deployPagesPager" class="list-pager"></div>
+          </section>
+
+          <p id="deployStatus" class="status-text"></p>
+        </section>
+
+        <section id="marketCreatePanel" class="history-panel modal-backdrop" hidden>
+          <div class="modal-box market-create-modal">
+            <div class="panel-head">
+              <div><h2 id="marketCreateTitle">添加展示项目</h2><p>创建项目后会直接加入当前分类，可继续进入详情编辑富文本内容。</p></div>
+              <button id="closeMarketCreate" class="button ghost" type="button">关闭</button>
+            </div>
+            <section class="market-add-panel market-create-panel">
+              <div class="form-grid two">
+                <select id="marketNewCategory" disabled></select>
+                <input id="marketNewSort" type="number" step="1" placeholder="排序，数字越小越靠前" />
               </div>
-            </article>
-          </section>
-          <section class="market-source-row">
-            <label class="stack">
-              <span>内容来源</span>
-              <select id="deployProject"></select>
-            </label>
-            <div id="deployCheck" class="deploy-check"></div>
-          </section>
-          <section class="market-add-panel">
-            <div class="field-head">
-              <span>加入展示项目</span>
-              <small>只显示当前内容来源中“已审核通过且启用”的资料；加入后会同步为扫码器可进入内容。</small>
-            </div>
-            <div class="form-grid five">
-              <select id="marketCandidate"></select>
-              <select id="marketItemCategory"></select>
-              <input id="marketItemIntro" placeholder="二维码上方简介，建议 30-80 字" />
-              <input id="marketItemSort" type="number" step="1" placeholder="排序" />
-              <button id="deployContent" class="button primary" type="button">加入成果超市</button>
-            </div>
-          </section>
-          <section class="market-add-panel market-create-panel">
-            <div class="field-head">
-              <span>新建展示项目</span>
-              <small>直接创建成果超市展示页，自动审核通过、加入当前主题，并同步为扫码器可进入内容。</small>
-            </div>
-            <div class="form-grid four">
-              <select id="marketNewCategory"></select>
               <input id="marketNewTitle" placeholder="展示项目标题" />
               <input id="marketNewSubtitle" placeholder="副标题/身份/荣誉说明" />
-              <input id="marketNewSort" type="number" step="1" placeholder="排序" />
-            </div>
-            <div class="form-grid two">
               <input id="marketNewIntro" placeholder="二维码上方简介，建议 30-80 字" />
               <input id="marketNewImageUrl" placeholder="封面图片 /uploads/..." />
-            </div>
-            <textarea id="marketNewBody" rows="5" placeholder="展示正文，可直接输入段落，也可粘贴简单 HTML"></textarea>
-            <div class="actions">
-              <button id="selectMarketNewAsset" class="button ghost" type="button">选择封面</button>
-              <button id="createMarketItem" class="button primary" type="button">创建并加入成果超市</button>
-            </div>
-          </section>
-          <div id="marketCategoryTabs" class="market-category-tabs"></div>
-          <div class="list-controls">
-            <input id="deployPageSearch" placeholder="搜索展示项目、编号、简介" />
-            <select id="deployPageModuleFilter">
-              <option value="">全部主题</option>
-            </select>
+              <textarea id="marketNewBody" rows="6" placeholder="项目正文，可先填写基础内容，创建后在详情中继续富文本编辑"></textarea>
+              <div class="actions">
+                <input id="marketNewImageFile" type="file" accept="image/*" hidden />
+                <button id="uploadMarketNewImage" class="button ghost" type="button">上传封面</button>
+                <button id="selectMarketNewAsset" class="button ghost" type="button">从素材库选择</button>
+                <button id="createMarketItem" class="button primary" type="button">创建项目</button>
+              </div>
+            </section>
+            <details class="market-import-existing">
+              <summary>从已审核资料中加入</summary>
+              <p>复用当前项目归属下已审核且启用的资料。</p>
+              <div class="form-grid two">
+                <select id="marketCandidate"></select>
+                <input id="marketItemIntro" placeholder="二维码上方简介，建议 30-80 字" />
+                <select id="marketItemCategory" hidden></select>
+                <input id="marketItemSort" type="number" step="1" placeholder="排序" />
+                <button id="deployContent" class="button primary" type="button">加入当前分类</button>
+              </div>
+            </details>
           </div>
-          <div id="deployPages" class="market-item-grid"></div>
-          <div id="deployPagesPager" class="list-pager"></div>
-          <p id="deployStatus" class="status-text"></p>
+        </section>
+
+        <section id="marketItemEditorPanel" class="history-panel modal-backdrop" hidden>
+          <div class="modal-box market-editor-modal">
+            <div class="panel-head">
+              <div><h2 id="marketItemEditorTitle">项目详情</h2><p>编辑展示项目的标题、封面与富文本正文。</p></div>
+              <button id="closeMarketItemEditor" class="button ghost" type="button">关闭</button>
+            </div>
+            <div class="form-grid two">
+              <input id="marketEditTitle" placeholder="项目标题" />
+              <input id="marketEditSubtitle" placeholder="副标题/身份/荣誉说明" />
+            </div>
+            <div class="form-grid two">
+              <input id="marketEditIntro" placeholder="二维码上方简介，建议 30-80 字" />
+              <input id="marketEditImageUrl" placeholder="封面图片 /uploads/..." />
+            </div>
+            <div class="form-grid three">
+              <select id="marketEditCategory"></select>
+              <input id="marketEditSort" type="number" step="1" placeholder="排序" />
+              <label class="check-inline"><input id="marketEditEnabled" type="checkbox" /> 启用展示</label>
+            </div>
+            <div class="actions">
+              <input id="marketEditImageFile" type="file" accept="image/*" hidden />
+              <button id="uploadMarketEditImage" class="button ghost" type="button">上传封面</button>
+              <button id="selectMarketEditAsset" class="button ghost" type="button">从素材库选择</button>
+            </div>
+            <div class="field-head">
+              <span>正文</span>
+              <small>支持标题、列表、引用、分割线和插图</small>
+            </div>
+            <div class="rich-toolbar">
+              <button type="button" data-market-block="h2">H2</button>
+              <button type="button" data-market-block="h3">H3</button>
+              <button type="button" data-market-block="p">正文</button>
+              <button type="button" data-market-command="bold">B</button>
+              <button type="button" data-market-command="italic">I</button>
+              <button type="button" data-market-command="insertUnorderedList">列表</button>
+              <button type="button" data-market-command="insertOrderedList">编号</button>
+              <button type="button" data-market-insert="quote">引用</button>
+              <button type="button" data-market-insert="divider">分割线</button>
+              <button type="button" data-market-insert="image">插图</button>
+            </div>
+            <div id="marketRichBody" class="rich-body" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="在这里编辑项目正文"></div>
+            <textarea id="marketEditBody" hidden></textarea>
+            <div class="actions">
+              <button id="saveMarketItem" class="button primary" type="button">保存详情</button>
+            </div>
+          </div>
         </section>
       </section>
 
@@ -938,6 +1035,6 @@
     </main>
 
     <template id="emptyTpl"><div class="empty">暂无数据</div></template>
-    <script src="/static/admin.js?v=achievement-market-editor-20260811e"></script>
+    <script src="/static/admin.js?v=management-dashboard-20260812"></script>
   </body>
 </html>
