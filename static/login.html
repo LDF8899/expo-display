@@ -3,36 +3,42 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>后台登录</title>
-    <link rel="stylesheet" href="/static/login.css?v=admin-unified-20260714" />
+    <title>数字门户后台登录</title>
+    <link rel="stylesheet" href="/static/login.css?v=display-logo-login-20260813" />
   </head>
   <body>
     <main class="login-shell">
       <aside class="login-rail" aria-label="系统说明">
         <div class="brand">
-          <strong>展示后台</strong>
-          <span>Expo Display Admin</span>
+          <img class="brand-logo" src="/static/blueprint/school-logo.png" alt="学校标识" />
         </div>
 
         <div class="rail-content">
-          <p class="eyebrow">School Screen</p>
-          <h1>现场扫码展示系统</h1>
-          <p>维护欢迎页、展示项目、二维码内容与部署状态，大屏会读取当前部署方案。</p>
+          <p class="eyebrow">Dual System</p>
+          <h1>系部专题与成果超市统一管理</h1>
+          <p>面向现场展示、扫码互动和资料审核的后台入口，管理员与老师按权限进入对应工作台。</p>
         </div>
 
-        <div class="deploy-card" aria-hidden="true">
-          <span>当前入口</span>
-          <strong>后台管理</strong>
-          <small>欢迎页配置 / 展示页管理 / 大屏预览</small>
+        <div class="system-stack" aria-hidden="true">
+          <article>
+            <span>系统一</span>
+            <strong>系部专题展示</strong>
+            <small>门户维护 / 人员分配 / 审核发布</small>
+          </article>
+          <article>
+            <span>系统二</span>
+            <strong>成果超市扫码</strong>
+            <small>六大专题 / 卡片导出 / 大屏展示</small>
+          </article>
         </div>
       </aside>
 
       <section class="login-panel" aria-labelledby="loginTitle">
         <form id="loginForm" class="login-form">
           <div class="panel-head">
-            <p class="eyebrow">Admin Login</p>
-            <h2 id="loginTitle">登录展示后台</h2>
-            <p>请输入账号和密码。</p>
+            <p class="eyebrow">Secure Login</p>
+            <h2 id="loginTitle">登录工作台</h2>
+            <p>请输入账号密码，系统会根据角色进入对应后台。</p>
           </div>
 
           <label>
@@ -45,12 +51,12 @@
             <input id="password" name="password" type="password" autocomplete="current-password" required />
           </label>
 
-          <button type="submit">登录</button>
+          <button type="submit">进入后台</button>
           <p id="status" role="status" aria-live="polite"></p>
         </form>
       </section>
     </main>
 
-    <script src="/static/login.js?v=admin-unified-20260714"></script>
+    <script src="/static/login.js?v=visual-edit-login-next-20260813"></script>
   </body>
 </html>

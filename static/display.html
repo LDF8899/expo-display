@@ -3,31 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Expo Display 高级感展示首页</title>
-    <link rel="stylesheet" href="/static/display.css?v=loop-scroll-20260716d" />
+    <title>毕节职业技术学院 · 数字展厅大屏</title>
+    <link rel="stylesheet" href="/static/display.css?v=market-detail-edit-20260815" />
   </head>
   <body>
     <main id="app" class="screen idle" data-od-id="display-app">
+      <!-- ============ 待机首页 ============ -->
       <section id="idleView" class="app-chrome fade-in" data-od-id="idle-home">
         <header class="topbar" data-od-id="top-navigation">
+          <div class="topbar-side" aria-hidden="true"></div>
           <div class="brand-lockup" data-od-id="brand-lockup">
-            <img id="brandLogo" class="brand-logo" alt="学校标识" hidden />
-            <span id="brandFallback" class="crest" aria-hidden="true">校</span>
-            <div id="brandTitle" class="brand-title">
-              <p id="brandKicker" class="eyebrow">EXPO DISPLAY</p>
-              <h1 id="projectName" class="school-name">毕节职业技术学院</h1>
-              <p id="schoolMeta" class="school-meta">欢迎来到校园 · 同心特色校园文化</p>
-            </div>
+            <img
+              id="brandLogo"
+              class="brand-logo"
+              src="/static/blueprint/school-logo.png"
+              alt="学校标识"
+            />
           </div>
 
-          <nav class="nav" aria-label="展示栏目" data-od-id="display-nav">
-            <span class="nav-pill" data-od-id="nav-overview">学院概况</span>
-            <span class="nav-pill" data-od-id="nav-achievement">成果展示</span>
-            <span class="nav-pill" data-od-id="nav-lab">实训空间</span>
-            <span class="nav-pill" data-od-id="nav-employment">招生就业</span>
-          </nav>
-
           <div class="status-stack" data-od-id="connection-status">
+            <span id="clockTime" class="status-chip clock-chip" aria-hidden="true">--:--:--</span>
             <span id="connectionState" class="status-chip is-live">展示通道连接中</span>
             <span id="projectState" class="status-chip">当前部署项目 · 等待读取</span>
           </div>
@@ -35,6 +30,12 @@
 
         <section class="hero-grid" data-od-id="hero-layout">
           <article id="mainStage" class="stage" data-od-id="main-stage">
+            <div class="stage-frame" aria-hidden="true">
+              <span class="corner tl"></span>
+              <span class="corner tr"></span>
+              <span class="corner bl"></span>
+              <span class="corner br"></span>
+            </div>
             <div class="stage-content">
               <div class="live-label caption" data-od-id="live-label">Live Exhibition Screen</div>
               <div class="hero-copy" data-od-id="hero-copy">
@@ -44,20 +45,6 @@
                   面向展会观众的大屏首页，先建立学校识别，再用扫码内容把观众带入具体成果、专业与校园故事。
                 </p>
                 <div id="heroTags" class="hero-tags tag-row" data-od-id="hero-tags"></div>
-              </div>
-              <div class="hero-actions" data-od-id="scan-guidance">
-                <div class="scan-card" data-od-id="scan-card">
-                  <img id="scanImage" class="qr-image" alt="" hidden />
-                  <div class="qr-mark" aria-hidden="true">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <div>
-                    <h2 id="scanTitle">扫描展项二维码</h2>
-                    <p id="scanCopy">大屏将自动进入对应编号内容页，保留当前项目与扫码事件的实时联动。</p>
-                  </div>
-                </div>
               </div>
             </div>
           </article>
@@ -74,13 +61,24 @@
 
             <section class="carousel-panel" data-od-id="carousel-panel">
               <div id="carouselStage" class="carousel-stage" data-od-id="carousel-stage"></div>
-              <section class="carousel-summary" data-od-id="carousel-summary">
-                <p id="carouselSummaryLabel" class="section-label">WELCOME OVERVIEW</p>
-                <h2 id="carouselSummaryTitle" class="carousel-summary-title"></h2>
-                <p id="carouselSummaryCopy" class="carousel-summary-copy"></p>
-                <div id="carouselSummaryTags" class="carousel-summary-tags tag-row"></div>
-              </section>
               <div id="carouselScanSlot" class="carousel-scan-slot"></div>
+              <div class="scan-card" data-od-id="scan-card">
+                <img
+                  id="scanImage"
+                  class="qr-image"
+                  src="/static/blueprint/school-qr.jpg"
+                  alt="扫码访问学校官网"
+                />
+                <div class="qr-mark" aria-hidden="true" hidden>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="scan-copy">
+                  <h2 id="scanTitle">扫码访问学校官网</h2>
+                  <p id="scanCopy">扫码即可访问学校官方网站，了解更多校园信息。</p>
+                </div>
+              </div>
               <div class="progress-track" aria-hidden="true"><div id="progressBar" class="progress-bar"></div></div>
               <div id="carouselPagination" class="carousel-pagination" aria-label="轮播分页"></div>
               <div class="control-row">
@@ -106,8 +104,33 @@
           </aside>
         </section>
 
+        <footer class="bottom-strip" data-od-id="bottom-strip">
+          <div class="meta-line">
+            <span id="footerProject">毕节职业技术学院数字展厅</span>
+            <span id="footerStatus">实时等待扫码内容</span>
+            <span class="mini-map" aria-hidden="true">
+              <span class="map-seg is-on"></span>
+              <span class="map-seg"></span>
+              <span class="map-seg"></span>
+            </span>
+          </div>
+          <span id="footerTime" class="meta-time">Display Ready</span>
+        </footer>
       </section>
 
+      <!-- ============ 成果超市 ============ -->
+      <section id="marketView" class="market-view" hidden data-od-id="market-view">
+        <button id="returnMarketHome" class="return-home" type="button">返回首页</button>
+        <header class="market-head">
+          <p id="marketLabel" class="section-label">ACHIEVEMENT MARKET</p>
+          <h1 id="marketTitle">成果超市</h1>
+          <p id="marketIntro">选择展示项目，扫码或点击进入详情页。</p>
+        </header>
+        <div id="marketCategoryNav" class="market-nav"></div>
+        <section id="marketItems" class="market-grid"></section>
+      </section>
+
+      <!-- ============ 扫码详情页 ============ -->
       <section id="pageView" class="detail-view" hidden data-od-id="detail-view">
         <button id="returnHome" class="return-home" type="button" data-od-id="return-home">返回首页</button>
         <figure class="detail-media" data-od-id="detail-media">
@@ -130,14 +153,11 @@
             扫码后，大屏直接切换到对应编号内容。图片、标题、副标题和正文均来自当前部署项目的数据接口。
           </p>
           <div id="detailBody" class="body-text" data-od-id="detail-body"></div>
-          <footer class="detail-footer" data-od-id="detail-footer">
-            <span>学校大屏展示内容</span>
-            <span>扫码进入子级展示页</span>
-          </footer>
+          <footer class="detail-footer" data-od-id="detail-footer" hidden></footer>
         </article>
       </section>
     </main>
 
-    <script src="/static/display.js?v=loop-scroll-20260716d"></script>
+    <script src="/static/display.js?v=detail-placeholder-clean-20260816"></script>
   </body>
 </html>

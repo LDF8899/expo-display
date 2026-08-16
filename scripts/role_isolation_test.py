@@ -136,7 +136,7 @@ def assert_teacher_isolated(base_url, teacher, own_project_id, own_project_name,
 
 
 def main():
-    with tempfile.TemporaryDirectory() as temp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
         temp_path = Path(temp)
         db_path = temp_path / "expo-role-isolation.db"
         base_url = f"http://127.0.0.1:{PORT}"
@@ -154,8 +154,11 @@ def main():
             [sys.executable, "server.py"],
             cwd=ROOT,
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         try:
             time.sleep(2)
@@ -179,6 +182,18 @@ def main():
             if admin_dashboard["dashboard"]["summary"]["scans"] != 2:
                 raise RuntimeError(f"admin should see all scans: {admin_dashboard['dashboard']['summary']}")
             print("role_isolation_ok=true")
+        except Exception:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+            if process.stdout:
+                output = process.stdout.read()
+                if output:
+                    print(output[-4000:], file=sys.stderr)
+            raise
         finally:
             if process.poll() is None:
                 process.terminate()

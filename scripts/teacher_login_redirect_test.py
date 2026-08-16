@@ -84,7 +84,7 @@ def main():
             if teacher_login.get("redirectUrl") != "/teacher?view=pages":
                 raise RuntimeError(f"teacher redirect mismatch: {teacher_login}")
             html = request(f"{base_url}/teacher?view=pages", headers={"Cookie": teacher_cookie}).read().decode("utf-8")
-            if "内容管理" not in html:
+            if 'id="nav"' not in html or "admin.js" not in html:
                 raise RuntimeError("teacher pages view did not serve teacher shell")
             response = request(f"{base_url}/admin", headers={"Cookie": teacher_cookie})
             if not response.geturl().endswith("/teacher?view=pages"):

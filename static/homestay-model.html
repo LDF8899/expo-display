@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>民宿三维模型</title>
+    <link rel="stylesheet" href="/static/homestay-model.css?v=20260806c" />
+  </head>
+  <body>
+    <div class="model-page">
+      <header class="model-topbar">
+        <a id="returnPortal" class="back-link" href="/departments/tourism">返回展厅</a>
+        <div class="brand-block">
+          <span class="brand-kicker">BIJIE VOCATIONAL AND TECHNICAL COLLEGE</span>
+          <h1>民宿三维模型</h1>
+        </div>
+        <span id="modelStatusChip" class="model-status-chip">Windows 3D</span>
+      </header>
+
+      <main class="model-main">
+        <section class="model-frame" aria-label="民宿三维模型">
+          <div class="model-window">
+            <img id="modelStream" class="model-stream" alt="民宿三维模型实时画面" tabindex="0" draggable="false" hidden />
+            <div class="model-window-grid" aria-hidden="true"></div>
+            <div id="modelOverlay" class="model-window-copy">
+              <span>Homestay 3D Model</span>
+              <h2>民宿场景正在串流</h2>
+              <p id="modelStatus">正在启动模型窗口...</p>
+              <button id="restartModel" class="model-restart" type="button">重新启动</button>
+            </div>
+          </div>
+          <footer class="model-footer">
+            <span>民宿场景建模资源</span>
+            <span>点击返回展厅将关闭模型进程</span>
+          </footer>
+        </section>
+      </main>
+    </div>
+    <script src="/static/homestay-model.js?v=20260806c"></script>
+  </body>
+</html>

@@ -1,0 +1,1334 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>毕节职业技术学院智慧康养专题</title>
+  <style>
+    :root {
+      --ink: #314b4c;
+      --green: #36666a;
+      --green-deep: #244c4f;
+      --green-soft: #6c8d8b;
+      --gold: #bb9051;
+      --rose: #c97d8f;
+      --paper: rgba(255, 253, 248, 0.88);
+      --paper-strong: rgba(255, 253, 248, 0.96);
+      --line: rgba(178, 157, 118, 0.32);
+      --shadow: 0 20px 44px rgba(55, 73, 69, 0.13);
+      --font: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background: #eef0e8;
+      font-family: var(--font);
+    }
+
+    button { font: inherit; }
+
+    button,
+    [tabindex="0"] {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:focus-visible,
+    [tabindex="0"]:focus-visible {
+      outline: 0.18rem solid rgba(216, 117, 154, 0.72);
+      outline-offset: 0.18rem;
+    }
+
+    .viewport {
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #e9eee9;
+    }
+
+    .page {
+      position: relative;
+      width: min(100vw, calc(100vh * 16 / 9));
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      background: url("页面/digital-tourism-bg.png") center / cover no-repeat;
+      box-shadow: 0 22px 80px rgba(41, 64, 67, 0.18);
+    }
+
+    .page::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 44% 48%, rgba(255, 255, 255, 0.4), transparent 42%),
+        linear-gradient(180deg, rgba(250, 253, 249, 0.06), rgba(235, 242, 238, 0.16));
+    }
+
+    .header,
+    .content,
+    .side-actions,
+    .pager {
+      position: absolute;
+      z-index: 1;
+    }
+
+    .header {
+      left: 3.9%;
+      right: 3.4%;
+      top: 3.6%;
+      height: 10.5%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 7.8%;
+      gap: 2.2%;
+      align-items: center;
+    }
+
+    .brand {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 1.55rem;
+    }
+
+    .seal {
+      flex: 0 0 auto;
+      width: 6.8rem;
+      height: 6.8rem;
+      border-radius: 50%;
+      border: 0.38rem solid #527d7d;
+      background:
+        radial-gradient(circle at 50% 52%, #fff8e5 0 28%, transparent 29%),
+        conic-gradient(from 20deg, #315f62, #86a6a0, #315f62);
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 0 0 0.45rem #f8f2de, 0 8px 20px rgba(72, 93, 58, 0.16);
+    }
+
+    .seal::before {
+      content: "";
+      width: 3.7rem;
+      height: 2.7rem;
+      clip-path: polygon(5% 78%, 32% 38%, 47% 62%, 68% 20%, 96% 78%);
+      background: linear-gradient(135deg, #4f8b8a, #d2a05b 58%, #4a6b76);
+      border-radius: 0.25rem;
+    }
+
+    .school {
+      min-width: 0;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 2.4rem;
+      min-width: 0;
+    }
+
+    h1 {
+      margin: 0;
+      color: #335e60;
+      font-size: 4.15rem;
+      line-height: 1;
+      font-weight: 900;
+      white-space: nowrap;
+      letter-spacing: 0;
+      text-shadow: 0 3px 0 rgba(255, 255, 255, 0.54);
+    }
+
+    .divider {
+      width: 2px;
+      height: 4.7rem;
+      background: rgba(176, 143, 92, 0.44);
+    }
+
+    .topic {
+      color: var(--gold);
+      font-size: 2.35rem;
+      line-height: 1;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .tagline {
+      margin-top: 0.7rem;
+      color: #5c7370;
+      font-size: 1.08rem;
+      font-weight: 500;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .qr {
+      height: 100%;
+      border-radius: 1.5rem;
+      background: rgba(255, 252, 246, 0.7);
+      box-shadow: 0 12px 34px rgba(47, 74, 78, 0.12);
+      display: grid;
+      place-items: center;
+      padding: 0.85rem;
+    }
+
+    .qr-box {
+      width: 100%;
+      height: 100%;
+      border: 2px dashed rgba(143, 124, 83, 0.58);
+      border-radius: 0.8rem;
+      display: grid;
+      place-items: center;
+      color: #556d69;
+      text-align: center;
+      font-weight: 700;
+      line-height: 1.55;
+      background:
+        linear-gradient(90deg, transparent 30%, rgba(73, 111, 112, 0.24) 30% 38%, transparent 38% 62%, rgba(73, 111, 112, 0.24) 62% 70%, transparent 70%),
+        linear-gradient(0deg, transparent 30%, rgba(73, 111, 112, 0.18) 30% 38%, transparent 38% 62%, rgba(73, 111, 112, 0.18) 62% 70%, transparent 70%);
+      background-size: 1.35rem 1.35rem;
+    }
+
+    .content {
+      left: 4.35%;
+      right: 10%;
+      top: 15.7%;
+      bottom: 6.35%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 0.97fr 1.03fr;
+      gap: 1.34rem;
+    }
+
+    .panel {
+      min-width: 0;
+      min-height: 0;
+      border: 1px solid rgba(182, 163, 128, 0.36);
+      border-radius: 1.45rem;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      padding: 1.55rem 1.78rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(4px);
+    }
+
+    .panel-header {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.35rem;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      min-width: 0;
+      color: var(--green);
+      font-size: 1.78rem;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .panel-title .icon {
+      flex: 0 0 auto;
+      width: 1.65rem;
+      height: 1.65rem;
+      border-radius: 0.45rem;
+      background: linear-gradient(135deg, #4f8b8a, #c97d8f 54%, #c9a15c);
+      position: relative;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.34);
+    }
+
+    .panel-title .icon::after {
+      content: "";
+      position: absolute;
+      left: 0.38rem;
+      top: 0.35rem;
+      width: 0.85rem;
+      height: 0.85rem;
+      border: solid rgba(255, 255, 255, 0.88);
+      border-width: 0 0 3px 3px;
+      transform: rotate(-45deg);
+      border-radius: 0 0 0 0.2rem;
+    }
+
+    .panel-note {
+      color: #4a5d5b;
+      font-size: 1.06rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .basic-grid {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .mini-card,
+    .partner-card,
+    .story-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 0.9rem;
+      background: rgba(255, 253, 248, 0.8);
+      box-shadow: 0 10px 22px rgba(55, 73, 69, 0.09);
+      overflow: hidden;
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background-color 180ms ease;
+    }
+
+    .mini-card,
+    .partner-card,
+    .story-card,
+    .result-item,
+    .qr,
+    .video-box {
+      cursor: pointer;
+    }
+
+    .mini-card:hover,
+    .partner-card:hover,
+    .story-card:hover,
+    .mini-card.is-active,
+    .partner-card.is-active,
+    .story-card.is-active {
+      transform: translateY(-0.18rem);
+      border-color: rgba(216, 117, 154, 0.52);
+      background: rgba(255, 253, 248, 0.9);
+      box-shadow: 0 16px 30px rgba(55, 73, 69, 0.13);
+    }
+
+    .mini-card {
+      padding: 1.15rem 0.95rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.05rem;
+    }
+
+    .card-title {
+      color: var(--green);
+      font-size: 1.48rem;
+      line-height: 1.1;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .photo {
+      flex: 0 0 auto;
+      height: 18.4rem;
+      border-radius: 0.65rem;
+      overflow: hidden;
+      background-image: linear-gradient(180deg, rgba(255,255,255,0), rgba(31,76,80,0.14)), url("页面/digital-tourism-bg.png");
+      background-size: cover;
+      box-shadow: inset 0 -28px 36px rgba(32, 72, 77, 0.13);
+    }
+
+    .photo.mountain { background-position: 72% 12%; }
+    .photo.greenhouse { background-position: 100% 18%; }
+    .photo.base { background-position: 2% 85%; }
+    .photo.team { background-position: 55% 8%; }
+    .photo.course { background-position: 82% 84%; }
+    .photo.student { background-position: 8% 88%; }
+    .photo.prize { background-position: 94% 90%; }
+    .photo.service { background-position: 18% 78%; }
+
+    .mini-card p,
+    .partner-card p,
+    .story-card p,
+    .video-copy p {
+      margin: 0;
+      color: #455958;
+      font-size: 1.18rem;
+      line-height: 1.62;
+      font-weight: 600;
+    }
+
+    .cooperation-body {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1.18fr 0.96fr;
+      gap: 1.35rem;
+    }
+
+    .partner-card {
+      padding: 1.2rem 1.15rem 1.05rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .partner-card .photo {
+      height: 13.4rem;
+    }
+
+    .partner-icons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.65rem;
+      color: #607674;
+      text-align: center;
+      font-size: 0.9rem;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .partner-icons span::before {
+      content: "";
+      display: block;
+      width: 1.85rem;
+      height: 1.85rem;
+      margin: 0 auto 0.32rem;
+      border-radius: 0.35rem;
+      background: linear-gradient(135deg, #c99758, #6f9b9a);
+      opacity: 0.78;
+    }
+
+    .result-grid {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-top: 1px solid rgba(205, 188, 157, 0.42);
+      border-left: 1px solid rgba(205, 188, 157, 0.42);
+      margin: 1rem 0 0;
+    }
+
+    .result-item {
+      display: grid;
+      place-items: center;
+      gap: 0.45rem;
+      padding: 0.65rem;
+      border-right: 1px solid rgba(205, 188, 157, 0.42);
+      border-bottom: 1px solid rgba(205, 188, 157, 0.42);
+      color: #455d5c;
+      text-align: center;
+      font-size: 1.02rem;
+      font-weight: 800;
+    }
+
+    .result-item::before {
+      content: "";
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #d1a25b, #7ca5a2);
+      opacity: 0.9;
+    }
+
+    .achievement {
+      padding-left: 1.45rem;
+      padding-right: 1.45rem;
+    }
+
+    .carousel {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1.2rem repeat(4, minmax(0, 1fr)) 1.2rem;
+      gap: 0.95rem;
+      align-items: center;
+    }
+
+    .arrow {
+      width: 2.45rem;
+      height: 2.45rem;
+      border: 0;
+      border-radius: 50%;
+      color: #344b4c;
+      background: rgba(255, 253, 248, 0.84);
+      box-shadow: 0 8px 18px rgba(55, 73, 69, 0.1);
+      font-size: 1.8rem;
+      line-height: 1;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      justify-self: center;
+      transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+    }
+
+    .arrow:hover,
+    .pager button:hover,
+    .round-link:hover {
+      transform: translateY(-0.12rem);
+    }
+
+    .arrow.next {
+      color: white;
+      background: rgba(80, 132, 133, 0.78);
+    }
+
+    .story-card {
+      height: 100%;
+      padding: 0.92rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .story-card .photo {
+      height: 17rem;
+    }
+
+    .story-card.is-updating {
+      opacity: 0.42;
+      transform: translateY(0.2rem);
+    }
+
+    .story-card strong {
+      color: var(--green);
+      font-size: 1.28rem;
+      line-height: 1.2;
+      font-weight: 900;
+    }
+
+    .dots {
+      display: flex;
+      justify-content: center;
+      gap: 0.6rem;
+      margin-top: 1.1rem;
+    }
+
+    .dots button {
+      width: 0.6rem;
+      height: 0.6rem;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(184, 170, 142, 0.28);
+      cursor: pointer;
+      transition: width 180ms ease, background-color 180ms ease, transform 180ms ease;
+    }
+
+    .dots button.is-active {
+      width: 0.9rem;
+      background: #5f8d8a;
+    }
+
+    .dots button:hover {
+      transform: scale(1.2);
+    }
+
+    .video-box {
+      flex: 1;
+      min-height: 0;
+      border-radius: 0.65rem;
+      overflow: hidden;
+      position: relative;
+      background-image:
+        linear-gradient(90deg, rgba(15, 43, 47, 0.24), rgba(15, 43, 47, 0.04)),
+        linear-gradient(0deg, rgba(8, 22, 26, 0.68), transparent 36%),
+        url("页面/digital-tourism-bg.png");
+      background-size: 100% 100%, 100% 100%, cover;
+      background-position: center, center, center;
+      box-shadow: inset 0 -70px 80px rgba(0, 0, 0, 0.32);
+    }
+
+    .video-box::after {
+      content: "点击播放";
+      position: absolute;
+      left: 2.4%;
+      top: 5.4%;
+      padding: 0.45rem 0.72rem;
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(27, 61, 63, 0.5);
+      backdrop-filter: blur(8px);
+      font-size: 0.9rem;
+      font-weight: 800;
+      opacity: 0;
+      transform: translateY(-0.3rem);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .video-box:hover::after {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .video-box.is-playing::after {
+      content: "播放中";
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .play {
+      position: absolute;
+      left: 50%;
+      top: 51%;
+      width: 4.2rem;
+      height: 4.2rem;
+      border: 0;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 12px 24px rgba(25, 50, 54, 0.2);
+      cursor: pointer;
+      transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+    }
+
+    .video-box.is-playing .play {
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 14px 30px rgba(25, 50, 54, 0.26);
+    }
+
+    .play:hover {
+      transform: translate(-50%, calc(-50% - 0.12rem));
+    }
+
+    .play::before {
+      content: "";
+      position: absolute;
+      left: 1.6rem;
+      top: 1.22rem;
+      border-left: 1.25rem solid #376f73;
+      border-top: 0.86rem solid transparent;
+      border-bottom: 0.86rem solid transparent;
+    }
+
+    .video-box.is-playing .play::before {
+      left: 1.3rem;
+      top: 1.2rem;
+      width: 0.38rem;
+      height: 1.75rem;
+      border: 0;
+      background: #2f8584;
+      box-shadow: 0.9rem 0 0 #2f8584;
+    }
+
+    .film-chip {
+      position: absolute;
+      right: 5.4%;
+      top: 18%;
+      width: 29%;
+      aspect-ratio: 1.6 / 1;
+      border: 0.16rem solid rgba(255, 255, 255, 0.74);
+      border-radius: 50%;
+      overflow: hidden;
+      background-image: url("页面/digital-tourism-bg.png");
+      background-size: cover;
+      background-position: 94% 82%;
+      box-shadow: 0 12px 30px rgba(7, 20, 24, 0.28);
+    }
+
+    .controls {
+      position: absolute;
+      left: 2.2%;
+      right: 2.2%;
+      bottom: 4.6%;
+      height: 2.6rem;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      color: #fff;
+      font-size: 1.02rem;
+      font-weight: 800;
+    }
+
+    .tiny-play {
+      width: 0;
+      height: 0;
+      border-left: 0.75rem solid #fff;
+      border-top: 0.5rem solid transparent;
+      border-bottom: 0.5rem solid transparent;
+    }
+
+    .bar {
+      flex: 1;
+      height: 0.34rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.78);
+      position: relative;
+    }
+
+    .bar::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: var(--progress, 7%);
+      border-radius: inherit;
+      background: #fff;
+      transition: width 260ms linear;
+    }
+
+    .video-copy {
+      margin-top: 0.9rem;
+    }
+
+    .video-copy strong {
+      display: block;
+      color: #223e40;
+      font-size: 1.42rem;
+      line-height: 1.2;
+      margin-bottom: 0.35rem;
+      font-weight: 900;
+    }
+
+    .side-actions {
+      right: 2.25%;
+      top: 59.2%;
+      width: 7.25%;
+      display: grid;
+      gap: 1.65rem;
+    }
+
+    .round-link {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 0;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      font-size: 1.22rem;
+      line-height: 1.32;
+      font-weight: 900;
+      box-shadow: 0 12px 26px rgba(43, 60, 58, 0.22), inset 0 0 0 0.16rem rgba(255, 255, 255, 0.22);
+      cursor: pointer;
+      transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+    }
+
+    .round-link:hover {
+      box-shadow: 0 16px 34px rgba(43, 60, 58, 0.26), inset 0 0 0 0.16rem rgba(255, 255, 255, 0.28);
+      filter: saturate(1.06);
+    }
+
+    .round-link.green { background: #356c70; }
+    .round-link.gold { background: #bf9150; }
+
+    .round-link::before {
+      content: "";
+      width: 0.86rem;
+      height: 0.86rem;
+      border-radius: 0.2rem;
+      margin-bottom: 0.9rem;
+      background: #fff;
+      box-shadow: 1.2rem 0 #fff, 0 1.2rem #fff, 1.2rem 1.2rem #fff;
+      opacity: 0.96;
+    }
+
+    .round-link.gold::before {
+      width: 2.45rem;
+      height: 1.8rem;
+      border-radius: 0.2rem 0.2rem 0.8rem 0.8rem;
+      background:
+        linear-gradient(90deg, transparent 47%, #fff 47% 53%, transparent 53%),
+        linear-gradient(135deg, transparent 13%, #fff 14% 43%, transparent 44%),
+        linear-gradient(45deg, transparent 13%, #fff 14% 43%, transparent 44%);
+      box-shadow: none;
+    }
+
+    .pager {
+      left: 50%;
+      bottom: 1.7%;
+      transform: translateX(-50%);
+      height: 3.25rem;
+      min-width: 14.1rem;
+      padding: 0 1.15rem;
+      border-radius: 1.8rem;
+      background: rgba(255, 253, 248, 0.85);
+      box-shadow: 0 12px 24px rgba(55, 73, 69, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      color: #3e4339;
+      font-size: 1rem;
+      font-weight: 900;
+    }
+
+    .pager button {
+      border: 0;
+      background: transparent;
+      color: #35402f;
+      font-size: 1.5rem;
+      line-height: 1;
+      padding: 0.25rem 0.35rem;
+      cursor: pointer;
+      transition: transform 160ms ease, color 160ms ease;
+    }
+
+    .pager .refresh {
+      border-left: 1px solid rgba(175, 161, 132, 0.5);
+      padding-left: 1.05rem;
+      color: #7d7869;
+      font-size: 1rem;
+      font-weight: 900;
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: 7.2%;
+      z-index: 8;
+      max-width: 42rem;
+      padding: 0.8rem 1.1rem;
+      border: 1px solid rgba(216, 117, 154, 0.26);
+      border-radius: 999px;
+      color: #2e7476;
+      background: rgba(255, 253, 248, 0.92);
+      box-shadow: 0 14px 34px rgba(55, 73, 69, 0.16);
+      font-size: 1.02rem;
+      font-weight: 800;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, 0.8rem);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .resource-dialog {
+      width: min(46rem, calc(100vw - 4rem));
+      border: 1px solid rgba(216, 117, 154, 0.3);
+      border-radius: 1.4rem;
+      color: var(--ink);
+      background: rgba(255, 253, 248, 0.96);
+      box-shadow: 0 24px 80px rgba(43, 60, 58, 0.28);
+      padding: 0;
+    }
+
+    .resource-dialog::backdrop {
+      background: rgba(36, 55, 55, 0.28);
+      backdrop-filter: blur(5px);
+    }
+
+    .dialog-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.3rem 1.45rem 0.8rem;
+      border-bottom: 1px solid rgba(178, 157, 118, 0.24);
+    }
+
+    .dialog-head strong {
+      color: #2e7476;
+      font-size: 1.35rem;
+      line-height: 1.2;
+    }
+
+    .dialog-close {
+      width: 2.2rem;
+      height: 2.2rem;
+      border: 0;
+      border-radius: 50%;
+      color: #fff;
+      background: #2f8584;
+      cursor: pointer;
+    }
+
+    .dialog-body {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.9rem;
+      padding: 1.2rem 1.45rem 1.45rem;
+    }
+
+    .dialog-item {
+      min-height: 6.5rem;
+      border: 1px solid rgba(178, 157, 118, 0.28);
+      border-radius: 0.9rem;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.58);
+    }
+
+    .dialog-item strong {
+      display: block;
+      color: var(--green);
+      font-size: 1.04rem;
+      margin-bottom: 0.45rem;
+    }
+
+    .dialog-item p {
+      margin: 0;
+      color: #455958;
+      font-size: 0.92rem;
+      line-height: 1.5;
+      font-weight: 650;
+    }
+
+    .page.is-highlighted {
+      animation: panelPulse 900ms ease;
+    }
+
+    @keyframes panelPulse {
+      0% { box-shadow: var(--shadow); }
+      38% { box-shadow: 0 0 0 0.22rem rgba(216, 117, 154, 0.18), 0 20px 44px rgba(55, 73, 69, 0.16); }
+      100% { box-shadow: var(--shadow); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+
+    html { font-size: 16px; }
+
+    @media (max-width: 3839px) { html { font-size: 15px; } }
+    @media (max-width: 3199px) { html { font-size: 12px; } }
+    @media (max-width: 2559px) { html { font-size: 10px; } }
+    @media (max-width: 1999px) { html { font-size: 7.5px; } }
+    @media (max-width: 1439px) { html { font-size: 5.35px; } }
+
+    /* Topic override: 智慧康养专题 */
+    :root {
+      --ink: #375457;
+      --green: #2f8584;
+      --gold: #c79566;
+      --rose: #d8759a;
+    }
+
+    body { background: #f4f0ed; }
+    .viewport { background: #e9f2ef; }
+    .page { background-image: url("页面/smart-healthcare-bg.png"); }
+    h1 { color: #2e7476; }
+    .tagline { color: #637c7b; }
+    .seal { border-color: #2f8584; }
+    .seal::before,
+    .panel-title .icon,
+    .partner-icons span::before,
+    .result-item::before {
+      background: linear-gradient(135deg, #42a7a3, #d8759a 56%, #c79566);
+    }
+    .round-link.green { background: #2f8584; }
+    .round-link.gold { background: #d8759a; }
+    .dots button.is-active,
+    .arrow.next { background: #2f8584; }
+    .play::before { border-left-color: #2f8584; }
+    .video-copy strong { color: #2e7476; }
+    .photo {
+      background-image: linear-gradient(180deg, rgba(255,255,255,0), rgba(31,76,80,0.14)), url("页面/smart-healthcare-bg.png");
+    }
+    .video-box {
+      background-image:
+        linear-gradient(90deg, rgba(15, 43, 47, 0.24), rgba(15, 43, 47, 0.04)),
+        linear-gradient(0deg, rgba(8, 22, 26, 0.68), transparent 36%),
+        url("页面/smart-healthcare-bg.png");
+    }
+    .film-chip { background-image: url("页面/smart-healthcare-bg.png"); }
+  </style>
+</head>
+<body>
+  <main class="viewport">
+    <section class="page" aria-label="毕节职业技术学院智慧康养专题展示页">
+      <header class="header">
+        <div class="brand">
+          <div class="seal" aria-hidden="true"></div>
+          <div class="school">
+            <div class="title-row">
+              <h1>毕节职业技术学院</h1>
+              <div class="divider" aria-hidden="true"></div>
+              <div class="topic">智慧康养专题</div>
+            </div>
+            <div class="tagline">护理康养 · 急救教育 · 健康管理 · 智慧服务</div>
+          </div>
+        </div>
+        <aside class="qr" aria-label="二维码区域">
+          <div class="qr-box">二维码<br>待放置</div>
+        </aside>
+      </header>
+
+      <section class="content">
+        <article class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span class="icon" aria-hidden="true"></span>基本情况</div>
+            <div class="panel-note">院系概览</div>
+          </div>
+          <div class="basic-grid">
+            <section class="mini-card">
+              <div class="card-title">护理康养概况</div>
+              <div class="photo mountain" role="img" aria-label="护理康养与健康服务"></div>
+              <p>面向护理照护、老年康养、健康管理与急救教育需求，结合毕节生态康养资源，打造温暖专业的健康服务育人场景。</p>
+            </section>
+            <section class="mini-card">
+              <div class="card-title">专业群建设</div>
+              <div class="photo greenhouse" role="img" aria-label="智慧康养专业群建设"></div>
+              <p>围绕护理、康复照护、健康管理与服务运营，培养兼具人文关怀、规范操作和数字应用能力的技能人才。</p>
+            </section>
+            <section class="mini-card">
+              <div class="card-title">护理实训基地</div>
+              <div class="photo base" role="img" aria-label="护理康养护理实训基地"></div>
+              <p>建设护理床旁照护、急救训练、康复照护、生命体征监测与健康数据管理等实训模块，强化真实岗位流程训练。</p>
+            </section>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span class="icon" aria-hidden="true"></span>产教融合校企合作成果</div>
+            <div class="panel-note">合作展示</div>
+          </div>
+          <div class="cooperation-body">
+            <section class="partner-card">
+              <div class="card-title">校企合作项目</div>
+              <div class="photo team" role="img" aria-label="校企合作实践现场"></div>
+              <div class="partner-icons">
+                <span>医院协同育人</span>
+                <span>康养机构共建</span>
+                <span>社区健康服务</span>
+                <span>急救培训项目</span>
+              </div>
+              <p>与医疗机构、康养中心和社区服务单位共建实践基地，开展岗位实训、健康宣教与社会服务。</p>
+            </section>
+            <section class="partner-card">
+              <div class="card-title">产教融合成果</div>
+              <div class="result-grid">
+                <div class="result-item">护理技能实训</div>
+                <div class="result-item">健康管理项目</div>
+                <div class="result-item">急救培训成果</div>
+                <div class="result-item">社区服务案例</div>
+              </div>
+              <p>学生参与护理照护、健康档案管理、急救科普和社区服务，形成面向地方民生需求的实践成果。</p>
+            </section>
+          </div>
+        </article>
+
+        <article class="panel achievement">
+          <div class="panel-header">
+            <div class="panel-title"><span class="icon" aria-hidden="true"></span>教学与创新成果</div>
+            <div class="panel-note">轮播图</div>
+          </div>
+          <div class="carousel">
+            <button class="arrow" type="button" aria-label="上一张" data-carousel-prev>‹</button>
+            <section class="story-card">
+              <div class="photo course" role="img" aria-label="课程成果"></div>
+              <strong>课程成果</strong>
+              <p>《智慧康养服务实务》课程资源建设与应用</p>
+            </section>
+            <section class="story-card">
+              <div class="photo student" role="img" aria-label="学生项目"></div>
+              <strong>学生项目</strong>
+              <p>健康数据随访与康养服务流程学生项目</p>
+            </section>
+            <section class="story-card">
+              <div class="photo prize" role="img" aria-label="技能竞赛"></div>
+              <strong>技能竞赛</strong>
+              <p>在护理技能与健康服务竞赛中获得奖项</p>
+            </section>
+            <section class="story-card">
+              <div class="photo service" role="img" aria-label="社区服务"></div>
+              <strong>社区服务</strong>
+              <p>师生团队开展健康宣教、急救培训与康养志愿服务</p>
+            </section>
+            <button class="arrow next" type="button" aria-label="下一张" data-carousel-next>›</button>
+          </div>
+          <div class="dots" aria-label="成果轮播分页">
+            <button class="is-active" type="button" aria-label="第1组成果" data-dot="0"></button>
+            <button type="button" aria-label="第2组成果" data-dot="1"></button>
+            <button type="button" aria-label="第3组成果" data-dot="2"></button>
+            <button type="button" aria-label="第4组成果" data-dot="3"></button>
+            <button type="button" aria-label="第5组成果" data-dot="4"></button>
+            <button type="button" aria-label="第6组成果" data-dot="5"></button>
+            <button type="button" aria-label="第7组成果" data-dot="6"></button>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span class="icon" aria-hidden="true"></span>视频资源</div>
+            <div class="panel-note">播放区</div>
+          </div>
+          <div class="video-box" role="img" aria-label="智慧康养专题宣传片" tabindex="0">
+            <button class="play" type="button" aria-label="播放视频"></button>
+            <div class="film-chip" aria-hidden="true"></div>
+            <div class="controls" aria-hidden="true">
+              <span class="tiny-play"></span>
+              <span class="video-time">00:00 / 03:45</span>
+              <span class="bar"></span>
+              <span>⌕</span>
+              <span>▢</span>
+            </div>
+          </div>
+          <div class="video-copy">
+            <strong>智慧康养专题宣传片</strong>
+            <p>展示学院围绕护理实训、康养服务、健康管理与急救教育的教学成果和实践探索。</p>
+          </div>
+        </article>
+      </section>
+
+      <nav class="side-actions" aria-label="特色入口">
+        <button class="round-link green" type="button" data-resource="system">特色系统<br>入口</button>
+        <button class="round-link gold" type="button" data-resource="resource">特色数字<br>资源</button>
+      </nav>
+
+      <div class="pager" aria-label="分页">
+        <button type="button" aria-label="上一页" data-page-prev>‹</button>
+        <span>1&nbsp;&nbsp;/&nbsp;&nbsp;1</span>
+        <button type="button" aria-label="下一页" data-page-next>›</button>
+        <button class="refresh" type="button" aria-label="刷新页面状态" data-refresh>刷新 ↻</button>
+      </div>
+
+      <div class="toast" role="status" aria-live="polite"></div>
+    </section>
+
+    <dialog class="resource-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-head">
+        <strong id="dialog-title">特色入口</strong>
+        <button class="dialog-close" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="dialog-body"></div>
+    </dialog>
+  </main>
+
+  <script>
+    (() => {
+      const page = document.querySelector(".page");
+      const toast = document.querySelector(".toast");
+      const dialog = document.querySelector(".resource-dialog");
+      const dialogTitle = document.querySelector("#dialog-title");
+      const dialogBody = document.querySelector(".dialog-body");
+      const dialogClose = document.querySelector(".dialog-close");
+      const storyCards = [...document.querySelectorAll(".story-card")];
+      const dots = [...document.querySelectorAll(".dots button")];
+      const videoBox = document.querySelector(".video-box");
+      const playButton = document.querySelector(".play");
+      const videoTime = document.querySelector(".video-time");
+      const progressBar = document.querySelector(".bar");
+
+      const achievements = [
+        { title: "课程成果", text: "《智慧康养服务实务》课程资源建设与应用", photo: "course" },
+        { title: "学生项目", text: "健康数据随访与康养服务流程学生项目", photo: "student" },
+        { title: "技能竞赛", text: "在护理技能与健康服务竞赛中获得奖项", photo: "prize" },
+        { title: "社区服务", text: "师生团队开展健康宣教、急救培训与康养志愿服务", photo: "service" },
+        { title: "急救训练", text: "心肺复苏、创伤包扎与应急响应流程实训成果", photo: "base" },
+        { title: "康复照护", text: "面向老年康养场景的照护流程与评估训练项目", photo: "mountain" },
+        { title: "健康管理", text: "生命体征监测、健康档案与随访服务综合实践", photo: "greenhouse" }
+      ];
+
+      const resourceData = {
+        system: {
+          title: "特色系统入口",
+          items: [
+            ["智慧康养服务平台", "健康档案、照护计划、随访记录与服务评价统一管理。"],
+            ["护理实训管理系统", "实训任务、技能评分、过程记录和教师点评集中呈现。"],
+            ["急救培训考核平台", "支持心肺复苏、创伤救护、应急响应等项目训练。"],
+            ["社区健康服务台账", "沉淀健康宣教、志愿服务与社区随访项目成果。"]
+          ]
+        },
+        resource: {
+          title: "特色数字资源",
+          items: [
+            ["康养课程资源库", "汇聚护理康养、健康管理、急救教育等课程素材。"],
+            ["护理技能视频库", "用于展示床旁照护、生命体征监测和康复训练流程。"],
+            ["健康宣教素材包", "支持社区服务、老年康养和校园健康活动快速调用。"],
+            ["典型服务案例库", "收录学生项目、竞赛成果和社会服务案例。"]
+          ]
+        }
+      };
+
+      let carouselIndex = 0;
+      let carouselTimer = 0;
+      let videoTimer = 0;
+      let seconds = 0;
+      const duration = 225;
+
+      const showToast = (message) => {
+        toast.textContent = message;
+        toast.classList.add("is-visible");
+        window.clearTimeout(showToast.timer);
+        showToast.timer = window.setTimeout(() => toast.classList.remove("is-visible"), 1800);
+      };
+
+      const formatTime = (value) => {
+        const minutes = String(Math.floor(value / 60)).padStart(2, "0");
+        const rest = String(value % 60).padStart(2, "0");
+        return `${minutes}:${rest}`;
+      };
+
+      const setActiveCard = (card) => {
+        document.querySelectorAll(".mini-card, .partner-card, .story-card").forEach((item) => item.classList.remove("is-active"));
+        card.classList.add("is-active");
+      };
+
+      const renderCarousel = () => {
+        storyCards.forEach((card, offset) => {
+          const item = achievements[(carouselIndex + offset) % achievements.length];
+          card.classList.add("is-updating");
+          window.setTimeout(() => {
+            card.querySelector(".photo").className = `photo ${item.photo}`;
+            card.querySelector("strong").textContent = item.title;
+            card.querySelector("p").textContent = item.text;
+            card.setAttribute("aria-label", item.title);
+            card.classList.remove("is-updating");
+          }, 90);
+        });
+        dots.forEach((dot, index) => {
+          dot.classList.toggle("is-active", index === carouselIndex);
+          dot.setAttribute("aria-current", index === carouselIndex ? "true" : "false");
+        });
+      };
+
+      const moveCarousel = (step) => {
+        carouselIndex = (carouselIndex + step + achievements.length) % achievements.length;
+        renderCarousel();
+      };
+
+      const restartCarousel = () => {
+        window.clearInterval(carouselTimer);
+        carouselTimer = window.setInterval(() => moveCarousel(1), 6500);
+      };
+
+      const toggleVideo = () => {
+        const isPlaying = videoBox.classList.toggle("is-playing");
+        playButton.setAttribute("aria-label", isPlaying ? "暂停视频" : "播放视频");
+        window.clearInterval(videoTimer);
+
+        if (!isPlaying) {
+          showToast("视频已暂停");
+          return;
+        }
+
+        showToast("开始播放智慧康养专题宣传片");
+        videoTimer = window.setInterval(() => {
+          seconds = Math.min(seconds + 1, duration);
+          videoTime.textContent = `${formatTime(seconds)} / 03:45`;
+          progressBar.style.setProperty("--progress", `${Math.max(7, (seconds / duration) * 100)}%`);
+          if (seconds >= duration) {
+            window.clearInterval(videoTimer);
+            videoBox.classList.remove("is-playing");
+            showToast("视频播放结束");
+          }
+        }, 1000);
+      };
+
+      const resetVideo = () => {
+        window.clearInterval(videoTimer);
+        seconds = 0;
+        videoBox.classList.remove("is-playing");
+        videoTime.textContent = "00:00 / 03:45";
+        progressBar.style.setProperty("--progress", "7%");
+        playButton.setAttribute("aria-label", "播放视频");
+      };
+
+      const openResourceDialog = (type) => {
+        const data = resourceData[type];
+        dialogTitle.textContent = data.title;
+        dialogBody.innerHTML = data.items.map(([title, desc]) => `
+          <article class="dialog-item">
+            <strong>${title}</strong>
+            <p>${desc}</p>
+          </article>
+        `).join("");
+
+        if (typeof dialog.showModal === "function") {
+          dialog.showModal();
+        } else {
+          dialog.setAttribute("open", "");
+        }
+      };
+
+      document.querySelectorAll(".mini-card, .partner-card, .story-card").forEach((card) => {
+        card.tabIndex = 0;
+        card.addEventListener("click", () => {
+          setActiveCard(card);
+          const title = card.querySelector(".card-title, strong")?.textContent?.trim() || "当前模块";
+          showToast(`已选中：${title}`);
+        });
+        card.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            card.click();
+          }
+        });
+      });
+
+      document.querySelectorAll(".result-item").forEach((item) => {
+        item.tabIndex = 0;
+        item.addEventListener("click", () => showToast(`查看成果：${item.textContent.trim()}`));
+      });
+
+      document.querySelector("[data-carousel-prev]").addEventListener("click", () => {
+        moveCarousel(-1);
+        restartCarousel();
+      });
+
+      document.querySelector("[data-carousel-next]").addEventListener("click", () => {
+        moveCarousel(1);
+        restartCarousel();
+      });
+
+      dots.forEach((dot) => {
+        dot.addEventListener("click", () => {
+          carouselIndex = Number(dot.dataset.dot);
+          renderCarousel();
+          restartCarousel();
+        });
+      });
+
+      playButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleVideo();
+      });
+
+      videoBox.addEventListener("click", toggleVideo);
+      videoBox.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggleVideo();
+        }
+      });
+
+      document.querySelectorAll("[data-resource]").forEach((button) => {
+        button.addEventListener("click", () => openResourceDialog(button.dataset.resource));
+      });
+
+      dialogClose.addEventListener("click", () => dialog.close());
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) {
+          dialog.close();
+        }
+      });
+
+      document.querySelector("[data-refresh]").addEventListener("click", () => {
+        carouselIndex = 0;
+        renderCarousel();
+        resetVideo();
+        page.classList.add("is-highlighted");
+        showToast("页面状态已刷新");
+        window.setTimeout(() => page.classList.remove("is-highlighted"), 950);
+      });
+
+      document.querySelector("[data-page-prev]").addEventListener("click", () => showToast("当前已是第 1 页"));
+      document.querySelector("[data-page-next]").addEventListener("click", () => showToast("暂无更多页面"));
+
+      document.querySelector(".qr").addEventListener("click", () => showToast("二维码内容待接入"));
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowLeft") {
+          moveCarousel(-1);
+          restartCarousel();
+        }
+        if (event.key === "ArrowRight") {
+          moveCarousel(1);
+          restartCarousel();
+        }
+        if (event.key === "Escape" && dialog.open) {
+          dialog.close();
+        }
+      });
+
+      renderCarousel();
+      restartCarousel();
+    })();
+  </script>
+</body>
+</html>

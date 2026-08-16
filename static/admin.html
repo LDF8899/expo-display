@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>展示后台管理</title>
-    <link rel="stylesheet" href="/static/admin.css?v=editor-preview-20260718a" />
+    <title>数字门户后台</title>
+    <link rel="stylesheet" href="/static/admin.css?v=teacher-admin-sync-20260816" />
   </head>
   <body>
     <aside class="sidebar">
       <div class="brand">
-          <strong id="brandTitle">展示后台</strong>
+          <strong id="brandTitle">数字门户后台</strong>
         <span id="roleBadge">-</span>
       </div>
       <nav id="nav" class="nav"></nav>
@@ -23,12 +23,13 @@
     <main class="main">
       <header class="topbar">
         <div>
-          <p id="consoleEyebrow" class="eyebrow">Expo Display Console</p>
+          <p id="consoleEyebrow" class="eyebrow">Management & Achievement Market</p>
           <h1 id="viewTitle">后台</h1>
           <p id="viewIntro">正在加载</p>
         </div>
         <div class="topbar-actions">
-          <a class="button ghost" href="/display" target="_blank" rel="noopener">打开大屏</a>
+          <a class="button ghost" href="/departments">门户官网</a>
+          <a class="button ghost" href="/display">成果超市</a>
           <button id="refreshData" class="button ghost" type="button">刷新</button>
         </div>
       </header>
@@ -39,8 +40,8 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-              <h2>老师管理</h2>
-              <p>创建老师账号、重置密码、启用或禁用账号，禁用后其内容下线。</p>
+              <h2>人员管理</h2>
+              <p>维护老师账号、部门和启用状态，并查看老师被分配的可视化编辑板块。</p>
             </div>
           </div>
           <form id="userForm" class="form-grid four">
@@ -48,20 +49,40 @@
             <input id="userDisplayName" placeholder="姓名" />
             <input id="userDepartment" placeholder="部门" />
             <input id="userPassword" placeholder="初始/重置密码" />
-            <button class="button primary" type="submit">保存老师</button>
+            <select id="userRole">
+              <option value="teacher">老师</option>
+              <option value="department_admin">系部专题管理员</option>
+              <option value="admin">管理员</option>
+            </select>
+            <button class="button primary" type="submit">保存账号</button>
           </form>
           <label class="stack">
-            <span>CSV 导入 username,name,password,department,projects</span>
-            <textarea id="csvImport" rows="5" placeholder="username,name,password,department,projects"></textarea>
+            <span>CSV 导入 username,name,password,department,role,projects</span>
+            <textarea id="csvImport" rows="5" placeholder="username,name,password,department,role,projects"></textarea>
           </label>
           <button id="importUsers" class="button ghost" type="button">导入 CSV</button>
           <p id="userStatus" class="status-text"></p>
+          <div class="list-controls">
+            <input id="userSearch" placeholder="搜索账号、姓名、部门" />
+            <select id="userRoleFilter">
+              <option value="">全部角色</option>
+              <option value="admin">管理员</option>
+              <option value="department_admin">系部专题管理员</option>
+              <option value="teacher">老师</option>
+            </select>
+            <select id="userEnabledFilter">
+              <option value="">全部状态</option>
+              <option value="1">启用</option>
+              <option value="0">禁用</option>
+            </select>
+          </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>账号</th><th>姓名</th><th>部门</th><th>项目</th><th>状态</th><th>操作</th></tr></thead>
+              <thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>部门</th><th>负责门户</th><th>人员分配</th><th>状态</th><th>操作</th></tr></thead>
               <tbody id="usersTable"></tbody>
             </table>
           </div>
+          <div id="usersPager" class="list-pager"></div>
         </section>
       </section>
 
@@ -69,45 +90,150 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-               <h2 id="projectsHeading">项目管理</h2>
-               <p id="projectsIntro">管理员创建和分配项目；老师可提交自己项目的配置修改审核。</p>
+               <h2 id="projectsHeading">系部专题管理</h2>
+               <p id="projectsIntro">维护学校门户与系部专题；在这里按板块进行人员分配并进入资料管理。</p>
             </div>
-            <button id="newProject" class="button primary admin-only" type="button">新建项目</button>
           </div>
           <div class="table-wrap">
-            <table>
-              <thead><tr><th>项目</th><th>归属</th><th>状态</th><th>页面</th><th>操作</th></tr></thead>
+            <table class="portal-table">
+              <thead><tr><th>门户</th><th>归属</th><th>状态</th><th>板块资料</th><th>操作</th></tr></thead>
               <tbody id="projectsTable"></tbody>
             </table>
           </div>
-          <section id="projectHistoryPanel" class="history-panel" hidden>
-            <div class="panel-head">
-              <div><h2 id="projectHistoryTitle">项目历史</h2><p>查看配置提交、审核结果和字段变化。</p></div>
-              <button id="closeProjectHistory" class="button ghost" type="button">关闭</button>
+          <div id="projectsPager" class="list-pager"></div>
+          <section id="projectAssignmentPanel" class="assignment-panel" hidden>
+            <div class="panel-subhead">
+              <div>
+                <strong id="projectAssignmentTitle">人员分配</strong>
+                <span id="projectAssignmentIntro">选择老师和可视化编辑板块，老师提交后由管理员审核确认。</span>
+              </div>
+              <button id="closeProjectAssignment" class="button ghost" type="button">关闭</button>
             </div>
-            <div id="projectHistory" class="history-list"></div>
+            <form id="projectAssignmentForm" class="form-grid assignment-form">
+              <select id="projectAssignmentTeacher"></select>
+              <select id="projectAssignmentModule"></select>
+              <select id="projectAssignmentContentType"></select>
+              <input id="projectAssignmentTitleInput" placeholder="板块说明，可留空自动生成" />
+              <input id="projectAssignmentDescription" placeholder="编辑要求/审核提示" />
+              <button class="button primary" type="submit">保存分配</button>
+            </form>
+            <p id="projectAssignmentStatus" class="status-text"></p>
+            <div id="projectAssignmentList" class="assignment-list"></div>
+            <section id="projectAssignmentRecordPanel" class="assignment-record-panel" hidden>
+              <div class="panel-subhead">
+                <div><strong id="projectAssignmentRecordTitle">提交详情</strong><span id="projectAssignmentRecordMeta"></span></div>
+                <button id="closeProjectAssignmentRecord" class="button ghost" type="button">关闭详情</button>
+              </div>
+              <div id="projectAssignmentRecordDetail" class="lowcode-record-detail"></div>
+            </section>
+          </section>
+          <section id="projectHistoryPanel" class="history-panel modal-backdrop" hidden>
+            <div class="modal-box">
+              <div class="panel-head">
+                <div><h2 id="projectHistoryTitle">门户历史</h2><p>查看项目修改记录：操作账号与操作时间。</p></div>
+                <button id="closeProjectHistory" class="button ghost" type="button">关闭</button>
+              </div>
+              <div id="projectHistory" class="history-list"></div>
+            </div>
           </section>
         </section>
         <form id="projectForm" class="panel editor-panel" hidden>
           <div class="panel-head">
-            <div><h2 id="projectFormTitle">项目配置</h2><p id="projectFormHint">保存项目配置。</p></div>
+            <div><h2 id="projectFormTitle">门户配置</h2><p id="projectFormHint">保存门户配置。</p></div>
             <button id="closeProjectForm" class="button ghost" type="button">关闭</button>
           </div>
-          <div class="form-grid three">
-            <input id="projectName" placeholder="项目名称" required />
+          <div class="form-grid portal-config-grid">
+            <input id="projectName" placeholder="门户名称，如 医学护理系" required />
+            <select id="projectPortalType" class="admin-only">
+              <option value="department">系部专题（旧系部）</option>
+              <option value="school">学校门户</option>
+              <option value="topic">系部专题</option>
+            </select>
+            <input id="projectPortalSlug" class="admin-only" placeholder="门户路由，如 finance" />
             <select id="projectOwner" class="admin-only"></select>
             <input id="projectAccent" type="color" value="#f59a13" />
           </div>
           <div class="form-grid two">
-            <input id="idleTitle" placeholder="欢迎页标题" />
-            <input id="idleKicker" placeholder="欢迎页小标题" />
+            <input id="idleTitle" placeholder="门户首页标题" />
+            <input id="idleKicker" placeholder="门户首页小标题" />
           </div>
-          <textarea id="idleCopy" rows="3" placeholder="欢迎页简介"></textarea>
+          <textarea id="idleCopy" rows="3" placeholder="门户简介"></textarea>
           <div class="form-grid three">
             <input id="defaultImageUrl" placeholder="默认图片地址 /uploads/..." />
             <input id="projectImageFile" type="file" accept="image/*" />
             <button id="selectProjectAsset" class="button ghost" type="button">选择资源</button>
           </div>
+          <fieldset class="portal-home-editor">
+            <legend>官网首页显示</legend>
+            <section id="schoolHomeFields" class="portal-home-fieldset">
+              <div class="field-head">
+                <span>/departments 首页顶部</span>
+                <small>学校门户负责首页导览、矩阵标题、页脚等固定位置文字。</small>
+              </div>
+              <div class="form-grid two">
+                <input id="portalHomeKicker" placeholder="导览小标题，如 School Portal" />
+                <input id="portalHomeTitle" placeholder="导览标题，如 学校门户" />
+              </div>
+              <textarea id="portalHomeCopy" rows="2" placeholder="导览说明文字"></textarea>
+              <div class="form-grid two">
+                <input id="portalHomeSectionKicker" placeholder="矩阵小标题，如 Integrated Showcase" />
+                <input id="portalHomeSectionTitle" placeholder="矩阵标题，如 创新育人矩阵" />
+              </div>
+              <textarea id="portalHomeSectionCopy" rows="2" placeholder="矩阵说明文字"></textarea>
+              <div class="form-grid two">
+                <textarea id="portalHomeRouteLabels" rows="3" placeholder="参观动线标签，每行一个"></textarea>
+                <textarea id="portalHomeFooter" rows="3" placeholder="底部提示文字"></textarea>
+              </div>
+            </section>
+            <section id="topicHomeCardFields" class="portal-home-fieldset">
+              <div class="field-head">
+                <span>/departments 首页卡片</span>
+                <small>系部专题负责自己在学校门户首页中的卡片文字、标签、关联入口和排序；封面图使用上面的默认图片。</small>
+              </div>
+              <div class="form-grid three">
+                <input id="portalHomeCardLabel" placeholder="卡片左上标签，如 系部专题" />
+                <input id="portalHomeCardSortOrder" type="number" step="1" placeholder="排序，数字越小越靠前" />
+                <input id="portalHomeCardImageHint" value="封面图使用上方默认图片/上传图片" disabled />
+              </div>
+              <textarea id="portalHomeCardSummary" rows="3" placeholder="卡片摘要文字"></textarea>
+              <textarea id="portalHomeCardChips" rows="4" placeholder="卡片底部标签，每行一个：显示文字|目标路由，如 旅游管理系|tourism"></textarea>
+            </section>
+          </fieldset>
+          <fieldset class="quality-rules-editor">
+            <legend>资料质量规则</legend>
+            <div class="form-grid quality-rules-grid">
+              <label class="stack">
+                <span>最少正文字数</span>
+                <input id="qualityMinBodyChars" type="number" min="0" max="2000" step="10" />
+              </label>
+              <label class="check-inline"><input id="qualityRequireSummary" type="checkbox" /> 要求卡片摘要</label>
+              <label class="check-inline"><input id="qualityRequireMedia" type="checkbox" /> 要求图片/视频</label>
+              <label class="check-inline"><input id="qualityRequireModule" type="checkbox" /> 要求标准板块</label>
+              <label class="check-inline"><input id="qualityRequireTypeAssets" type="checkbox" /> 检查类型素材</label>
+            </div>
+            <section class="module-quality-editor" aria-label="板块质量规则">
+              <div class="field-head">
+                <span>板块规则特例</span>
+                <small>没有配置特例的板块使用上方默认规则；适合视频、荣誉、概况等板块单独调整。</small>
+              </div>
+              <div class="form-grid quality-rules-grid">
+                <select id="qualityModuleSelect" aria-label="选择板块质量规则"></select>
+                <label class="stack">
+                  <span>板块最少正文字数</span>
+                  <input id="moduleQualityMinBodyChars" type="number" min="0" max="2000" step="10" />
+                </label>
+                <label class="check-inline"><input id="moduleQualityRequireSummary" type="checkbox" /> 要求摘要</label>
+                <label class="check-inline"><input id="moduleQualityRequireMedia" type="checkbox" /> 要求图片/视频</label>
+                <label class="check-inline"><input id="moduleQualityRequireModule" type="checkbox" /> 要求标准板块</label>
+                <label class="check-inline"><input id="moduleQualityRequireTypeAssets" type="checkbox" /> 检查类型素材</label>
+              </div>
+              <div class="actions">
+                <button id="applyModuleQualityRule" class="button ghost" type="button">应用到板块</button>
+                <button id="removeModuleQualityRule" class="button ghost" type="button">移除特例</button>
+              </div>
+              <div id="moduleQualityRuleList" class="module-quality-list"></div>
+            </section>
+          </fieldset>
           <button id="projectSubmitButton" class="button primary" type="submit">保存/提交审核</button>
           <p id="projectStatus" class="status-text"></p>
         </form>
@@ -116,9 +242,10 @@
       <section id="pagesView" class="view">
         <section class="panel">
           <div class="panel-head">
-            <div><h2 id="pagesHeading">内容管理</h2><p id="pagesIntro">老师提交后等待审核；已通过内容可生成二维码。</p></div>
+            <div><h2 id="pagesHeading">板块资料</h2><p id="pagesPanelIntro">按门户维护基本情况、专业设置、实训基地、产教融合、教学成果等板块资料。</p></div>
             <div class="toolbar">
               <select id="projectSelect"></select>
+              <input id="pageSearch" placeholder="搜索编号、标题、板块" />
               <select id="pageStatusFilter">
                 <option value="">全部状态</option>
                 <option value="pending">待审核</option>
@@ -126,49 +253,465 @@
                 <option value="rejected">已驳回</option>
                 <option value="pending_delete">删除待审</option>
               </select>
+              <select id="pageModuleFilter">
+                <option value="">全部板块</option>
+              </select>
               <button id="newPage" class="button primary" type="button">新建内容</button>
+              <button id="newLegacyPage" class="button ghost" type="button">兼容旧页</button>
             </div>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>编号</th><th>标题</th><th>栏目</th><th>状态</th><th>二维码</th><th>操作</th></tr></thead>
+          <div id="currentPortalStrip" class="current-portal-strip"></div>
+          <section id="assignmentPanel" class="assignment-panel">
+            <div class="panel-subhead">
+              <div>
+                <strong id="assignmentPanelTitle">人员分配</strong>
+                <span id="assignmentPanelIntro">管理员按板块分配系部老师；老师进入自己的可视化编辑板块后提交审核。</span>
+              </div>
+              <span id="assignmentSummary" class="badge">0 项</span>
+            </div>
+            <form id="assignmentForm" class="form-grid assignment-form">
+              <select id="assignmentTeacher"></select>
+              <select id="assignmentModule"></select>
+              <select id="assignmentContentType"></select>
+              <input id="assignmentTitle" placeholder="板块说明，可留空自动生成" />
+              <input id="assignmentDescription" placeholder="编辑要求/审核提示" />
+              <button class="button primary" type="submit">保存分配</button>
+            </form>
+            <p id="assignmentStatus" class="status-text"></p>
+            <div id="assignmentList" class="assignment-list"></div>
+          </section>
+          <section id="contentWorkspaceNav" class="content-workspace-nav" aria-label="内容工作台分区">
+            <div>
+              <strong id="contentWorkspaceModeTitle">栏目看板</strong>
+              <span id="contentWorkspaceModeIntro">从门户完整度和结构化资料开始维护，优先补齐缺项和待审内容。</span>
+            </div>
+            <div class="content-mode-tabs">
+              <button class="active" type="button" data-content-mode="content">栏目内容</button>
+              <button type="button" data-content-mode="templates">资料采集</button>
+              <button type="button" data-content-mode="reports">数据报表</button>
+              <button type="button" data-content-mode="advanced">高级兼容</button>
+            </div>
+          </section>
+          <section class="content-workflow-shell" data-content-section="content reports" aria-label="内容维护工作流">
+            <aside class="portal-tree-panel" data-workspace-only="content" aria-label="门户树">
+              <div class="workspace-panel-head">
+                <strong>门户树</strong>
+                <span>按学校门户和系部专题选择维护对象。</span>
+              </div>
+              <div id="contentPortalTree" class="content-portal-tree"></div>
+            </aside>
+            <section class="module-coverage-panel" aria-label="标准板块覆盖">
+              <div class="module-coverage-head">
+                <div>
+                  <strong id="moduleCoverageTitle">标准板块覆盖</strong>
+                  <span id="moduleCoverageSummary">正在统计门户资料完整度</span>
+                </div>
+                <div class="module-coverage-toolbar">
+                  <span id="moduleCoverageBadge" class="badge warn">待统计</span>
+                  <button id="exportModuleCoverage" class="button small" type="button">导出板块 CSV</button>
+                  <button id="exportModuleGaps" class="button small" type="button">导出待补 CSV</button>
+                </div>
+              </div>
+              <div id="moduleLibrary" class="module-library"></div>
+              <p class="module-coverage-hint">已通过资料会进入对应门户页；成果超市用于控制现场展示可打开的资料范围。</p>
+              <section class="structured-panel cms-main-list" data-content-section="content" aria-label="结构化资料">
+                <div class="panel-subhead">
+                  <div>
+                    <strong>栏目内容</strong>
+                    <span>按资料类型录入，前端自动套用人物、活动、荣誉、成果、场景、视频或图文抽屉模板。</span>
+                  </div>
+                  <div class="content-item-toolbar">
+                    <input id="contentItemSearch" placeholder="搜索标题、摘要、类型" />
+                    <select id="contentItemModuleFilter">
+                      <option value="">全部板块</option>
+                    </select>
+                    <span id="contentItemsSummary" class="badge">0 条</span>
+                    <button id="exportAssetArchive" class="button small" type="button">导出素材归档 CSV</button>
+                  </div>
+                </div>
+                <div id="contentItemsGrid" class="content-items-grid"></div>
+                <div id="contentItemsPager" class="list-pager"></div>
+              </section>
+            </section>
+            <aside class="workspace-status-panel" data-workspace-only="content reports" aria-label="门户状态和建议">
+              <div class="workspace-panel-head">
+                <strong>状态建议</strong>
+                <span>把下一步动作直接摆在维护流程旁边。</span>
+              </div>
+              <div id="workspaceStatusSummary" class="workspace-status-summary"></div>
+              <div id="workspaceActionList" class="workspace-action-list"></div>
+              <section class="content-quality-panel cms-side-quality" data-content-section="content reports" aria-label="资料质量检查">
+                <div class="panel-subhead">
+                  <div>
+                    <strong>质量检查</strong>
+                    <span id="contentQualitySummary">正在检查标题、摘要、正文和素材完整度。</span>
+                  </div>
+                  <div class="content-quality-toolbar">
+                    <span id="contentQualityBadge" class="badge warn">待检查</span>
+                    <button id="exportContentQuality" class="button small" type="button">导出清单 CSV</button>
+                  </div>
+                </div>
+                <div id="contentQualityList" class="content-quality-list"></div>
+              </section>
+            </aside>
+          </section>
+          <section class="lowcode-template-panel" data-content-section="templates" aria-label="资料采集模板">
+            <div class="panel-subhead">
+              <div>
+                <strong>资料采集模板</strong>
+                <span>按模板填写资料，系统自动生成结构化资料并进入现有审核/展示流程。</span>
+              </div>
+              <div class="lowcode-template-toolbar">
+                <span id="lowcodeFormsSummary" class="badge">0 个模板</span>
+                <button id="exportLowcodeTemplateQuality" class="button small" type="button">导出质量 CSV</button>
+                <button id="importLowcodeTemplate" class="button small" type="button">导入 JSON</button>
+                <button id="newLowcodeTemplate" class="button small" type="button">新建模板</button>
+                <input id="lowcodeTemplateImportFile" type="file" accept="application/json,.json" hidden />
+              </div>
+            </div>
+            <div id="lowcodeFormsGrid" class="lowcode-forms-grid"></div>
+          </section>
+          <section class="lowcode-report-panel" data-content-section="reports" aria-label="资料填报统计">
+            <div class="panel-subhead">
+              <div>
+                <strong>资料填报统计</strong>
+                <span>按模板和填报人汇总草稿、待审、已通过、已驳回数量，便于追踪资料采集进度。</span>
+              </div>
+              <div class="lowcode-report-toolbar">
+                <span id="lowcodeReportSummary" class="badge">0 条记录</span>
+                <button id="exportLowcodeReminderReport" class="button small" type="button">导出提醒 CSV</button>
+                <button id="exportLowcodeReport" class="button small" type="button">导出统计 CSV</button>
+              </div>
+            </div>
+            <div id="lowcodeReportGrid" class="lowcode-report-grid"></div>
+          </section>
+          <section class="lowcode-record-panel" data-content-section="templates reports" aria-label="模板提交记录">
+            <div class="panel-subhead">
+              <div>
+                <strong>模板提交记录</strong>
+                <span>追踪老师按模板提交的原始记录、模板版本和生成后的结构化资料。</span>
+              </div>
+              <div class="lowcode-record-toolbar">
+                <input id="lowcodeRecordSearch" placeholder="搜索标题、模板、填报人" />
+                <select id="lowcodeRecordStatusFilter" aria-label="筛选模板提交记录状态">
+                  <option value="all">全部状态</option>
+                  <option value="draft">草稿</option>
+                  <option value="pending">待审核</option>
+                  <option value="approved">已通过</option>
+                  <option value="rejected">已驳回</option>
+                </select>
+                <span id="lowcodeRecordsSummary" class="badge">0 条记录</span>
+                <button id="exportLowcodeRecords" class="button small" type="button">导出 CSV</button>
+                <button id="exportLowcodeRecordDetails" class="button small" type="button">导出明细 CSV</button>
+              </div>
+            </div>
+            <div id="lowcodeRecordsList" class="lowcode-record-list"></div>
+            <div id="lowcodeRecordsPager" class="list-pager"></div>
+          </section>
+          <section id="lowcodeRecordDetailPanel" class="panel editor-panel" hidden>
+            <div class="panel-head">
+              <div><h2 id="lowcodeRecordDetailTitle">模板填报详情</h2><p id="lowcodeRecordDetailMeta">查看老师按模板提交的原始字段。</p></div>
+              <button id="closeLowcodeRecordDetail" class="button ghost" type="button">关闭</button>
+            </div>
+            <div id="lowcodeRecordDetail" class="lowcode-record-detail"></div>
+          </section>
+          <div class="panel-subhead legacy-subhead" data-content-section="advanced">
+            <div>
+              <strong>兼容展示页</strong>
+              <span>结构化资料通过后会自动同步到这里；旧资料仍可编辑。</span>
+            </div>
+          </div>
+          <div id="legacyPagesTableWrap" class="table-wrap" data-content-section="advanced">
+            <table class="pages-table">
+              <thead><tr><th>编号</th><th>标题</th><th>板块</th><th>状态</th><th>二维码</th><th>操作</th></tr></thead>
               <tbody id="pagesTable"></tbody>
             </table>
           </div>
-          <section id="pageHistoryPanel" class="history-panel" hidden>
-            <div class="panel-head">
-              <div><h2 id="pageHistoryTitle">内容历史</h2><p>查看内容草稿、删除申请、审核结果和字段变化。</p></div>
-              <button id="closePageHistory" class="button ghost" type="button">关闭</button>
+          <div id="pagesPager" class="list-pager" data-content-section="advanced"></div>
+          <section id="pageHistoryPanel" class="history-panel modal-backdrop" hidden>
+            <div class="modal-box">
+              <div class="panel-head">
+                <div><h2 id="pageHistoryTitle">板块资料历史</h2><p>查看资料草稿、删除申请、审核结果和字段变化。</p></div>
+                <button id="closePageHistory" class="button ghost" type="button">关闭</button>
+              </div>
+              <div id="pageHistory" class="history-list"></div>
             </div>
-            <div id="pageHistory" class="history-list"></div>
           </section>
         </section>
-        <form id="pageForm" class="panel editor-panel" hidden>
+        <form id="lowcodeRecordForm" class="panel editor-panel" hidden>
           <div class="panel-head">
-            <div><h2 id="pageFormTitle">内容编辑</h2><p id="pageFormHint">保存后按角色发布或提交审核。</p></div>
-            <button id="closePageForm" class="button ghost" type="button">关闭</button>
+            <div><h2 id="lowcodeRecordTitle">资料采集模板</h2><p id="lowcodeRecordHint">按模板填写后自动生成结构化资料。</p></div>
+            <button id="closeLowcodeRecordForm" class="button ghost" type="button">关闭</button>
+          </div>
+          <div id="lowcodeDynamicFields" class="lowcode-dynamic-fields"></div>
+          <section class="content-asset-manager" aria-label="模板素材">
+            <div class="field-head">
+              <span>素材/附件文件</span>
+              <small>可上传、从素材中心选择，或粘贴地址；支持图片、视频、文档、压缩包和安装包。</small>
+            </div>
+            <div class="content-asset-entry">
+              <input id="lowcodeAssetUrl" placeholder="粘贴素材/附件地址" />
+              <input id="lowcodeAssetCaption" placeholder="素材说明" />
+              <select id="lowcodeAssetRole">
+                <option value="cover">封面</option>
+                <option value="portrait">人物照</option>
+                <option value="certificate">证书/荣誉</option>
+                <option value="gallery">图集</option>
+                <option value="video">视频</option>
+                <option value="attachment">附件</option>
+              </select>
+              <button id="addLowcodeAssetUrl" class="button ghost" type="button">加入</button>
+              <button id="selectLowcodeAsset" class="button ghost" type="button">素材中心</button>
+            </div>
+            <div class="form-grid four">
+              <input id="lowcodeAssetFile" type="file" multiple />
+              <button id="uploadLowcodeAsset" class="button ghost" type="button">批量上传任意文件并加入素材组</button>
+            </div>
+            <div id="lowcodeAssetCards" class="content-asset-list"></div>
+          </section>
+          <section class="exhibit-guide" aria-label="模板提交预览">
+            <div class="field-head">
+              <span>提交预览</span>
+              <small>这里预览模板数据会怎样转换为结构化资料，不影响前台固定展示样式。</small>
+            </div>
+            <article id="lowcodeRecordPreview" class="content-preview"></article>
+          </section>
+          <div class="actions">
+            <button id="lowcodeRecordDraftButton" class="button ghost" type="button">保存草稿</button>
+            <button id="lowcodeRecordSubmitButton" class="button primary" type="submit">按模板提交资料</button>
+          </div>
+          <p id="lowcodeRecordStatus" class="status-text"></p>
+        </form>
+        <form id="lowcodeTemplateForm" class="panel editor-panel" hidden>
+          <div class="panel-head">
+            <div><h2 id="lowcodeTemplateTitle">资料采集模板配置</h2><p>管理员配置字段、必填项和映射关系；老师端只看到填写表单。</p></div>
+            <button id="closeLowcodeTemplateForm" class="button ghost" type="button">关闭</button>
           </div>
           <div class="form-grid three">
+            <input id="lowcodeTemplateName" placeholder="模板名称" required />
+            <input id="lowcodeTemplateCode" placeholder="模板编码，如 LC-TOPIC-OVERVIEW" required />
+            <label class="check-inline"><input id="lowcodeTemplateEnabled" type="checkbox" checked /> 启用模板</label>
+          </div>
+          <textarea id="lowcodeTemplateDescription" rows="2" placeholder="模板说明"></textarea>
+          <div class="form-grid three">
+            <select id="lowcodeTemplatePortalType"></select>
+            <select id="lowcodeTemplateModule"></select>
+            <select id="lowcodeTemplateContentType"></select>
+          </div>
+          <datalist id="lowcodeMappingOptions">
+            <option value="content_item.title"></option>
+            <option value="content_item.subtitle"></option>
+            <option value="content_item.summary"></option>
+            <option value="content_item.body_text"></option>
+            <option value="content_item.sort_order"></option>
+            <option value="content_item.featured"></option>
+            <option value="content_item.assets.cover"></option>
+            <option value="content_item.assets.portrait"></option>
+            <option value="content_item.assets.certificate"></option>
+            <option value="content_item.assets.gallery"></option>
+            <option value="content_item.assets.video"></option>
+            <option value="content_item.assets.attachment"></option>
+            <option value="content_item.meta_json.自定义字段"></option>
+          </datalist>
+          <section id="lowcodeTemplateImportCheck" class="lowcode-import-check" aria-label="模板导入预检" hidden>
+            <div class="field-head">
+              <span>导入预检</span>
+              <small id="lowcodeTemplateImportCheckSummary">导入后请检查字段、映射和资料类型。</small>
+            </div>
+            <div id="lowcodeTemplateImportIssues" class="lowcode-import-issues"></div>
+          </section>
+          <section class="lowcode-field-editor" aria-label="模板字段配置">
+            <div class="field-head">
+              <span>字段配置</span>
+              <small>建议保留标题、摘要等核心字段；可拖拽排序，并通过绑定预设映射到展示资料。</small>
+            </div>
+            <div id="lowcodeFieldEditorList" class="lowcode-field-editor-list"></div>
+            <div class="actions">
+              <button id="applyLowcodeStandardFields" class="button ghost" type="button">套用标准字段</button>
+              <button id="addLowcodeField" class="button ghost" type="button">添加字段</button>
+            </div>
+          </section>
+          <section class="lowcode-template-quality" aria-label="模板质量引导">
+            <div class="field-head">
+              <span>模板质量引导</span>
+              <small>检查字段必填、展示映射和资料类型素材要求，避免老师填完后前台缺标题、摘要、正文或关键素材。</small>
+            </div>
+            <div id="lowcodeTemplateQualityGuide" class="lowcode-quality-list"></div>
+          </section>
+          <section class="lowcode-template-preview" aria-label="老师填写预览">
+            <div class="field-head">
+              <span>填写预览</span>
+              <small>按老师端看到的分组、字段类型和必填状态预览。</small>
+            </div>
+            <div id="lowcodeTemplatePreview"></div>
+          </section>
+          <button id="lowcodeTemplateSubmitButton" class="button primary" type="submit">保存模板配置</button>
+          <p id="lowcodeTemplateStatus" class="status-text"></p>
+        </form>
+        <section id="lowcodeVersionPanel" class="panel editor-panel" hidden>
+          <div class="panel-head">
+            <div><h2 id="lowcodeVersionTitle">模板版本历史</h2><p>查看模板字段版本，已提交记录会保留当时使用的模板版本。</p></div>
+            <button id="closeLowcodeVersionPanel" class="button ghost" type="button">关闭</button>
+          </div>
+          <div id="lowcodeVersionList" class="lowcode-version-list"></div>
+        </section>
+        <form id="contentItemForm" class="panel editor-panel" hidden>
+          <div class="panel-head">
+            <div><h2 id="contentItemFormTitle">结构化资料编辑</h2><p id="contentItemFormHint">按资料类型规范录入，保存后自动同步扫码详情页。</p></div>
+            <button id="closeContentItemForm" class="button ghost" type="button">关闭</button>
+          </div>
+          <div class="form-grid four">
+            <input id="contentCode" placeholder="编号留空自动生成" />
+            <select id="contentModule"></select>
+            <select id="contentType"></select>
+            <input id="contentSortOrder" type="number" min="0" step="1" placeholder="排序" />
+          </div>
+          <div class="form-grid two">
+            <input id="contentTitle" placeholder="资料标题" />
+            <input id="contentSubtitle" placeholder="副标题 / 身份 / 活动信息" />
+          </div>
+          <textarea id="contentSummary" rows="2" placeholder="摘要：卡片和抽屉开头优先展示"></textarea>
+          <section class="rich-editor-section content-rich-editor">
+            <div class="field-head">
+              <span>正文</span>
+              <small>像写文档一样编辑，保存后同步到门户和扫码详情页</small>
+            </div>
+            <div class="rich-toolbar">
+              <select data-content-font title="字体">
+                <option value="">字体</option>
+                <option value="Microsoft YaHei UI">微软雅黑</option>
+                <option value="SimSun">宋体</option>
+                <option value="SimHei">黑体</option>
+                <option value="KaiTi">楷体</option>
+                <option value="Arial">Arial</option>
+              </select>
+              <select data-content-size title="字号">
+                <option value="">字号</option>
+                <option value="2">小</option>
+                <option value="3">正文</option>
+                <option value="4">大</option>
+                <option value="5">特大</option>
+                <option value="6">标题</option>
+              </select>
+              <button type="button" data-content-block="h2">H2</button>
+              <button type="button" data-content-block="h3">H3</button>
+              <button type="button" data-content-block="p">正文</button>
+              <button type="button" data-content-command="bold">B</button>
+              <button type="button" data-content-command="italic">I</button>
+              <button type="button" data-content-command="insertUnorderedList">列表</button>
+              <button type="button" data-content-command="insertOrderedList">编号</button>
+              <button type="button" data-content-insert="quote">引用</button>
+              <button type="button" data-content-insert="divider">分割线</button>
+              <button type="button" data-content-insert="image">插图</button>
+            </div>
+            <div id="contentRichBody" class="rich-body content-rich-body" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="在这里编辑资料正文"></div>
+            <textarea id="contentBodyText" hidden></textarea>
+          </section>
+          <div class="form-grid two">
+            <textarea id="contentMetaText" rows="6" placeholder="类型字段：每行一个，例如&#10;姓名：张三&#10;身份：优秀校友&#10;年份：2026"></textarea>
+            <section class="content-asset-manager" aria-label="结构化素材">
+              <div class="field-head">
+                <span>素材/附件组</span>
+                <small>统一管理顺序、说明、展示角色和归档附件</small>
+              </div>
+              <div class="content-asset-entry">
+                <input id="contentAssetUrl" placeholder="粘贴素材/附件/跳转地址" />
+                <input id="contentAssetCaption" placeholder="素材说明" />
+                <select id="contentAssetRole">
+                  <option value="cover">封面</option>
+                  <option value="portrait">人物照</option>
+                  <option value="certificate">证书/荣誉</option>
+                  <option value="gallery">图集</option>
+                  <option value="video">视频</option>
+                  <option value="attachment">附件</option>
+                  <option value="external_link">跳转按钮</option>
+                </select>
+                <button id="addContentAssetUrl" class="button ghost" type="button">加入</button>
+                <button id="selectContentAsset" class="button ghost" type="button">素材中心</button>
+              </div>
+              <div id="contentAssetCards" class="content-asset-list"></div>
+              <textarea id="contentAssetsText" hidden></textarea>
+            </section>
+          </div>
+          <div class="form-grid four">
+            <label class="check-inline"><input id="contentFeatured" type="checkbox" /> 重点展示</label>
+            <label class="check-inline"><input id="contentEnabled" type="checkbox" checked /> 启用资料</label>
+            <input id="contentAssetFile" type="file" multiple />
+            <button id="uploadContentAsset" class="button ghost" type="button">批量上传任意文件并加入素材组</button>
+          </div>
+          <section class="exhibit-guide" aria-label="结构化预览">
+            <div class="field-head">
+              <span>结构化预览</span>
+              <small id="contentPreviewMeta">选择板块和资料类型后查看摘要</small>
+            </div>
+            <article id="contentPreview" class="content-preview"></article>
+          </section>
+          <button id="contentItemSubmitButton" class="button primary" type="submit">保存/提交审核</button>
+          <p id="contentItemStatus" class="status-text"></p>
+        </form>
+        <form id="pageForm" class="panel editor-panel" hidden>
+          <div class="panel-head">
+            <div><h2 id="pageFormTitle">板块资料编辑</h2><p id="pageFormHint">保存后按角色发布或提交审核。</p></div>
+            <button id="closePageForm" class="button ghost" type="button">关闭</button>
+          </div>
+          <div class="form-grid four">
             <input id="pageCode" placeholder="二维码编号" required />
-            <input id="pageCategory" placeholder="栏目" />
+            <input id="pageCategory" list="moduleCategoryList" placeholder="板块，如 基本情况 / 专业设置 / 实训基地" />
+            <datalist id="moduleCategoryList">
+              <option value="基本情况"></option>
+              <option value="专业设置"></option>
+              <option value="实训基地"></option>
+              <option value="产教融合"></option>
+              <option value="教学成果"></option>
+              <option value="数字资源"></option>
+              <option value="特色系统入口"></option>
+            </datalist>
+            <select id="pageContentType" title="资料类型决定前端抽屉自动排版方式">
+              <option value="article">普通图文</option>
+              <option value="person">人物类</option>
+              <option value="activity">活动类</option>
+              <option value="honor">荣誉类</option>
+              <option value="achievement">成果类</option>
+              <option value="scene">场景类</option>
+              <option value="video">视频类</option>
+              <option value="attachment">附件资料</option>
+            </select>
             <input id="pagePublishedAt" type="date" />
           </div>
           <input id="pageSource" placeholder="来源" />
-          <input id="pageTitle" placeholder="标题" required />
+            <input id="pageTitle" placeholder="资料标题" />
           <input id="pageSubtitle" placeholder="副标题" />
           <section class="rich-editor-section">
             <div class="field-head">
               <span>正文</span>
               <small>支持标题、列表、引用、分割线和插图</small>
             </div>
-            <div class="template-actions">
-              <button type="button" data-template="news">新闻模板</button>
-              <button type="button" data-template="activity">活动模板</button>
-              <button type="button" data-template="notice">公告模板</button>
-              <button type="button" data-template="feature">图文模板</button>
-              <button type="button" data-template="profile">人物模板</button>
+            <div id="templateActions" class="template-actions">
+              <button type="button" data-template="overview">基本情况</button>
+              <button type="button" data-template="majors">专业设置</button>
+              <button type="button" data-template="training">实训基地</button>
+              <button type="button" data-template="cooperation">产教融合</button>
+              <button type="button" data-template="achievements">教学成果</button>
+              <button type="button" data-template="media">数字资源</button>
+              <button type="button" data-template="systems">系统入口</button>
             </div>
             <div class="rich-toolbar">
+              <select data-font title="字体">
+                <option value="">字体</option>
+                <option value="Microsoft YaHei UI">微软雅黑</option>
+                <option value="SimSun">宋体</option>
+                <option value="SimHei">黑体</option>
+                <option value="KaiTi">楷体</option>
+                <option value="Arial">Arial</option>
+              </select>
+              <select data-size title="字号">
+                <option value="">字号</option>
+                <option value="2">小</option>
+                <option value="3">正文</option>
+                <option value="4">大</option>
+                <option value="5">特大</option>
+                <option value="6">标题</option>
+              </select>
               <button type="button" data-block="h2">H2</button>
               <button type="button" data-block="h3">H3</button>
               <button type="button" data-block="p">正文</button>
@@ -180,7 +723,7 @@
               <button type="button" data-insert="divider">分割线</button>
               <button type="button" data-insert="image">插图</button>
             </div>
-            <div id="richBody" class="rich-body" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="在这里编辑展示页正文"></div>
+            <div id="richBody" class="rich-body" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="在这里编辑板块资料正文"></div>
             <textarea id="pageBody" hidden></textarea>
             <section class="exhibit-guide" aria-label="展览效果预览">
               <div class="field-head">
@@ -222,40 +765,401 @@
       <section id="assetsView" class="view">
         <section class="panel">
           <div class="panel-head">
-            <div><h2 id="assetsHeading">资源管理</h2><p id="assetsIntro">上传、复用和删除图片资源；老师只能管理自己上传的资源。</p></div>
-            <button id="refreshAssets" class="button ghost" type="button">刷新资源</button>
+            <div><h2 id="assetsHeading">素材中心</h2><p id="assetsIntro">上传、复用、下载和删除门户展示素材；支持图片、视频、文档、压缩包、安装包等文件。</p></div>
+            <button id="refreshAssets" class="button ghost" type="button">刷新素材</button>
           </div>
           <div class="form-grid three">
-            <input id="assetFile" type="file" accept="image/*" />
-            <button id="uploadAsset" class="button primary" type="button">上传图片</button>
+            <input id="assetFile" type="file" multiple />
+            <button id="uploadAsset" class="button primary" type="button">批量上传任意文件</button>
             <button id="cancelAssetPick" class="button ghost" type="button" hidden>返回编辑</button>
+          </div>
+          <div class="list-controls">
+            <input id="assetSearch" placeholder="搜索文件名、上传人、地址" />
+            <select id="assetTypeFilter">
+              <option value="">全部类型</option>
+              <option value="image">图片</option>
+              <option value="video">视频</option>
+              <option value="document">文件/附件/安装包</option>
+            </select>
           </div>
           <p id="assetStatus" class="status-text"></p>
           <div id="assetsGrid" class="asset-grid"></div>
+          <div id="assetsPager" class="list-pager"></div>
         </section>
       </section>
 
       <section id="reviewsView" class="view admin-only">
         <section class="panel">
           <div class="panel-head">
-            <div><h2>内容审核</h2><p>审核页面草稿、删除申请和项目配置草稿。</p></div>
-            <button id="batchApprove" class="button primary" type="button">批量通过</button>
+            <div><h2>审核发布</h2><p>审核板块资料草稿、删除申请和门户配置草稿。</p></div>
+            <div class="toolbar">
+              <select id="reviewStatusFilter" aria-label="筛选审核状态">
+                <option value="pending">待审核</option>
+                <option value="approved">已通过/已发布</option>
+                <option value="rejected">已退回</option>
+              </select>
+              <input id="reviewSearch" placeholder="搜索门户、标题、提交人" />
+              <button id="batchApprove" class="button primary" type="button">批量通过</button>
+            </div>
           </div>
           <div id="reviewsList" class="review-list"></div>
+          <div id="reviewsPager" class="list-pager"></div>
         </section>
       </section>
 
       <section id="deployView" class="view admin-only">
-        <section class="panel">
-          <div class="panel-head"><div><h2>部署管理</h2><p>欢迎页和内容项目独立部署，内容可勾选具体页面。</p></div></div>
-          <div class="form-grid two">
-            <select id="deployProject"></select>
-            <button id="deployWelcome" class="button ghost" type="button">部署欢迎页</button>
+        <section class="panel market-shell">
+          <div class="panel-head">
+            <div><h2>成果超市管理</h2><p>先维护欢迎页，再按五个主题分类管理展示项目。</p></div>
+            <div class="toolbar">
+              <a class="button ghost" target="_blank" rel="noopener" href="/display">预览成果超市</a>
+              <button id="marketPublish" class="button primary" type="button">发布成果超市</button>
+            </div>
           </div>
-          <div id="deployCheck" class="deploy-check"></div>
-          <div id="deployPages" class="check-list"></div>
-          <button id="deployContent" class="button primary" type="button">部署内容项目</button>
+
+          <section id="marketOverview" class="market-overview">
+            <a class="market-entry market-welcome-entry" href="/display?edit=1">
+              <span class="market-entry-icon" aria-hidden="true">首</span>
+              <span class="market-entry-copy">
+                <small>入口页面</small>
+                <strong>欢迎页</strong>
+                <span>直接进入真实前台页面，更换左侧大图并管理轮播图片</span>
+              </span>
+              <span class="market-entry-action">可视化编辑</span>
+            </a>
+            <div class="market-section-head">
+              <div>
+                <h3>内容分类</h3>
+                <p>点击分类进入汇总页，添加和维护该分类下的展示项目。</p>
+              </div>
+              <span id="marketTotalCount">0 个项目</span>
+            </div>
+            <div id="marketCategoryGrid" class="market-category-grid"></div>
+          </section>
+
+          <section id="marketWelcomeWorkspace" class="market-workspace" hidden>
+            <div class="market-workspace-head">
+              <button class="button ghost" type="button" data-market-back>返回内容分类</button>
+              <div>
+                <span>欢迎页</span>
+                <h3>编辑成果超市入口</h3>
+              </div>
+            </div>
+            <section class="market-editor-grid">
+              <article class="market-editor-card">
+                <div class="field-head">
+                  <span>页面内容</span>
+                  <small>保存后可在右侧查看实际展示效果。</small>
+                </div>
+                <div class="form-grid two">
+                  <input id="marketWelcomeTitle" placeholder="欢迎页标题，如 成果超市" />
+                  <input id="marketWelcomeSubtitle" placeholder="副标题，如 欢迎进入校园成果展示现场" />
+                </div>
+                <textarea id="marketWelcomeIntro" rows="5" placeholder="欢迎页介绍"></textarea>
+                <input id="marketWelcomeNote" placeholder="底部提示文字" />
+                <div class="market-image-editor">
+                  <div id="marketWelcomeImagePreview" class="market-image-preview"><span>尚未选择左侧大图</span></div>
+                  <div>
+                    <strong>左侧大图</strong>
+                    <p>建议使用 16:9 横图，图片会显示在欢迎页左侧主舞台。</p>
+                    <input id="marketWelcomeImageUrl" placeholder="左侧大图地址 /uploads/..." />
+                    <input id="marketWelcomeImageFile" type="file" accept="image/*" hidden />
+                    <div class="actions">
+                      <button id="uploadMarketWelcomeImage" class="button ghost" type="button">上传左侧大图</button>
+                      <button id="selectMarketWelcomeAsset" class="button ghost" type="button">从素材中心选择</button>
+                    </div>
+                  </div>
+                </div>
+                <section class="market-carousel-editor">
+                  <div class="market-carousel-head">
+                    <div>
+                      <strong>轮播图</strong>
+                      <p>图片越多，欢迎页轮播内容越丰富；拖动式排序暂不启用，可使用上移、下移调整顺序。</p>
+                    </div>
+                    <span id="marketCarouselCount">0 张</span>
+                  </div>
+                  <div class="actions">
+                    <input id="marketCarouselImageFiles" type="file" accept="image/*" multiple hidden />
+                    <button id="addMarketCarouselImage" class="button ghost" type="button">添加图片地址</button>
+                    <button id="uploadMarketCarouselImages" class="button ghost" type="button">上传轮播图</button>
+                    <button id="selectMarketCarouselAsset" class="button ghost" type="button">从素材中心添加</button>
+                  </div>
+                  <div id="marketCarouselList" class="market-carousel-list"></div>
+                </section>
+                <div class="actions">
+                  <button id="deployWelcome" class="button primary" type="button">保存欢迎页</button>
+                </div>
+              </article>
+              <article class="market-live-preview">
+                <header>
+                  <div>
+                    <strong>页面预览</strong>
+                    <span id="marketPreviewLabel">欢迎页</span>
+                  </div>
+                  <a id="marketPreviewOpen" class="button small" target="_blank" rel="noopener" href="/display">新窗口打开</a>
+                </header>
+                <div class="market-preview-viewport">
+                  <iframe id="marketPreviewFrame" title="成果超市预览" src="/display"></iframe>
+                </div>
+              </article>
+            </section>
+          </section>
+
+          <section id="marketCategoryWorkspace" class="market-workspace" hidden>
+            <div class="market-workspace-head market-category-workspace-head">
+              <button class="button ghost" type="button" data-market-back>返回内容分类</button>
+              <div>
+                <span id="marketCategoryEyebrow">内容分类</span>
+                <h3 id="marketCategoryHeading">分类汇总</h3>
+                <p id="marketCategoryIntro"></p>
+              </div>
+              <div class="actions">
+                <button id="openMarketTableExport" class="button ghost" type="button">导出表格</button>
+                <button id="marketPreviewTheme" class="button ghost" type="button">预览分类页</button>
+                <button id="openMarketBatchExport" class="button ghost" type="button">批量导出卡片</button>
+                <button id="openMarketCreate" class="button primary" type="button">添加项目</button>
+              </div>
+            </div>
+            <div id="marketCategoryTabs" class="market-category-tabs market-category-switcher"></div>
+            <section class="market-source-row">
+              <label class="stack">
+                <span>项目归属</span>
+                <select id="deployProject"></select>
+              </label>
+              <div id="deployCheck" class="deploy-check"></div>
+            </section>
+            <div class="list-controls market-list-controls">
+              <input id="deployPageSearch" placeholder="搜索项目名称、编号或简介" />
+              <select id="deployPageModuleFilter" hidden>
+                <option value="">全部主题</option>
+              </select>
+              <span id="marketCategoryCount">0 个项目</span>
+            </div>
+            <div id="deployPages" class="market-item-grid"></div>
+            <div id="deployPagesPager" class="list-pager"></div>
+          </section>
+
           <p id="deployStatus" class="status-text"></p>
+        </section>
+
+        <section id="marketCreatePanel" class="history-panel modal-backdrop" hidden>
+          <div class="modal-box market-create-modal">
+            <div class="panel-head">
+              <div><h2 id="marketCreateTitle">添加展示项目</h2><p>创建项目后会直接加入当前分类，可继续进入详情编辑富文本内容。</p></div>
+              <button id="closeMarketCreate" class="button ghost" type="button">关闭</button>
+            </div>
+            <section class="market-add-panel market-create-panel">
+              <div class="form-grid two">
+                <select id="marketNewCategory" disabled></select>
+                <input id="marketNewSort" type="number" step="1" placeholder="排序，数字越小越靠前" />
+              </div>
+              <input id="marketNewTitle" placeholder="展示项目标题" />
+              <input id="marketNewSubtitle" placeholder="副标题/身份/荣誉说明" />
+              <input id="marketNewIntro" placeholder="二维码上方简介，建议 30-80 字" />
+              <input id="marketNewImageUrl" placeholder="封面图片 /uploads/..." />
+              <textarea id="marketNewBody" rows="6" placeholder="项目正文，可先填写基础内容，创建后在详情中继续富文本编辑"></textarea>
+              <div class="actions">
+                <input id="marketNewImageFile" type="file" accept="image/*" hidden />
+                <button id="uploadMarketNewImage" class="button ghost" type="button">上传封面</button>
+                <button id="selectMarketNewAsset" class="button ghost" type="button">从素材中心选择</button>
+                <button id="createMarketItem" class="button primary" type="button">创建项目</button>
+              </div>
+            </section>
+            <details class="market-import-existing">
+              <summary>从已审核资料中加入</summary>
+              <p>复用当前项目归属下已审核且启用的资料。</p>
+              <div class="form-grid two">
+                <select id="marketCandidate"></select>
+                <input id="marketItemIntro" placeholder="二维码上方简介，建议 30-80 字" />
+                <select id="marketItemCategory" hidden></select>
+                <input id="marketItemSort" type="number" step="1" placeholder="排序" />
+                <button id="deployContent" class="button primary" type="button">加入当前分类</button>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section id="marketItemEditorPanel" class="history-panel modal-backdrop" hidden>
+          <div class="modal-box market-editor-modal">
+            <div class="panel-head">
+              <div><h2 id="marketItemEditorTitle">项目详情</h2><p>编辑展示项目的标题、封面与富文本正文。</p></div>
+              <button id="closeMarketItemEditor" class="button ghost" type="button">关闭</button>
+            </div>
+            <div class="form-grid two">
+              <input id="marketEditTitle" placeholder="项目标题" />
+              <input id="marketEditSubtitle" placeholder="副标题/身份/荣誉说明" />
+            </div>
+            <div class="form-grid two">
+              <input id="marketEditIntro" placeholder="二维码上方简介，建议 30-80 字" />
+              <input id="marketEditImageUrl" placeholder="封面图片 /uploads/..." />
+            </div>
+            <div class="form-grid three">
+              <select id="marketEditCategory"></select>
+              <input id="marketEditSort" type="number" step="1" placeholder="排序" />
+              <label class="check-inline"><input id="marketEditEnabled" type="checkbox" /> 启用展示</label>
+            </div>
+            <div class="actions">
+              <input id="marketEditImageFile" type="file" accept="image/*" hidden />
+              <button id="uploadMarketEditImage" class="button ghost" type="button">上传封面</button>
+              <button id="selectMarketEditAsset" class="button ghost" type="button">从素材中心选择</button>
+            </div>
+            <div class="field-head">
+              <span>正文</span>
+              <small>支持标题、列表、引用、分割线和插图</small>
+            </div>
+            <div class="rich-toolbar">
+              <select data-market-font title="字体">
+                <option value="">字体</option>
+                <option value="Microsoft YaHei UI">微软雅黑</option>
+                <option value="SimSun">宋体</option>
+                <option value="SimHei">黑体</option>
+                <option value="KaiTi">楷体</option>
+                <option value="Arial">Arial</option>
+              </select>
+              <select data-market-size title="字号">
+                <option value="">字号</option>
+                <option value="2">小</option>
+                <option value="3">正文</option>
+                <option value="4">大</option>
+                <option value="5">特大</option>
+                <option value="6">标题</option>
+              </select>
+              <button type="button" data-market-block="h2">H2</button>
+              <button type="button" data-market-block="h3">H3</button>
+              <button type="button" data-market-block="p">正文</button>
+              <button type="button" data-market-command="bold">B</button>
+              <button type="button" data-market-command="italic">I</button>
+              <button type="button" data-market-command="insertUnorderedList">列表</button>
+              <button type="button" data-market-command="insertOrderedList">编号</button>
+              <button type="button" data-market-insert="quote">引用</button>
+              <button type="button" data-market-insert="divider">分割线</button>
+              <button type="button" data-market-insert="image">插图</button>
+            </div>
+            <div id="marketRichBody" class="rich-body" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="在这里编辑项目正文"></div>
+            <textarea id="marketEditBody" hidden></textarea>
+            <div class="actions">
+              <button id="saveMarketItem" class="button primary" type="button">保存详情</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="marketMovePanel" class="history-panel modal-backdrop" hidden>
+          <div class="modal-box market-move-modal">
+            <div class="panel-head">
+              <div><h2 id="marketMoveTitle">移动展示项目</h2><p>选择新的系部专题和分类，保存后项目会从当前列表移动到目标位置。</p></div>
+              <button id="closeMarketMove" class="button ghost" type="button">关闭</button>
+            </div>
+            <p id="marketMoveSummary" class="status-text"></p>
+            <div class="form-grid three">
+              <select id="marketMoveProject"></select>
+              <select id="marketMoveCategory"></select>
+              <input id="marketMoveSort" type="number" step="1" placeholder="排序，数字越小越靠前" />
+            </div>
+            <div class="actions">
+              <button id="cancelMarketMove" class="button ghost" type="button">取消</button>
+              <button id="confirmMarketMove" class="button primary" type="button">确认移动</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="marketPosterPanel" class="history-panel modal-backdrop" hidden>
+          <div class="modal-box market-poster-modal">
+            <div class="panel-head">
+              <div><h2 id="marketPosterTitle">导出打印卡片</h2><p>二维码会嵌入对应专题底图的白色区域，简介显示在二维码上方。</p></div>
+              <button id="closeMarketPoster" class="button ghost" type="button">关闭</button>
+            </div>
+            <div class="market-poster-layout">
+              <section class="market-poster-controls">
+                <label class="stack">
+                  <span>简介文本</span>
+                  <textarea id="marketPosterIntro" rows="5" maxlength="120" placeholder="请输入二维码上方简介，建议 30-80 字"></textarea>
+                </label>
+                <div class="form-grid two">
+                  <label class="stack">
+                    <span>二维码大小</span>
+                    <input id="marketPosterQrSize" type="number" min="320" max="520" step="10" value="470" />
+                  </label>
+                  <label class="stack">
+                    <span>文字大小</span>
+                    <input id="marketPosterFontSize" type="number" min="26" max="54" step="2" value="38" />
+                  </label>
+                </div>
+                <div class="actions">
+                  <button id="renderMarketPoster" class="button ghost" type="button">刷新预览</button>
+                  <button id="downloadMarketPoster" class="button primary" type="button">导出 PNG</button>
+                </div>
+                <p id="marketPosterStatus" class="status-text"></p>
+              </section>
+              <section class="market-poster-preview-shell">
+                <canvas id="marketPosterCanvas" width="1040" height="2079"></canvas>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section id="marketBatchExportPanel" class="history-panel modal-backdrop" hidden>
+          <div class="modal-box market-batch-modal">
+            <div class="panel-head">
+              <div><h2>批量导出卡片</h2><p>勾选需要打印的展示项目，系统会按专题底图逐个导出 PNG。</p></div>
+              <button id="closeMarketBatchExport" class="button ghost" type="button">关闭</button>
+            </div>
+            <div class="market-batch-tools">
+              <div class="actions">
+                <button id="selectAllMarketCards" class="button ghost" type="button">全选</button>
+                <button id="selectCurrentMarketCards" class="button ghost" type="button">只选当前分类</button>
+                <button id="clearMarketCards" class="button ghost" type="button">清空</button>
+              </div>
+              <span id="marketBatchCount">0 个项目</span>
+            </div>
+            <div id="marketBatchList" class="market-batch-list"></div>
+            <div class="actions">
+              <button id="downloadSelectedMarketCards" class="button primary" type="button">导出选中卡片</button>
+            </div>
+            <p id="marketBatchStatus" class="status-text"></p>
+          </div>
+        </section>
+
+        <section id="marketTableExportPanel" class="history-panel modal-backdrop" hidden>
+          <div class="modal-box market-table-modal">
+            <div class="panel-head">
+              <div><h2>批量导出表格</h2><p>默认不选中记录；勾选展示项目后，导出包含展示块、卡片文字和二维码图片的 Excel 工作簿（.xlsx）。</p></div>
+              <button id="closeMarketTableExport" class="button ghost" type="button">关闭</button>
+            </div>
+            <div class="market-table-tools">
+              <div class="actions">
+                <button id="selectAllMarketTableRows" class="button ghost" type="button">一键全选</button>
+                <button id="selectCurrentMarketTableRows" class="button ghost" type="button">只选当前分类</button>
+                <button id="clearMarketTableRows" class="button ghost" type="button">清空</button>
+              </div>
+              <span id="marketTableCount">0 条记录</span>
+            </div>
+            <section class="market-table-preview-section" aria-label="批量导出表格预览">
+              <div class="field-head">
+                <span>表格记录</span>
+                <small>勾选需要导出的记录。</small>
+              </div>
+              <div class="market-table-preview-wrap">
+                <table class="market-table-preview">
+                  <thead>
+                    <tr>
+                      <th>选择</th>
+                      <th>所属模块</th>
+                      <th>编号信息</th>
+                      <th>卡片文字</th>
+                      <th>二维码</th>
+                    </tr>
+                  </thead>
+                  <tbody id="marketTableRows">
+                    <tr><td colspan="5">请选择需要导出的表格记录</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <div class="actions">
+              <button id="downloadMarketTable" class="button primary" type="button">导出选中表格</button>
+            </div>
+            <p id="marketTableStatus" class="status-text"></p>
+          </div>
         </section>
       </section>
 
@@ -276,6 +1180,37 @@
               <tbody id="logsTable"></tbody>
             </table>
           </div>
+          <div id="logsPager" class="list-pager"></div>
+        </section>
+      </section>
+
+      <section id="settingsView" class="view admin-only">
+        <section class="panel">
+          <div class="panel-head">
+            <div><h2>系统设置</h2><p>把低频维护入口收拢到这里，日常内容维护不再被账号、日志和上线配置打断。</p></div>
+          </div>
+          <div class="settings-grid">
+            <article>
+              <strong>账号与权限</strong>
+              <span>维护管理员、系部专题管理员和老师账号，分配门户归属。</span>
+              <button class="button small primary" type="button" data-settings-view="users">进入人员管理</button>
+            </article>
+            <article>
+              <strong>成果超市</strong>
+              <span>配置欢迎页和成果内容池，查看影响范围与可进入成果超市内容。</span>
+              <button class="button small primary" type="button" data-settings-view="deploy">进入成果超市</button>
+            </article>
+            <article>
+              <strong>操作日志</strong>
+              <span>按账号、动作和时间追踪关键后台操作，支持导出 CSV。</span>
+              <button class="button small" type="button" data-settings-view="logs">查看日志</button>
+            </article>
+            <article>
+              <strong>个人信息</strong>
+              <span>查看当前账号资料，并修改登录密码。</span>
+              <button class="button small" type="button" data-settings-view="account">个人设置</button>
+            </article>
+          </div>
         </section>
       </section>
 
@@ -294,6 +1229,6 @@
     </main>
 
     <template id="emptyTpl"><div class="empty">暂无数据</div></template>
-    <script src="/static/admin.js?v=editor-preview-20260718a"></script>
+    <script src="/static/admin.js?v=teacher-admin-sync-20260816"></script>
   </body>
 </html>

@@ -1,5 +1,6 @@
 ﻿import base64
 import csv
+import ctypes
 import hashlib
 import hmac
 import io
@@ -7,14 +8,20 @@ import json
 import os
 import re
 import secrets
+import socket
+import struct
+import subprocess
+import sys
 import threading
 import time
 import uuid
+import zlib
+from html import unescape
 from http.cookies import SimpleCookie
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
 from db_backend import DBError, connect_database, database_backend, execute_mysql_schema
@@ -70,6 +77,13 @@ def env_path(name, default):
 
 UPLOAD_DIR = env_path("UPLOAD_DIR", "uploads")
 DB_PATH = env_path("DB_PATH", "expo.db")
+RESET_MARKER_PATH = env_path("RESET_MARKER_PATH", ".content-reset")
+UNITY_MODEL_DIR = UPLOAD_DIR / "unityceshi111"
+HOMESTAY_MODEL_EXE = env_path("HOMESTAY_MODEL_EXE", UPLOAD_DIR / "民宿" / "CoffeeShop.exe")
+HOMESTAY_INPUT_MODE = os.environ.get("HOMESTAY_INPUT_MODE", "message").strip().lower()
+UNITY_MODEL_HOST = "127.0.0.1"
+UNITY_MODEL_PORT = env_int("UNITY_MODEL_PORT", 8080)
+UNITY_MODEL_FALLBACK_PORTS = os.environ.get("UNITY_MODEL_FALLBACK_PORTS", "18080,18081,18082")
 DATABASE_BACKEND = database_backend()
 MYSQL_SCHEMA_PATH = env_path("MYSQL_SCHEMA_PATH", "database/mysql_schema.sql")
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -77,7 +91,7 @@ PORT = env_int("PORT", 8000)
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "123456")
 ADMIN_COOKIE = os.environ.get("ADMIN_COOKIE", "expo_admin_session")
-ADMIN_SESSION_SECONDS = env_int("ADMIN_SESSION_SECONDS", 12 * 60 * 60)
+ADMIN_SESSION_SECONDS = env_int("ADMIN_SESSION_SECONDS", 10 * 365 * 24 * 60 * 60)
 CSRF_SECRET = os.environ.get("CSRF_SECRET", "")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", PUBLIC_BASE_URL.startswith("https://"))
@@ -89,7 +103,7 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 MAX_JSON_BYTES = env_int("MAX_JSON_BYTES", 8 * 1024 * 1024)
-MAX_UPLOAD_BYTES = env_int("MAX_UPLOAD_BYTES", 5 * 1024 * 1024)
+MAX_UPLOAD_BYTES = env_int("MAX_UPLOAD_BYTES", 200 * 1024 * 1024)
 ALLOW_SVG_UPLOADS = env_bool("ALLOW_SVG_UPLOADS", False)
 ASSET_KEY_PREFIX = os.environ.get("ASSET_KEY_PREFIX", "").strip().strip("/")
 LOGIN_RATE_LIMIT = env_int("LOGIN_RATE_LIMIT", 10)
@@ -104,6 +118,506 @@ DEFAULT_PROJECT_NAME = "毕节职业技术学院"
 DEFAULT_SAMPLE_CODE = "DEMO-10100043"
 DEFAULT_PAGE_CATEGORY = "校园新闻"
 DEFAULT_PAGE_SOURCE = "学校展示"
+STANDARD_MODULES = [
+    {
+        "key": "overview",
+        "label": "基本情况",
+        "description": "定位、沿革、师资、数据",
+        "aliases": ("基本情况", "系部介绍", "系部简介", "概况", "概览", "简介"),
+    },
+    {
+        "key": "majors",
+        "label": "专业设置",
+        "description": "专业群、课程、就业方向",
+        "aliases": ("专业设置", "专业", "专业群", "课程", "就业方向"),
+    },
+    {
+        "key": "training",
+        "label": "实训基地",
+        "description": "实训室、设备、场景",
+        "aliases": ("实训基地", "实训", "实践", "基地", "设备"),
+    },
+    {
+        "key": "cooperation",
+        "label": "产教融合",
+        "description": "校企合作、订单班、共同体",
+        "aliases": ("产教融合", "校企合作", "订单班", "共同体", "社会服务"),
+    },
+    {
+        "key": "achievements",
+        "label": "教学成果",
+        "description": "课程、竞赛、荣誉、育人成效",
+        "aliases": ("教学成果", "成果", "竞赛", "荣誉", "育人成果", "名师名匠", "优秀毕业生", "学生"),
+    },
+    {
+        "key": "media",
+        "label": "数字资源",
+        "description": "视频、资源库、课程资源、扫码资料",
+        "aliases": ("数字资源", "特色数字资源", "视频资源", "视频", "宣传片", "作品", "资源库", "专题资料", "扫码内容"),
+    },
+    {
+        "key": "systems",
+        "label": "特色系统入口",
+        "description": "业务系统、互动平台",
+        "aliases": ("特色系统入口", "系统入口", "业务系统", "互动平台", "系统"),
+    },
+    {
+        "key": "resources",
+        "label": "数字资源",
+        "description": "资源库、专题资料、扫码内容",
+        "aliases": ("特色数字资源", "数字资源", "资源库", "专题资料", "扫码内容", "专题"),
+    },
+]
+TOPIC_MODULES = [
+    {
+        "key": "overview",
+        "label": "专题概况",
+        "description": "专题背景、建设目标、总体介绍",
+        "aliases": ("专题概况", "专题简介", "专题介绍", "概况", "简介", "背景", "topicOverview"),
+    },
+    {
+        "key": "majors",
+        "label": "专业群布局",
+        "description": "专业群、专业方向、课程、就业方向",
+        "aliases": ("专业群布局", "专业群", "专业布局", "专业方向", "课程", "就业方向"),
+    },
+    {
+        "key": "training",
+        "label": "实训场景",
+        "description": "实训基地、实训室、设备、实践教学",
+        "aliases": ("实训场景", "实训基地", "实训", "实践教学", "实训室", "设备", "基地"),
+    },
+    {
+        "key": "cooperation",
+        "label": "产教协同",
+        "description": "校企合作、订单班、共同体、社会服务",
+        "aliases": ("产教协同", "产教融合", "校企合作", "订单班", "共同体", "社会服务"),
+    },
+    {
+        "key": "masters",
+        "label": "名师名匠",
+        "description": "教学名师、技能大师、教师团队",
+        "aliases": ("名师名匠", "名师", "名匠", "教师团队", "教学名师", "技能大师", "大师工作室"),
+    },
+    {
+        "key": "alumni",
+        "label": "优秀校友",
+        "description": "校友人物、成长经历、就业成果",
+        "aliases": ("优秀校友", "校友", "毕业生", "优秀毕业生", "就业典型"),
+    },
+    {
+        "key": "students",
+        "label": "优秀学生",
+        "description": "学生人物、竞赛经历、成长故事",
+        "aliases": ("优秀学生", "学生风采", "学生", "成长故事", "技能成才"),
+    },
+    {
+        "key": "achievements",
+        "label": "专题成果",
+        "description": "教学成果、项目成果、典型案例",
+        "aliases": ("专题成果", "教学成果", "项目成果", "成果", "案例", "建设成果", "图文资料", "topicAchievements", "topicGallery"),
+    },
+    {
+        "key": "competitions",
+        "label": "技能大赛",
+        "description": "赛事、获奖、承办活动、比赛现场",
+        "aliases": ("技能大赛", "大赛", "竞赛", "比赛", "赛项", "获奖"),
+    },
+    {
+        "key": "honors",
+        "label": "荣誉资质",
+        "description": "证书、奖项、资质、认定结果",
+        "aliases": ("荣誉资质", "荣誉", "资质", "证书", "奖项", "认定"),
+    },
+    {
+        "key": "systems",
+        "label": "特色系统入口",
+        "description": "合作商系统、互动体验平台、外部专题入口",
+        "aliases": ("特色系统入口", "系统入口", "特色系统", "体验系统", "互动平台", "合作商"),
+    },
+    {
+        "key": "media",
+        "label": "数字资源",
+        "description": "视频、资源库、课程资源、扫码内容",
+        "aliases": ("数字资源", "特色数字资源", "视频资源", "视频", "宣传片", "访谈", "纪实片", "资源库", "专题资料", "扫码内容", "topicMedia"),
+    },
+]
+CONTENT_TYPES = [
+    {
+        "key": "article",
+        "label": "普通图文",
+        "description": "标题、摘要、正文、图片轮播；适合专题概况及兜底资料",
+    },
+    {
+        "key": "person",
+        "label": "人物类",
+        "description": "适合名师名匠、优秀校友、优秀学生，图片与人物介绍并列展示",
+    },
+    {
+        "key": "activity",
+        "label": "活动类",
+        "description": "适合活动、比赛、产教协同，按时间地点、正文和图片组织",
+    },
+    {
+        "key": "honor",
+        "label": "荣誉类",
+        "description": "适合证书、奖项、资质，证书图片和获奖信息优先展示",
+    },
+    {
+        "key": "achievement",
+        "label": "成果类",
+        "description": "适合专题成果、项目成果，摘要和关键指标优先展示",
+    },
+    {
+        "key": "scene",
+        "label": "场景类",
+        "description": "适合实训场景、设备条件、服务课程和开放对象",
+    },
+    {
+        "key": "video",
+        "label": "视频类",
+        "description": "适合视频资源，播放器或封面为主，下方展示说明",
+    },
+    {
+        "key": "attachment",
+        "label": "附件资料",
+        "description": "适合 PDF、Word、Excel、PPT、压缩包等附件资料，附件列表优先展示",
+    },
+]
+CONTENT_TYPE_KEYS = {item["key"] for item in CONTENT_TYPES}
+CONTENT_TYPE_LABELS = {item["key"]: item["label"] for item in CONTENT_TYPES}
+MODULE_DEFAULT_CONTENT_TYPES = {
+    "training": "scene",
+    "cooperation": "activity",
+    "masters": "person",
+    "alumni": "person",
+    "students": "person",
+    "achievements": "achievement",
+    "competitions": "activity",
+    "honors": "honor",
+    "media": "video",
+}
+PORTAL_TYPES = {
+    "school": "学校门户",
+    "department": "系部专题",
+    "topic": "系部专题",
+}
+BLUEPRINT_PORTALS = [
+    {
+        "name": DEFAULT_PROJECT_NAME,
+        "portal_type": "school",
+        "portal_slug": "",
+        "summary": "学校总入口，进入各系部专题。",
+        "image": "/uploads/4fcaa6e34b5f40c7a7e2b58947b9de1c.jpg",
+    },
+    {
+        "name": "现代农业",
+        "portal_type": "topic",
+        "portal_slug": "modern-agriculture",
+        "summary": "山地特色农业、乡村振兴与数字化生产服务。",
+        "image": "/uploads/4fcaa6e34b5f40c7a7e2b58947b9de1c.jpg",
+    },
+    {
+        "name": "数字文旅",
+        "portal_type": "topic",
+        "portal_slug": "digital-tourism",
+        "summary": "数字文旅、酒店运营、烹饪技艺与服务场景。",
+        "image": "/uploads/blueprint/topics/digital-tourism/images/img01.webp",
+    },
+    {
+        "name": "智慧康养",
+        "portal_type": "topic",
+        "portal_slug": "smart-healthcare",
+        "summary": "护理康养、急救教育、健康管理与服务运营。",
+        "image": "/uploads/blueprint/departments/medical-nursing/images/img01.webp",
+    },
+    {
+        "name": "财经商贸",
+        "portal_type": "topic",
+        "portal_slug": "finance-commerce",
+        "summary": "数字商贸、电商物流与产教融合。",
+        "image": "/uploads/blueprint/topics/finance-commerce/images/img01.webp",
+    },
+    {
+        "name": "数智技术",
+        "portal_type": "topic",
+        "portal_slug": "digital-intelligence",
+        "summary": "人工智能、网络安全、数据应用与跨专业赋能。",
+        "image": "/uploads/blueprint/departments/information/images/img01.webp",
+    },
+    {
+        "name": "智慧能源",
+        "portal_type": "topic",
+        "portal_slug": "smart-energy",
+        "summary": "绿色能源、智能开采与化工安全。",
+        "image": "/uploads/blueprint/topics/smart-energy/images/img01.webp",
+    },
+    {
+        "name": "智能制造",
+        "portal_type": "topic",
+        "portal_slug": "smart-manufacturing",
+        "summary": "智能装备、新能源汽车与无人机应用。",
+        "image": "/uploads/blueprint/topics/smart-manufacturing/images/img01.webp",
+    },
+    {
+        "name": "同心校园文化",
+        "portal_type": "topic",
+        "portal_slug": "campus-culture",
+        "summary": "同心育人、校园文化、学生成长与服务地方。",
+        "image": "/uploads/4fcaa6e34b5f40c7a7e2b58947b9de1c.jpg",
+    },
+]
+MODULE_SETS = {
+    "department": TOPIC_MODULES,
+    "school": [
+        {
+            "key": "service",
+            "label": "社会服务",
+            "description": "技术服务、培训服务、校地合作",
+            "aliases": ("社会服务", "技术服务", "培训服务", "乡村振兴", "服务地方", "校地合作", "继续教育"),
+        },
+        {
+            "key": "international",
+            "label": "国际交流",
+            "description": "国际合作、交流项目、开放办学",
+            "aliases": ("国际交流", "国际交流合作", "国际合作", "中外合作", "境外交流", "留学生"),
+        },
+        {
+            "key": "education",
+            "label": "育人成果",
+            "description": "人才培养、优秀毕业生、竞赛成果",
+            "aliases": ("育人成果", "优秀毕业生", "人才培养", "学生成长", "就业创业", "技能大赛", "竞赛成果"),
+        },
+        {
+            "key": "masters",
+            "label": "名师名匠",
+            "description": "教学名师、技能大师、双师团队",
+            "aliases": ("名师名匠", "教师团队", "教学名师", "技能大师", "双师", "大师工作室"),
+        },
+    ],
+    "topic": TOPIC_MODULES,
+}
+
+
+def normalize_portal_type(value):
+    text = str(value or "").strip()
+    return text if text in PORTAL_TYPES else "department"
+
+
+def normalize_portal_slug(value):
+    text = str(value or "").strip().lower()
+    text = re.sub(r"[^a-z0-9-]+", "-", text)
+    text = re.sub(r"-{2,}", "-", text).strip("-")
+    return text
+
+
+def portal_type_label(value):
+    return PORTAL_TYPES[normalize_portal_type(value)]
+
+
+def portal_preview_url(portal_type, portal_slug=""):
+    normalized_type = normalize_portal_type(portal_type)
+    slug = normalize_portal_slug(portal_slug)
+    if normalized_type == "school":
+        return "/departments"
+    if normalized_type == "topic":
+        return f"/topics/{slug}" if slug else "/departments"
+    return f"/departments/{slug}" if slug else "/departments"
+
+
+def html_attr(value):
+    return xml_escape(str(value or ""), {'"': "&quot;"})
+
+
+def module_set_for_portal_type(portal_type):
+    return MODULE_SETS[normalize_portal_type(portal_type)]
+
+
+def normalize_module_key_for_portal(module_key, portal_type="department"):
+    key = str(module_key or "").strip()
+    normalized_type = normalize_portal_type(portal_type)
+    if normalized_type in {"department", "topic"} and key == "resources":
+        return "media"
+    return key
+
+
+def module_meta_for_key(module_key, portal_type="department"):
+    normalized_key = normalize_module_key_for_portal(module_key, portal_type)
+    return next((module for module in module_set_for_portal_type(portal_type) if module["key"] == normalized_key), None)
+
+
+def module_public_payload(module):
+    return {
+        "key": module["key"],
+        "label": module["label"],
+        "description": module["description"],
+        "aliases": list(module.get("aliases", ())),
+        "defaultContentType": default_content_type_for_module(module["key"]),
+    }
+
+
+def content_type_public_payload(content_type):
+    return {
+        "key": content_type["key"],
+        "label": content_type["label"],
+        "description": content_type["description"],
+    }
+
+
+def normalize_content_type(value, fallback="article"):
+    text = str(value or "").strip().lower()
+    if text in CONTENT_TYPE_KEYS:
+        return text
+    return fallback if fallback in CONTENT_TYPE_KEYS else "article"
+
+
+def default_content_type_for_module(module_key):
+    return MODULE_DEFAULT_CONTENT_TYPES.get(str(module_key or "").strip(), "article")
+
+
+def content_type_label(value):
+    return CONTENT_TYPE_LABELS.get(normalize_content_type(value), CONTENT_TYPE_LABELS["article"])
+
+
+def content_templates_payload():
+    return {
+        "portalTypes": PORTAL_TYPES,
+        "moduleSets": {
+            key: [module_public_payload(module) for module in modules]
+            for key, modules in MODULE_SETS.items()
+        },
+        "contentTypes": [content_type_public_payload(item) for item in CONTENT_TYPES],
+    }
+
+
+def lowcode_field(key, label, field_type="text", required=False, mapping="", placeholder="", options=None, default_value="", group="", max_length=0):
+    field = {
+        "key": key,
+        "label": label,
+        "type": field_type,
+        "required": bool(required),
+        "mapping": mapping,
+        "placeholder": placeholder,
+        "defaultValue": default_value,
+        "group": group,
+    }
+    try:
+        normalized_max_length = int(max_length or 0)
+    except (TypeError, ValueError):
+        normalized_max_length = 0
+    if normalized_max_length > 0:
+        field["maxLength"] = normalized_max_length
+    if options:
+        field["options"] = options
+    return field
+
+
+LOWCODE_META_FIELDS = {
+    "person": [
+        lowcode_field("personName", "姓名", "text", True, "content_item.meta_json.姓名", "人物姓名"),
+        lowcode_field("identity", "身份/职务", "text", True, "content_item.meta_json.身份", "教师职务、校友岗位或学生班级"),
+        lowcode_field("tags", "荣誉标签", "text", False, "content_item.meta_json.标签", "技能能手、优秀毕业生等"),
+        lowcode_field("story", "主要事迹", "textarea", True, "content_item.body_text", "成长经历、代表成果和可展示亮点"),
+    ],
+    "activity": [
+        lowcode_field("eventDate", "时间", "text", True, "content_item.meta_json.时间", "活动或比赛时间"),
+        lowcode_field("location", "地点", "text", False, "content_item.meta_json.地点", "举办地点或实践场景"),
+        lowcode_field("units", "参与单位", "text", False, "content_item.meta_json.参与单位", "主办、承办或合作单位"),
+        lowcode_field("outcome", "活动成效", "textarea", True, "content_item.body_text", "活动过程、学生参与和成果"),
+    ],
+    "honor": [
+        lowcode_field("honorName", "荣誉名称", "text", True, "content_item.meta_json.荣誉名称", "奖项、资质或认定名称"),
+        lowcode_field("level", "级别", "text", False, "content_item.meta_json.级别", "国家级、省级、市级、校级等"),
+        lowcode_field("year", "年份", "text", True, "content_item.meta_json.年份", "获评或获奖年份"),
+        lowcode_field("recipient", "获奖单位/个人", "text", True, "content_item.meta_json.获奖单位或个人", "对应团队或人员"),
+        lowcode_field("value", "展示说明", "textarea", True, "content_item.body_text", "荣誉对专业建设或人才培养的价值"),
+    ],
+    "achievement": [
+        lowcode_field("achievementName", "成果名称", "text", True, "content_item.meta_json.成果名称", "项目、课程、案例或建设成果"),
+        lowcode_field("period", "建设周期", "text", False, "content_item.meta_json.建设周期", "起止时间或阶段"),
+        lowcode_field("team", "参与团队", "text", False, "content_item.meta_json.参与团队", "教师、学生或合作单位"),
+        lowcode_field("metrics", "关键指标", "textarea", False, "content_item.meta_json.关键指标", "获奖、立项、服务人数等数据"),
+        lowcode_field("value", "成果价值", "textarea", True, "content_item.body_text", "成果如何支撑人才培养、专业建设或服务地方"),
+    ],
+    "scene": [
+        lowcode_field("sceneName", "场景名称", "text", True, "content_item.meta_json.场景名称", "实训室、基地或设备名称"),
+        lowcode_field("positioning", "功能定位", "text", True, "content_item.meta_json.功能定位", "服务课程、训练项目和开放对象"),
+        lowcode_field("equipment", "设备条件", "textarea", False, "content_item.meta_json.设备条件", "关键设备、软件平台或工位数量"),
+        lowcode_field("application", "教学应用", "textarea", True, "content_item.body_text", "支撑课程教学、技能训练或社会培训的方式"),
+    ],
+    "video": [
+        lowcode_field("duration", "视频时长", "text", False, "content_item.meta_json.视频时长", "如 02:30"),
+        lowcode_field("videoUrl", "视频地址", "text", True, "content_item.assets.video", "视频文件地址或外部链接"),
+        lowcode_field("scenario", "适用场景", "text", False, "content_item.meta_json.适用场景", "宣传片、访谈、课堂展示或纪实片"),
+        lowcode_field("intro", "内容简介", "textarea", True, "content_item.body_text", "概括视频重点"),
+    ],
+    "attachment": [
+        lowcode_field("fileTitle", "附件名称", "text", True, "content_item.meta_json.附件名称", "文件、资料包或表格名称"),
+        lowcode_field("fileType", "附件类型", "text", False, "content_item.meta_json.附件类型", "PDF、Word、Excel、PPT、压缩包等"),
+        lowcode_field("fileUrl", "附件地址", "text", True, "content_item.assets.attachment", "上传附件或粘贴附件地址"),
+        lowcode_field("fileIntro", "附件说明", "textarea", True, "content_item.body_text", "说明附件用途、适用对象和查看要点"),
+    ],
+    "article": [
+        lowcode_field("bodyText", "正文内容", "textarea", True, "content_item.body_text", "按短段落填写，一段一行或空行分隔"),
+    ],
+}
+
+
+def lowcode_schema_for_module(portal_type, module):
+    content_type = default_content_type_for_module(module["key"])
+    fields = [
+        lowcode_field("title", "资料标题", "text", True, "content_item.title", f"{module['label']}标题", group="基础信息", max_length=80),
+        lowcode_field("subtitle", "副标题/身份信息", "text", False, "content_item.subtitle", module.get("description", ""), group="基础信息", max_length=120),
+        lowcode_field("summary", "卡片摘要", "textarea", True, "content_item.summary", "用于门户卡片和抽屉开头，建议 40 到 100 字", group="基础信息", max_length=180),
+    ]
+    fields.extend([
+        {**field, "group": field.get("group") or "详情内容"}
+        for field in LOWCODE_META_FIELDS.get(content_type, LOWCODE_META_FIELDS["article"])
+    ])
+    fields.extend(
+        [
+            lowcode_field("sortOrder", "排序", "number", False, "content_item.sort_order", "数字越小越靠前", group="展示设置"),
+            lowcode_field("featured", "重点展示", "checkbox", False, "content_item.featured", "", group="展示设置"),
+            lowcode_field("assets", "素材/附件文件", "asset_list", False, "content_item.assets.gallery", "可上传、从素材中心选择，或一行一个素材地址", group="媒体素材"),
+        ]
+    )
+    return {
+        "portalType": normalize_portal_type(portal_type),
+        "moduleKey": module["key"],
+        "moduleLabel": module["label"],
+        "contentType": content_type,
+        "contentTypeLabel": content_type_label(content_type),
+        "fields": fields,
+        "mapping": {
+            "target": "content_items",
+            "moduleKey": module["key"],
+            "contentType": content_type,
+        },
+    }
+
+
+def builtin_lowcode_forms():
+    forms = []
+    for portal_type, modules in MODULE_SETS.items():
+        for module in modules:
+            content_type = default_content_type_for_module(module["key"])
+            portal_label = PORTAL_TYPES.get(portal_type, "门户")
+            code = f"LC-{portal_type.upper()}-{module['key'].upper()}"
+            forms.append(
+                {
+                    "name": f"{module['label']}采集表",
+                    "code": code,
+                    "description": f"{portal_label} · {module['description']}。按模板填写后自动生成结构化资料。",
+                    "targetType": "content_item",
+                    "targetPortalType": portal_type,
+                    "targetContentType": content_type,
+                    "targetModuleKey": module["key"],
+                    "schema": lowcode_schema_for_module(portal_type, module),
+                }
+            )
+    return forms
+
+
 DEFAULT_DISPLAY_CONFIG = {
     "logoImageUrl": "",
     "schoolName": DEFAULT_PROJECT_NAME,
@@ -121,6 +635,19 @@ DEFAULT_DISPLAY_CONFIG = {
     "brandColor": "#28539c",
     "brandDeepColor": "#20468b",
     "accent2": "#47b7ff",
+    "portalHomeKicker": "School Portal",
+    "portalHomeTitle": "学校门户",
+    "portalHomeCopy": "以系部专题为主线，串联专业建设、实训基地、产教融合、教学成果与专题资源。",
+    "portalHomeRouteLabels": ["学校门户", "系部专题", "板块资料", "专题展区"],
+    "portalHomeSectionKicker": "Integrated Showcase",
+    "portalHomeSectionTitle": "创新育人矩阵",
+    "portalHomeSectionCopy": "以专题牵引院系共建，集中呈现跨系专业群、实训资源、产教融合与文化成果。",
+    "portalHomeFooter": "触摸卡片进入二级页面 · 长按返回首页",
+    "portalHomeCardLabel": "系部专题",
+    "portalHomeCardSummary": "",
+    "portalHomeCardChips": [],
+    "portalHomeCardSortOrder": 0,
+    "portalHomeCardHidden": False,
     "slides": [
         {
             "label": "校园入口与主楼",
@@ -148,8 +675,79 @@ DEFAULT_DISPLAY_CONFIG = {
         },
     ],
 }
+ACHIEVEMENT_MARKET_CATEGORIES = [
+    {
+        "key": "masters",
+        "label": "名匠名师",
+        "theme": "purple",
+        "color": "#7030A0",
+        "description": "教学名师、技能大师、双师团队和大师工作室。",
+    },
+    {
+        "key": "alumni",
+        "label": "优秀校友",
+        "theme": "blue",
+        "color": "#0070C0",
+        "description": "校友人物、成长经历、就业典型和行业贡献。",
+    },
+    {
+        "key": "students",
+        "label": "优秀学生",
+        "theme": "teal",
+        "color": "#30C0B4",
+        "description": "学生风采、技能成长、竞赛经历和榜样故事。",
+    },
+    {
+        "key": "teaching",
+        "label": "教学科研",
+        "theme": "green",
+        "color": "#75BD42",
+        "description": "教学成果、科研项目、实践案例和建设成效。",
+    },
+    {
+        "key": "competitions",
+        "label": "技能大赛",
+        "theme": "yellow",
+        "color": "#EFBB1F",
+        "description": "赛事、获奖、承办活动和比赛现场。",
+    },
+    {
+        "key": "honors",
+        "label": "荣誉资质",
+        "theme": "orange",
+        "color": "#FB9236",
+        "description": "证书、奖项、资质认定和荣誉成果。",
+    },
+]
+ACHIEVEMENT_MARKET_CATEGORY_MAP = {item["key"]: item for item in ACHIEVEMENT_MARKET_CATEGORIES}
+ACHIEVEMENT_MARKET_CATEGORY_ALIASES = {
+    "innovation": "teaching",
+    "achievements": "teaching",
+    "research": "teaching",
+}
+ACHIEVEMENT_MARKET_TOPIC_EXCLUDED = {"campus-culture"}
+ACHIEVEMENT_MARKET_DEFAULT_CONFIG = {
+    "welcomeTitle": "成果超市",
+    "welcomeSubtitle": "欢迎进入校园成果展示现场",
+    "welcomeIntro": "选择一个主题展区，查看名匠名师、优秀校友、优秀学生、教学科研、技能大赛与荣誉资质。每个展示项目都可生成二维码，扫码后进入对应展示详情。",
+    "welcomeImageUrl": "",
+    "welcomeCarouselImages": [],
+    "welcomeCarouselSlides": [],
+    "welcomeNote": "现场扫码进入项目详情 · 后台审核通过后方可发布",
+}
+DEFAULT_QUALITY_RULES = {
+    "minBodyChars": 80,
+    "requireSummary": True,
+    "requireMedia": True,
+    "requireModule": True,
+    "requireTypeAssets": True,
+}
 
 SSE_CLIENTS = set()
+UNITY_MODEL_PROCESS = None
+UNITY_MODEL_LOCK = threading.Lock()
+HOMESTAY_MODEL_PROCESS = None
+HOMESTAY_MODEL_LOCK = threading.Lock()
 LAST_SCAN = None
 RATE_LIMITS = {}
 RATE_LIMIT_LOCK = threading.Lock()
@@ -185,9 +783,72 @@ UPLOAD_MIME_EXTENSIONS = {
     "image/png": ".png",
     "image/jpeg": ".jpg",
     "image/webp": ".webp",
+    "application/pdf": ".pdf",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.ms-excel": ".xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.ms-powerpoint": ".ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "text/plain": ".txt",
+    "text/csv": ".csv",
+    "application/zip": ".zip",
+    "application/x-zip-compressed": ".zip",
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
 }
 if ALLOW_SVG_UPLOADS:
     UPLOAD_MIME_EXTENSIONS["image/svg+xml"] = ".svg"
+
+ACTIVE_WEB_UPLOAD_MIMES = {
+    "application/javascript",
+    "application/xhtml+xml",
+    "image/svg+xml",
+    "text/css",
+    "text/html",
+    "text/javascript",
+}
+ACTIVE_WEB_UPLOAD_EXTENSIONS = {".css", ".html", ".htm", ".js", ".mjs", ".svg", ".xhtml"}
+INLINE_UPLOAD_EXTENSIONS = {
+    ".bmp",
+    ".gif",
+    ".jpeg",
+    ".jpg",
+    ".mp4",
+    ".png",
+    ".webm",
+    ".webp",
+}
+
+
+def safe_upload_extension(filename, mime_type=""):
+    suffix = Path(str(filename or "")).suffix.lower()
+    if suffix and re.fullmatch(r"\.[a-z0-9][a-z0-9_-]{0,31}", suffix):
+        return suffix
+    return UPLOAD_MIME_EXTENSIONS.get(str(mime_type or "").lower(), ".bin")
+
+
+def safe_upload_mime(mime_type, extension):
+    mime = str(mime_type or "").strip().lower()
+    if not re.fullmatch(r"[a-z0-9.+-]+/[a-z0-9.+-]+", mime):
+        mime = "application/octet-stream"
+    if mime in ACTIVE_WEB_UPLOAD_MIMES or str(extension or "").lower() in ACTIVE_WEB_UPLOAD_EXTENSIONS:
+        if not (ALLOW_SVG_UPLOADS and mime == "image/svg+xml"):
+            return "application/octet-stream"
+    return mime
+
+
+def safe_download_filename(filename, fallback="download"):
+    name = Path(str(filename or fallback)).name.strip() or fallback
+    name = re.sub(r"[\r\n\"\\]+", "_", name)
+    return name[:180] or fallback
+
+
+def content_disposition_header(filename, mode="attachment"):
+    safe_name = safe_download_filename(filename)
+    ascii_name = safe_name.encode("ascii", "ignore").decode("ascii").strip()
+    ascii_name = re.sub(r"[^A-Za-z0-9._ -]+", "_", ascii_name) or "download"
+    return f'{mode}; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(safe_name)}'
 
 
 class RequestRejected(Exception):
@@ -199,6 +860,7 @@ QR_L_CAPACITY = {
     3: (55, 15),
     4: (80, 20),
     5: (108, 26),
+    6: (136, 36),
 }
 
 QR_ALIGNMENT = {
@@ -207,6 +869,7 @@ QR_ALIGNMENT = {
     3: [6, 22],
     4: [6, 26],
     5: [6, 30],
+    6: [6, 34],
 }
 
 GF_EXP = [0] * 512
@@ -449,6 +1112,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS projects (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
+                portal_type TEXT NOT NULL DEFAULT 'department',
+                portal_slug TEXT NOT NULL DEFAULT '',
                 idle_kicker TEXT NOT NULL DEFAULT '学校简介',
                 idle_title TEXT NOT NULL DEFAULT '欢迎来到毕节职业技术学院',
                 idle_copy TEXT NOT NULL DEFAULT '毕节职业技术学院立足地方发展需求，围绕人才培养、技术技能教育、社会服务与校园文化建设，打造开放、务实、富有活力的学习共同体。',
@@ -460,18 +1125,24 @@ def init_db():
                 display_config TEXT NOT NULL DEFAULT '{}',
                 deployed INTEGER NOT NULL DEFAULT 0,
                 content_deployed INTEGER NOT NULL DEFAULT 0,
+                deployed_at TEXT NOT NULL DEFAULT '',
+                content_deployed_at TEXT NOT NULL DEFAULT '',
                 updated_at TEXT NOT NULL
             )
             """
         )
         migrate_projects_table(conn)
-        ensure_default_project(conn)
+        if not RESET_MARKER_PATH.exists():
+            ensure_default_project(conn)
         upgrade_legacy_default_project(conn)
         migrate_pages_table(conn)
         ensure_page_extra_columns(conn)
         ensure_unique_page_codes(conn)
         migrate_role_tables(conn)
         migrate_review_tables(conn)
+        if not RESET_MARKER_PATH.exists():
+            ensure_blueprint_portal_projects(conn)
+            ensure_blueprint_pages(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS scans (
@@ -505,13 +1176,21 @@ def init_db():
         )
         migrate_logs_table(conn)
         migrate_assets_table(conn)
+        migrate_content_tables(conn)
+        if not RESET_MARKER_PATH.exists():
+            ensure_blueprint_content_items(conn)
+        migrate_lowcode_tables(conn)
+        migrate_assignment_tables(conn)
+        migrate_achievement_market_tables(conn)
+        if not RESET_MARKER_PATH.exists():
+            ensure_special_experience_links(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at)")
         project_id = deployed_content_project_id(conn)
         existing = conn.execute(
             "SELECT code FROM pages WHERE code = ?",
             (DEFAULT_SAMPLE_CODE,),
         ).fetchone()
-        if not existing:
+        if not RESET_MARKER_PATH.exists() and project_id and not existing:
             conn.execute(
                 """
                 INSERT INTO pages (project_id, code, title, subtitle, body, image_url, accent, enabled, updated_at)
@@ -530,21 +1209,35 @@ def init_db():
             )
         upsert_admin_credentials(conn)
         ensure_default_user(conn)
+        if not RESET_MARKER_PATH.exists():
+            seed_lowcode_forms(conn)
         ensure_legacy_versions(conn)
 
 
 def init_mysql_db():
     with db_connect() as conn:
         execute_mysql_schema(conn, MYSQL_SCHEMA_PATH)
+        migrate_projects_table(conn)
+        ensure_page_extra_columns(conn)
+        migrate_content_tables(conn)
+        migrate_lowcode_tables(conn)
+        migrate_assignment_tables(conn)
+        migrate_achievement_market_tables(conn)
         upsert_admin_credentials(conn)
         ensure_default_user(conn)
-        ensure_default_project(conn)
+        if not RESET_MARKER_PATH.exists():
+            seed_lowcode_forms(conn)
+            ensure_default_project(conn)
+            ensure_blueprint_portal_projects(conn)
+            ensure_blueprint_pages(conn)
+            ensure_blueprint_content_items(conn)
+            ensure_special_experience_links(conn)
         project_id = deployed_content_project_id(conn)
         existing = conn.execute(
             "SELECT code FROM pages WHERE code = ?",
             (DEFAULT_SAMPLE_CODE,),
         ).fetchone()
-        if not existing:
+        if not RESET_MARKER_PATH.exists() and project_id and not existing:
             conn.execute(
                 """
                 INSERT INTO pages (
@@ -572,26 +1265,36 @@ def init_mysql_db():
 def ensure_default_project(conn):
     if conn.execute("SELECT id FROM projects LIMIT 1").fetchone():
         if not conn.execute("SELECT id FROM projects WHERE deployed = 1 LIMIT 1").fetchone():
-            first = conn.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()
-            conn.execute("UPDATE projects SET deployed = CASE WHEN id = ? THEN 1 ELSE 0 END", (first["id"],))
+            first = conn.execute("SELECT id FROM projects WHERE portal_type = 'school' ORDER BY id LIMIT 1").fetchone()
+            if not first:
+                first = conn.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()
+            conn.execute(
+                "UPDATE projects SET deployed = CASE WHEN id = ? THEN 1 ELSE 0 END, deployed_at = CASE WHEN id = ? THEN COALESCE(NULLIF(deployed_at, ''), updated_at) ELSE deployed_at END",
+                (first["id"], first["id"]),
+            )
         if not conn.execute("SELECT id FROM projects WHERE content_deployed = 1 LIMIT 1").fetchone():
             first = conn.execute("SELECT id FROM projects WHERE deployed = 1 ORDER BY id LIMIT 1").fetchone()
             if not first:
                 first = conn.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()
-            conn.execute("UPDATE projects SET content_deployed = CASE WHEN id = ? THEN 1 ELSE 0 END", (first["id"],))
+            conn.execute(
+                "UPDATE projects SET content_deployed = CASE WHEN id = ? THEN 1 ELSE 0 END, content_deployed_at = CASE WHEN id = ? THEN COALESCE(NULLIF(content_deployed_at, ''), updated_at) ELSE content_deployed_at END",
+                (first["id"], first["id"]),
+            )
         return
 
+    now = now_iso()
     conn.execute(
         """
         INSERT INTO projects (
-            name, idle_kicker, idle_title, idle_copy, welcome_kicker,
+            name, portal_type, idle_kicker, idle_title, idle_copy, welcome_kicker,
             welcome_title, welcome_subtitle, default_image_url, accent, display_config,
-            deployed, content_deployed, updated_at
+            deployed, content_deployed, deployed_at, content_deployed_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)
         """,
         (
             DEFAULT_PROJECT_NAME,
+            "school",
             "学校简介",
             "欢迎来到毕节职业技术学院",
             "毕节职业技术学院立足地方发展需求，围绕人才培养、技术技能教育、社会服务与校园文化建设，打造开放、务实、富有活力的学习共同体。",
@@ -601,18 +1304,46 @@ def ensure_default_project(conn):
             "/static/expo-stage.png",
             "#f59a13",
             display_config_json(DEFAULT_DISPLAY_CONFIG),
-            now_iso(),
+            now,
+            now,
+            now,
         ),
     )
 
 
 def migrate_projects_table(conn):
     columns = set(table_columns(conn, "projects"))
+    if "portal_type" not in columns:
+        conn.execute("ALTER TABLE projects ADD COLUMN portal_type TEXT NOT NULL DEFAULT 'department'")
+        conn.execute(
+            "UPDATE projects SET portal_type = 'school' WHERE deployed = 1 OR name LIKE ?",
+            (f"{DEFAULT_PROJECT_NAME}%",),
+        )
+    else:
+        conn.execute("UPDATE projects SET portal_type = 'department' WHERE portal_type IS NULL OR portal_type = ''")
+    columns = set(table_columns(conn, "projects"))
+    if "portal_slug" not in columns:
+        conn.execute("ALTER TABLE projects ADD COLUMN portal_slug VARCHAR(160) NOT NULL DEFAULT ''")
+        conn.execute("UPDATE projects SET portal_slug = '' WHERE portal_type = 'school'")
+        for portal in BLUEPRINT_PORTALS:
+            if portal["portal_type"] == "school":
+                continue
+            conn.execute(
+                "UPDATE projects SET portal_slug = ? WHERE portal_type = ? AND name = ? AND portal_slug = ''",
+                (portal["portal_slug"], portal["portal_type"], portal["name"]),
+            )
     if "display_config" not in columns:
         conn.execute("ALTER TABLE projects ADD COLUMN display_config TEXT NOT NULL DEFAULT '{}'")
     if "content_deployed" not in columns:
         conn.execute("ALTER TABLE projects ADD COLUMN content_deployed INTEGER NOT NULL DEFAULT 0")
         conn.execute("UPDATE projects SET content_deployed = deployed")
+    columns = set(table_columns(conn, "projects"))
+    if "deployed_at" not in columns:
+        conn.execute("ALTER TABLE projects ADD COLUMN deployed_at VARCHAR(40) NOT NULL DEFAULT ''")
+        conn.execute("UPDATE projects SET deployed_at = COALESCE(NULLIF(updated_at, ''), '') WHERE deployed = 1 AND deployed_at = ''")
+    if "content_deployed_at" not in columns:
+        conn.execute("ALTER TABLE projects ADD COLUMN content_deployed_at VARCHAR(40) NOT NULL DEFAULT ''")
+        conn.execute("UPDATE projects SET content_deployed_at = COALESCE(NULLIF(updated_at, ''), '') WHERE content_deployed = 1 AND content_deployed_at = ''")
 
 
 def upgrade_legacy_default_project(conn):
@@ -633,6 +1364,7 @@ def upgrade_legacy_default_project(conn):
             """
             UPDATE projects SET
                 name = ?,
+                portal_type = 'school',
                 idle_kicker = ?,
                 idle_title = ?,
                 idle_copy = ?,
@@ -654,11 +1386,491 @@ def upgrade_legacy_default_project(conn):
         )
 
 
+def ensure_blueprint_portal_projects(conn):
+    conn.execute("UPDATE projects SET portal_slug = '' WHERE portal_slug IS NULL")
+    conn.execute("UPDATE projects SET portal_slug = '' WHERE portal_type = 'school'")
+    for portal in BLUEPRINT_PORTALS:
+        portal_type = normalize_portal_type(portal["portal_type"])
+        portal_slug = "" if portal_type == "school" else normalize_portal_slug(portal["portal_slug"])
+        existing = conn.execute(
+            """
+            SELECT id FROM projects
+            WHERE portal_type = ? AND portal_slug = ?
+            ORDER BY deployed DESC, content_deployed DESC, id
+            LIMIT 1
+            """,
+            (portal_type, portal_slug),
+        ).fetchone()
+        if existing:
+            continue
+        conn.execute(
+            """
+            INSERT INTO projects (
+                name, portal_type, portal_slug, owner_username,
+                idle_kicker, idle_title, idle_copy,
+                welcome_kicker, welcome_title, welcome_subtitle,
+                default_image_url, accent, display_config,
+                deployed, content_deployed, config_status, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'approved', ?)
+            """,
+            (
+                portal["name"],
+                portal_type,
+                portal_slug,
+                ADMIN_USERNAME,
+                portal_type_label(portal_type),
+                portal["name"],
+                portal["summary"],
+                "Welcome",
+                "欢迎参观 {title}",
+                "即将进入展示页面",
+                portal["image"] or "/static/expo-stage.png",
+                "#49c5b6" if portal_type == "school" else "#f59a13",
+                display_config_json(DEFAULT_DISPLAY_CONFIG if portal_type == "school" else {}),
+                now_iso(),
+            ),
+        )
+
+
+def blueprint_data_path(portal_type, portal_slug):
+    if normalize_portal_type(portal_type) == "topic":
+        return STATIC_DIR / "blueprint" / "data" / "topics" / f"{portal_slug}.json"
+    return STATIC_DIR / "blueprint" / "data" / "departments" / f"{portal_slug}.json"
+
+
+def load_blueprint_json(portal_type, portal_slug):
+    path = blueprint_data_path(portal_type, portal_slug)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def blueprint_section_category(portal_type, section):
+    section_id = str(section.get("id") or "").strip()
+    title = str(section.get("title") or "").strip()
+    if normalize_portal_type(portal_type) == "topic":
+        if section_id == "overview":
+            return "专题概况"
+        if section_id in {"achievements", "competitions", "honors"}:
+            return "专题成果"
+        if section_id == "media":
+            return "数字资源"
+        return "图文资料"
+    aliases = {
+        "overview": "基本情况",
+        "majors": "专业设置",
+        "training": "实训基地",
+        "cooperation": "产教融合",
+        "achievements": "教学成果",
+        "media": "数字资源",
+        "systems": "特色系统入口",
+        "resources": "特色数字资源",
+    }
+    return aliases.get(section_id) or title or "基本情况"
+
+
+def blueprint_blocks_to_html(blocks):
+    parts = []
+    for block in blocks or []:
+        block_type = block.get("type")
+        if block_type == "text":
+            text = str(block.get("content") or "").strip()
+            if text:
+                parts.append(f"<p>{xml_escape(text)}</p>")
+        elif block_type == "image":
+            src = str(block.get("src") or "").strip()
+            caption = str(block.get("caption") or "").strip()
+            if src:
+                figure = f'<figure><img src="{html_attr(src)}" alt="{html_attr(caption)}">'
+                if caption:
+                    figure += f"<figcaption>{xml_escape(caption)}</figcaption>"
+                figure += "</figure>"
+                parts.append(figure)
+        elif block_type == "video":
+            src = str(block.get("src") or "").strip()
+            title = str(block.get("title") or "数字资源").strip()
+            poster = str(block.get("poster") or "").strip()
+            if src:
+                video = f"<figure><p><strong>{xml_escape(title)}</strong></p>"
+                if poster:
+                    video += f'<img src="{html_attr(poster)}" alt="{html_attr(title)}">'
+                video += f'<figcaption><a href="{html_attr(src)}">查看数字资源</a></figcaption></figure>'
+                parts.append(video)
+    return "\n".join(parts).strip() or "<p>资料待补充。</p>"
+
+
+def blueprint_first_media(blocks, fallback=""):
+    for block in blocks or []:
+        if block.get("type") == "image" and block.get("src"):
+            return str(block.get("src") or "")
+        if block.get("type") == "video" and block.get("poster"):
+            return str(block.get("poster") or "")
+    return fallback or ""
+
+
+def blueprint_blocks_to_content_payload(blocks):
+    body_parts = []
+    assets = []
+    for block in blocks or []:
+        if not isinstance(block, dict):
+            continue
+        block_type = str(block.get("type") or "").strip().lower()
+        if block_type == "text":
+            text = str(block.get("content") or "").strip()
+            if not text:
+                continue
+            if len(text) <= 30 and not re.search(r"[。！？；;]", text):
+                body_parts.append(f"<h2>{xml_escape(text)}</h2>")
+            else:
+                body_parts.append(f"<p>{xml_escape(text)}</p>")
+        elif block_type == "image":
+            src = str(block.get("src") or "").strip()
+            if not src:
+                continue
+            assets.append(
+                {
+                    "url": src,
+                    "caption": str(block.get("caption") or "").strip(),
+                    "role": "cover" if not assets else "gallery",
+                }
+            )
+        elif block_type == "video":
+            src = str(block.get("src") or "").strip()
+            poster = str(block.get("poster") or "").strip()
+            title = str(block.get("title") or block.get("caption") or "数字资源").strip()
+            if poster:
+                assets.append({"url": poster, "caption": title, "role": "cover" if not assets else "gallery"})
+            if src:
+                assets.append({"url": src, "caption": title, "role": "video"})
+    body_html = "\n".join(body_parts).strip()
+    return {
+        "bodyJson": [{"type": "html", "html": body_html}] if body_html else [],
+        "assets": [{**asset, "sortOrder": index} for index, asset in enumerate(assets)],
+    }
+
+
+def blueprint_page_code(portal_type, portal_slug, section_id):
+    prefix = "TOPIC" if normalize_portal_type(portal_type) == "topic" else "DEPT"
+    slug = normalize_portal_slug(portal_slug).upper().replace("-", "_") or "PORTAL"
+    section = normalize_portal_slug(section_id).upper().replace("-", "_") or "SECTION"
+    return f"BP-{prefix}-{slug}-{section}"
+
+
+def blueprint_content_item_code(portal_type, portal_slug, section_id):
+    prefix = "BIT" if normalize_portal_type(portal_type) == "topic" else "BID"
+    slug = normalize_portal_slug(portal_slug).upper().replace("-", "_") or "PORTAL"
+    section = normalize_portal_slug(section_id).upper().replace("-", "_") or "SECTION"
+    return f"{prefix}-{slug}-{section}"
+
+
+def ensure_blueprint_content_items(conn):
+    projects = conn.execute(
+        """
+        SELECT id, name, portal_type, portal_slug, default_image_url
+        FROM projects
+        WHERE portal_type = 'topic' AND portal_slug <> ''
+        ORDER BY id
+        """
+    ).fetchall()
+    actor = {"username": ADMIN_USERNAME}
+    for project in projects:
+        data = load_blueprint_json(project["portal_type"], project["portal_slug"])
+        if not data:
+            continue
+        portal_type = normalize_portal_type(project["portal_type"])
+        for index, section in enumerate(data.get("sections") or [], start=1):
+            section_id = normalize_portal_slug(section.get("id") or f"section-{index}")
+            if not section_id:
+                continue
+            module_key = section_id
+            if not module_meta_for_key(module_key, portal_type):
+                module_key = module_key_for_category(blueprint_section_category(portal_type, section), portal_type)
+            if not module_key or not module_meta_for_key(module_key, portal_type):
+                continue
+            code = blueprint_content_item_code(portal_type, project["portal_slug"], section_id)
+            existing = conn.execute(
+                "SELECT id FROM content_items WHERE project_id = ? AND code = ? LIMIT 1",
+                (project["id"], code),
+            ).fetchone()
+            if existing:
+                continue
+            blocks = section.get("blocks") or []
+            converted = blueprint_blocks_to_content_payload(blocks)
+            text_blocks = [str(block.get("content") or "").strip() for block in blocks if isinstance(block, dict) and block.get("type") == "text"]
+            summary = str(section.get("summary") or data.get("summary") or "").strip()
+            if not summary and text_blocks:
+                summary = text_blocks[0][:180]
+            title = str(section.get("title") or blueprint_section_category(portal_type, section) or data.get("name") or project["name"]).strip()
+            content_type = normalize_content_type(section.get("contentType") or default_content_type_for_module(module_key))
+            snapshot = {
+                "code": code,
+                "moduleKey": module_key,
+                "contentType": content_type,
+                "title": title[:255],
+                "subtitle": str(data.get("name") or project["name"] or "").strip()[:512],
+                "summary": summary[:1024],
+                "bodyJson": converted["bodyJson"],
+                "metaJson": {"来源": "前台蓝图资料入库", "门户": str(data.get("name") or project["name"] or "").strip()},
+                "coverAssetId": None,
+                "sortOrder": index,
+                "featured": index == 1,
+                "enabled": True,
+                "assets": converted["assets"],
+            }
+            if not snapshot["assets"]:
+                fallback = blueprint_first_media(blocks, data.get("cover") or project["default_image_url"])
+                if fallback:
+                    snapshot["assets"] = [{"url": fallback, "caption": title, "role": "cover", "sortOrder": 0}]
+            apply_content_item_snapshot(conn, project["id"], None, snapshot, actor)
+
+
+def ensure_blueprint_pages(conn):
+    projects = conn.execute(
+        """
+        SELECT id, name, portal_type, portal_slug, default_image_url
+        FROM projects
+        WHERE portal_type = 'topic' AND portal_slug <> ''
+        ORDER BY id
+        """
+    ).fetchall()
+    now = now_iso()
+    for project in projects:
+        existing = conn.execute("SELECT id FROM pages WHERE project_id = ? LIMIT 1", (project["id"],)).fetchone()
+        if existing:
+            continue
+        data = load_blueprint_json(project["portal_type"], project["portal_slug"])
+        if not data:
+            continue
+        for index, section in enumerate(data.get("sections") or [], start=1):
+            section_id = str(section.get("id") or f"section-{index}").strip()
+            blocks = section.get("blocks") or []
+            code = unique_page_code(conn, blueprint_page_code(project["portal_type"], project["portal_slug"], section_id))
+            category = blueprint_section_category(project["portal_type"], section)
+            title = str(section.get("title") or category or data.get("name") or project["name"]).strip()
+            body = blueprint_blocks_to_html(blocks)
+            image_url = blueprint_first_media(blocks, data.get("cover") or project["default_image_url"])
+            content_type = default_content_type_for_module(module_key_for_category(category, project["portal_type"]) or section_id)
+            cursor = conn.execute(
+                """
+                INSERT INTO pages (
+                    project_id, code, category, source, published_at, title, subtitle,
+                    body, image_url, content_type, accent, enabled, review_status, pending_version_id,
+                    submitted_by, reviewed_by, review_note, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'approved', NULL, ?, ?, '', ?)
+                """,
+                (
+                    project["id"],
+                    code,
+                    category,
+                    "蓝图资料同步",
+                    now[:10],
+                    title,
+                    str(data.get("summary") or "").strip(),
+                    body,
+                    image_url,
+                    content_type,
+                    "#f59a13",
+                    ADMIN_USERNAME,
+                    ADMIN_USERNAME,
+                    now,
+                ),
+            )
+            snapshot = {
+                "code": code,
+                "category": category,
+                "source": "蓝图资料同步",
+                "publishedAt": now[:10],
+                "title": title,
+                "subtitle": str(data.get("summary") or "").strip(),
+                "body": body,
+                "imageUrl": image_url,
+                "contentType": content_type,
+                "accent": "#f59a13",
+                "enabled": True,
+            }
+            conn.execute(
+                """
+                INSERT INTO page_versions (
+                    page_id, project_id, code, operation, status, snapshot,
+                    submitted_by, submitted_at, reviewed_by, reviewed_at, changes
+                )
+                VALUES (?, ?, ?, 'upsert', 'approved', ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    cursor.lastrowid,
+                    project["id"],
+                    code,
+                    json.dumps(snapshot, ensure_ascii=False),
+                    ADMIN_USERNAME,
+                    now,
+                    ADMIN_USERNAME,
+                    now,
+                    "blueprint-sync",
+                ),
+            )
+
+
+SPECIAL_EXPERIENCE_LINKS = [
+    {
+        "portalSlug": "digital-intelligence",
+        "moduleKey": "systems",
+        "code": "EXT-DIGITAL-INTELLIGENCE-HUB",
+        "title": "特色系统入口合集",
+        "summary": "汇聚人工智能、大模型交互和 AIGC 等互动体验系统入口。",
+        "links": [
+            {"label": "特色系统入口合集", "url": "http://sxjsxy.szzfhs.com/"},
+        ],
+    },
+    {
+        "portalSlug": "digital-intelligence",
+        "moduleKey": "systems",
+        "code": "EXT-DIGITAL-INTELLIGENCE-AI",
+        "title": "人工智能特色系统入口",
+        "summary": "面向数智技术专题的人工智能应用、大模型自然语言交互与生成式 AI 体验。",
+        "links": [
+            {"label": "人工智能应用技术互动体验系统", "url": "http://sxjsxy.szzfhs.com/"},
+            {"label": "多模态大模型自然语言交互体验系统", "url": "http://sxjsxy.szzfhs.com/#/AigcApply"},
+            {"label": "生成式人工智能 AIGC 终端系统", "url": "http://110.41.133.77:8899/trainai2/#/media-design"},
+        ],
+    },
+    {
+        "portalSlug": "digital-tourism",
+        "moduleKey": "systems",
+        "code": "EXT-DIGITAL-TOURISM-SIM",
+        "title": "文旅虚拟仿真体验入口",
+        "summary": "面向数字文旅实训场景，集中跳转毕节特色景点虚拟仿真资源。",
+        "links": [
+            {"label": "毕节特色景点虚拟仿真文旅数字资源", "url": "http://bjsz.szzfhs.com/bjlvh5"},
+        ],
+    },
+    {
+        "portalSlug": "digital-tourism",
+        "moduleKey": "systems",
+        "code": "EXT-DIGITAL-TOURISM-CASELIB",
+        "title": "文化旅游系典型案例库",
+        "summary": "面向数字文旅专题成果，跳转文化旅游系典型案例库数字资源。",
+        "links": [
+            {"label": "文化旅游系典型案例库数字资源", "url": "http://bjsz.szzfhs.com/bjlvh5/#/pages/spotoverview/spotoverview"},
+        ],
+    },
+    {
+        "portalSlug": "modern-agriculture",
+        "moduleKey": "systems",
+        "code": "EXT-MODERN-AGRICULTURE-LED",
+        "title": "现代农业特色系统入口",
+        "summary": "面向现代农业专题展示，对接农业特色系统主页与左右屏展示入口。",
+        "links": [
+            {"label": "现代农业特色系统", "url": "https://bjled.szzfhs.com"},
+            {"label": "现代农业左屏展示", "url": "https://bjled.szzfhs.com/#/LeftScreen"},
+            {"label": "现代农业右屏展示", "url": "https://bjled.szzfhs.com/#/RightScreen"},
+        ],
+    },
+    {
+        "portalSlug": "finance-commerce",
+        "moduleKey": "training",
+        "code": "EXT-FINANCE-COMMERCE-AIGC",
+        "title": "AIGC 电商视觉设计终端",
+        "summary": "面向财经商贸数字营销、视觉设计和电商运营实训，提供生成式 AI 终端入口。",
+        "links": [
+            {"label": "生成式人工智能 AIGC 终端系统", "url": "http://110.41.133.77:8899/trainai2/#/media-design"},
+        ],
+    },
+]
+
+
+def ensure_special_experience_links(conn):
+    now = now_iso()
+    actor = {"username": ADMIN_USERNAME}
+    for entry in SPECIAL_EXPERIENCE_LINKS:
+        project = conn.execute(
+            """
+            SELECT id, portal_type, portal_slug
+            FROM projects
+            WHERE portal_type = 'topic' AND portal_slug = ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            (entry["portalSlug"],),
+        ).fetchone()
+        if not project:
+            continue
+        existing = conn.execute(
+            "SELECT id FROM content_items WHERE project_id = ? AND code = ? LIMIT 1",
+            (project["id"], entry["code"]),
+        ).fetchone()
+        if existing:
+            continue
+        snapshot = {
+            "code": entry["code"],
+            "moduleKey": entry["moduleKey"],
+            "contentType": "article",
+            "title": entry["title"],
+            "subtitle": "",
+            "summary": entry["summary"],
+            "bodyJson": [{"type": "paragraph", "text": entry["summary"]}],
+            "metaJson": {"入口类型": "外部互动体验系统", "维护方式": "后台结构化资料素材区"},
+            "coverAssetId": None,
+            "sortOrder": 5,
+            "featured": True,
+            "enabled": True,
+            "assets": [
+                {
+                    "role": "external_link",
+                    "caption": item["label"],
+                    "title": item["label"],
+                    "url": item["url"],
+                    "sortOrder": index,
+                }
+                for index, item in enumerate(entry["links"])
+            ],
+        }
+        cursor = conn.execute(
+            """
+            INSERT INTO content_items (
+                project_id, code, module_key, content_type, title, subtitle,
+                summary, body_json, meta_json, cover_asset_id, sort_order,
+                featured, enabled, review_status, submitted_by, reviewed_by,
+                review_note, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 1, 'approved', ?, ?, '', ?, ?)
+            """,
+            (
+                project["id"],
+                snapshot["code"],
+                snapshot["moduleKey"],
+                snapshot["contentType"],
+                snapshot["title"],
+                snapshot["subtitle"],
+                snapshot["summary"],
+                json_text(snapshot["bodyJson"], []),
+                json_text(snapshot["metaJson"], {}),
+                int_value(snapshot.get("sortOrder")),
+                1 if snapshot.get("featured") else 0,
+                actor["username"],
+                actor["username"],
+                now,
+                now,
+            ),
+        )
+        content_item_id = cursor.lastrowid
+        replace_content_item_assets(conn, content_item_id, snapshot["assets"])
+        version_id = write_content_item_version(conn, project["id"], content_item_id, snapshot, actor, "approved", "upsert")
+        conn.execute("UPDATE content_item_versions SET content_item_id = ? WHERE id = ?", (content_item_id, version_id))
+
+
 def deployed_project_id(conn=None):
     close_conn = conn is None
     conn = conn or db_connect()
     try:
-        row = conn.execute("SELECT id FROM projects WHERE deployed = 1 ORDER BY id LIMIT 1").fetchone()
+        row = conn.execute("SELECT id FROM projects WHERE deployed = 1 AND portal_type = 'school' ORDER BY id LIMIT 1").fetchone()
+        if row:
+            return row["id"]
+        row = conn.execute("SELECT id FROM projects WHERE portal_type = 'school' ORDER BY id LIMIT 1").fetchone()
         if row:
             return row["id"]
         row = conn.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()
@@ -749,6 +1961,8 @@ def create_pages_table(conn):
             subtitle TEXT NOT NULL DEFAULT '',
             body TEXT NOT NULL DEFAULT '',
             image_url TEXT NOT NULL DEFAULT '',
+            image_transform_json TEXT NOT NULL DEFAULT '{}',
+            content_type TEXT NOT NULL DEFAULT 'article',
             accent TEXT NOT NULL DEFAULT '#0f766e',
             enabled INTEGER NOT NULL DEFAULT 1,
             updated_at TEXT NOT NULL,
@@ -761,15 +1975,25 @@ def create_pages_table(conn):
 def ensure_page_extra_columns(conn):
     columns = set(table_columns(conn, "pages"))
     if "category" not in columns:
-        conn.execute(
-            "ALTER TABLE pages ADD COLUMN category TEXT NOT NULL DEFAULT '校园新闻'"
-        )
+        column_type = "VARCHAR(120)" if DATABASE_BACKEND == "mysql" else "TEXT"
+        conn.execute(f"ALTER TABLE pages ADD COLUMN category {column_type} NOT NULL DEFAULT '校园新闻'")
     if "source" not in columns:
-        conn.execute(
-            "ALTER TABLE pages ADD COLUMN source TEXT NOT NULL DEFAULT '学校展示'"
-        )
+        column_type = "VARCHAR(160)" if DATABASE_BACKEND == "mysql" else "TEXT"
+        conn.execute(f"ALTER TABLE pages ADD COLUMN source {column_type} NOT NULL DEFAULT '学校展示'")
     if "published_at" not in columns:
-        conn.execute("ALTER TABLE pages ADD COLUMN published_at TEXT NOT NULL DEFAULT ''")
+        column_type = "VARCHAR(80)" if DATABASE_BACKEND == "mysql" else "TEXT"
+        conn.execute(f"ALTER TABLE pages ADD COLUMN published_at {column_type} NOT NULL DEFAULT ''")
+    if "content_type" not in columns:
+        if DATABASE_BACKEND == "mysql":
+            conn.execute("ALTER TABLE pages ADD COLUMN content_type VARCHAR(32) NOT NULL DEFAULT 'article'")
+        else:
+            conn.execute("ALTER TABLE pages ADD COLUMN content_type TEXT NOT NULL DEFAULT 'article'")
+    if "image_transform_json" not in columns:
+        if DATABASE_BACKEND == "mysql":
+            conn.execute("ALTER TABLE pages ADD COLUMN image_transform_json TEXT NULL")
+            conn.execute("UPDATE pages SET image_transform_json = '{}' WHERE image_transform_json IS NULL")
+        else:
+            conn.execute("ALTER TABLE pages ADD COLUMN image_transform_json TEXT NOT NULL DEFAULT '{}'")
 
 
 def ensure_unique_page_codes(conn):
@@ -875,6 +2099,8 @@ def migrate_review_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_page_versions_project ON page_versions(project_id, submitted_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_page_versions_page ON page_versions(page_id, submitted_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_versions_project ON project_versions(project_id, submitted_at)")
+    conn.execute("DELETE FROM page_versions WHERE project_id NOT IN (SELECT id FROM projects)")
+    conn.execute("DELETE FROM project_versions WHERE project_id NOT IN (SELECT id FROM projects)")
 
 
 def migrate_scans_table(conn):
@@ -912,6 +2138,617 @@ def migrate_assets_table(conn):
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_owner_created ON assets(owner_username, created_at)")
+
+
+def migrate_content_tables(conn):
+    if DATABASE_BACKEND == "mysql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS content_items (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              project_id BIGINT NOT NULL,
+              page_id BIGINT NULL,
+              code VARCHAR(160) NOT NULL,
+              module_key VARCHAR(80) NOT NULL,
+              content_type VARCHAR(32) NOT NULL DEFAULT 'article',
+              title VARCHAR(255) NOT NULL,
+              subtitle VARCHAR(512) NOT NULL DEFAULT '',
+              summary VARCHAR(1024) NOT NULL DEFAULT '',
+              body_json JSON NOT NULL,
+              meta_json JSON NOT NULL,
+              cover_asset_id BIGINT NULL,
+              sort_order INT NOT NULL DEFAULT 0,
+              featured TINYINT(1) NOT NULL DEFAULT 0,
+              enabled TINYINT(1) NOT NULL DEFAULT 1,
+              review_status VARCHAR(32) NOT NULL DEFAULT 'approved',
+              pending_version_id BIGINT NULL,
+              submitted_by VARCHAR(64) NOT NULL DEFAULT 'admin',
+              reviewed_by VARCHAR(64) NOT NULL DEFAULT 'admin',
+              review_note VARCHAR(1024) NOT NULL DEFAULT '',
+              created_at VARCHAR(40) NOT NULL,
+              updated_at VARCHAR(40) NOT NULL,
+              UNIQUE KEY uq_content_items_project_code (project_id, code),
+              INDEX idx_content_items_project_module (project_id, module_key, sort_order),
+              INDEX idx_content_items_project_status (project_id, review_status),
+              INDEX idx_content_items_type (content_type),
+              CONSTRAINT fk_content_items_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+              CONSTRAINT fk_content_items_page FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE SET NULL,
+              CONSTRAINT fk_content_items_cover FOREIGN KEY (cover_asset_id) REFERENCES assets(id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS content_item_assets (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              content_item_id BIGINT NOT NULL,
+              asset_id BIGINT NULL,
+              role VARCHAR(40) NOT NULL DEFAULT 'gallery',
+              title VARCHAR(255) NOT NULL DEFAULT '',
+              caption VARCHAR(512) NOT NULL DEFAULT '',
+              url VARCHAR(2048) NOT NULL DEFAULT '',
+              sort_order INT NOT NULL DEFAULT 0,
+              created_at VARCHAR(40) NOT NULL,
+              INDEX idx_content_item_assets_item (content_item_id, sort_order),
+              INDEX idx_content_item_assets_asset (asset_id),
+              CONSTRAINT fk_content_item_assets_item FOREIGN KEY (content_item_id) REFERENCES content_items(id) ON DELETE CASCADE,
+              CONSTRAINT fk_content_item_assets_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS content_item_versions (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              content_item_id BIGINT NULL,
+              project_id BIGINT NOT NULL,
+              operation VARCHAR(32) NOT NULL DEFAULT 'upsert',
+              status VARCHAR(32) NOT NULL DEFAULT 'pending',
+              snapshot_json JSON NOT NULL,
+              submitted_by VARCHAR(64) NOT NULL DEFAULT '',
+              submitted_at VARCHAR(40) NOT NULL,
+              reviewed_by VARCHAR(64) NOT NULL DEFAULT '',
+              reviewed_at VARCHAR(40) NOT NULL DEFAULT '',
+              review_note VARCHAR(1024) NOT NULL DEFAULT '',
+              changes VARCHAR(2048) NOT NULL DEFAULT '',
+              INDEX idx_content_item_versions_status (status, submitted_at),
+              INDEX idx_content_item_versions_project (project_id),
+              INDEX idx_content_item_versions_item (content_item_id),
+              CONSTRAINT fk_content_item_versions_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+              CONSTRAINT fk_content_item_versions_item FOREIGN KEY (content_item_id) REFERENCES content_items(id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            page_id INTEGER,
+            code TEXT NOT NULL,
+            module_key TEXT NOT NULL,
+            content_type TEXT NOT NULL DEFAULT 'article',
+            title TEXT NOT NULL,
+            subtitle TEXT NOT NULL DEFAULT '',
+            summary TEXT NOT NULL DEFAULT '',
+            body_json TEXT NOT NULL,
+            meta_json TEXT NOT NULL,
+            cover_asset_id INTEGER,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            featured INTEGER NOT NULL DEFAULT 0,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            review_status TEXT NOT NULL DEFAULT 'approved',
+            pending_version_id INTEGER,
+            submitted_by TEXT NOT NULL DEFAULT 'admin',
+            reviewed_by TEXT NOT NULL DEFAULT 'admin',
+            review_note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(project_id, code)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_item_assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_item_id INTEGER NOT NULL,
+            asset_id INTEGER,
+            role TEXT NOT NULL DEFAULT 'gallery',
+            title TEXT NOT NULL DEFAULT '',
+            caption TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_item_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_item_id INTEGER,
+            project_id INTEGER NOT NULL,
+            operation TEXT NOT NULL DEFAULT 'upsert',
+            status TEXT NOT NULL DEFAULT 'pending',
+            snapshot_json TEXT NOT NULL,
+            submitted_by TEXT NOT NULL DEFAULT '',
+            submitted_at TEXT NOT NULL,
+            reviewed_by TEXT NOT NULL DEFAULT '',
+            reviewed_at TEXT NOT NULL DEFAULT '',
+            review_note TEXT NOT NULL DEFAULT '',
+            changes TEXT NOT NULL DEFAULT ''
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_items_project_module ON content_items(project_id, module_key, sort_order)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_items_project_status ON content_items(project_id, review_status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_item_assets_item ON content_item_assets(content_item_id, sort_order)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_item_versions_status ON content_item_versions(status, submitted_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_item_versions_project ON content_item_versions(project_id, submitted_at)")
+
+
+def migrate_lowcode_tables(conn):
+    if DATABASE_BACKEND == "mysql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lowcode_forms (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              name VARCHAR(255) NOT NULL,
+              code VARCHAR(120) NOT NULL,
+              description VARCHAR(1024) NOT NULL DEFAULT '',
+              target_type VARCHAR(40) NOT NULL DEFAULT 'content_item',
+              target_portal_type VARCHAR(40) NOT NULL DEFAULT 'department',
+              target_content_type VARCHAR(32) NOT NULL DEFAULT 'article',
+              target_module_key VARCHAR(80) NOT NULL DEFAULT '',
+              enabled TINYINT(1) NOT NULL DEFAULT 1,
+              created_by VARCHAR(64) NOT NULL DEFAULT 'system',
+              created_at VARCHAR(40) NOT NULL,
+              updated_at VARCHAR(40) NOT NULL,
+              UNIQUE KEY uq_lowcode_forms_code (code),
+              INDEX idx_lowcode_forms_target (target_portal_type, target_module_key, enabled)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lowcode_form_versions (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              form_id BIGINT NOT NULL,
+              version_no INT NOT NULL DEFAULT 1,
+              schema_json JSON NOT NULL,
+              status VARCHAR(32) NOT NULL DEFAULT 'active',
+              created_by VARCHAR(64) NOT NULL DEFAULT 'system',
+              created_at VARCHAR(40) NOT NULL,
+              UNIQUE KEY uq_lowcode_form_versions_form_version (form_id, version_no),
+              INDEX idx_lowcode_form_versions_form_status (form_id, status),
+              CONSTRAINT fk_lowcode_form_versions_form
+                FOREIGN KEY (form_id) REFERENCES lowcode_forms(id)
+                ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lowcode_records (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              form_id BIGINT NOT NULL,
+              form_version_id BIGINT NOT NULL,
+              project_id BIGINT NOT NULL,
+              content_item_id BIGINT NULL,
+              status VARCHAR(32) NOT NULL DEFAULT 'pending',
+              data_json JSON NOT NULL,
+              submitted_by VARCHAR(64) NOT NULL DEFAULT '',
+              submitted_at VARCHAR(40) NOT NULL,
+              reviewed_by VARCHAR(64) NOT NULL DEFAULT '',
+              reviewed_at VARCHAR(40) NOT NULL DEFAULT '',
+              review_note VARCHAR(1024) NOT NULL DEFAULT '',
+              created_at VARCHAR(40) NOT NULL,
+              updated_at VARCHAR(40) NOT NULL,
+              INDEX idx_lowcode_records_project (project_id, submitted_at),
+              INDEX idx_lowcode_records_form (form_id, submitted_at),
+              INDEX idx_lowcode_records_content_item (content_item_id),
+              CONSTRAINT fk_lowcode_records_form
+                FOREIGN KEY (form_id) REFERENCES lowcode_forms(id)
+                ON DELETE RESTRICT,
+              CONSTRAINT fk_lowcode_records_version
+                FOREIGN KEY (form_version_id) REFERENCES lowcode_form_versions(id)
+                ON DELETE RESTRICT,
+              CONSTRAINT fk_lowcode_records_project
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_lowcode_records_content_item
+                FOREIGN KEY (content_item_id) REFERENCES content_items(id)
+                ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lowcode_record_assets (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              record_id BIGINT NOT NULL,
+              asset_id BIGINT NULL,
+              role VARCHAR(40) NOT NULL DEFAULT 'gallery',
+              title VARCHAR(255) NOT NULL DEFAULT '',
+              caption VARCHAR(512) NOT NULL DEFAULT '',
+              url VARCHAR(2048) NOT NULL DEFAULT '',
+              sort_order INT NOT NULL DEFAULT 0,
+              created_at VARCHAR(40) NOT NULL,
+              INDEX idx_lowcode_record_assets_record (record_id, sort_order),
+              CONSTRAINT fk_lowcode_record_assets_record
+                FOREIGN KEY (record_id) REFERENCES lowcode_records(id)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_lowcode_record_assets_asset
+                FOREIGN KEY (asset_id) REFERENCES assets(id)
+                ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lowcode_forms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            code TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT '',
+            target_type TEXT NOT NULL DEFAULT 'content_item',
+            target_portal_type TEXT NOT NULL DEFAULT 'department',
+            target_content_type TEXT NOT NULL DEFAULT 'article',
+            target_module_key TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_by TEXT NOT NULL DEFAULT 'system',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lowcode_form_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            form_id INTEGER NOT NULL,
+            version_no INTEGER NOT NULL DEFAULT 1,
+            schema_json TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_by TEXT NOT NULL DEFAULT 'system',
+            created_at TEXT NOT NULL,
+            UNIQUE(form_id, version_no)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lowcode_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            form_id INTEGER NOT NULL,
+            form_version_id INTEGER NOT NULL,
+            project_id INTEGER NOT NULL,
+            content_item_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'pending',
+            data_json TEXT NOT NULL,
+            submitted_by TEXT NOT NULL DEFAULT '',
+            submitted_at TEXT NOT NULL,
+            reviewed_by TEXT NOT NULL DEFAULT '',
+            reviewed_at TEXT NOT NULL DEFAULT '',
+            review_note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lowcode_record_assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            record_id INTEGER NOT NULL,
+            asset_id INTEGER,
+            role TEXT NOT NULL DEFAULT 'gallery',
+            title TEXT NOT NULL DEFAULT '',
+            caption TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_forms_target ON lowcode_forms(target_portal_type, target_module_key, enabled)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_form_versions_form_status ON lowcode_form_versions(form_id, status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_records_project ON lowcode_records(project_id, submitted_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_records_form ON lowcode_records(form_id, submitted_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_records_content_item ON lowcode_records(content_item_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lowcode_record_assets_record ON lowcode_record_assets(record_id, sort_order)")
+
+
+def migrate_assignment_tables(conn):
+    if DATABASE_BACKEND == "mysql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS content_assignments (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              project_id BIGINT NOT NULL,
+              teacher_username VARCHAR(64) NOT NULL,
+              module_key VARCHAR(80) NOT NULL,
+              content_type VARCHAR(32) NOT NULL DEFAULT 'article',
+              title VARCHAR(255) NOT NULL,
+              description VARCHAR(1024) NOT NULL DEFAULT '',
+              status VARCHAR(32) NOT NULL DEFAULT 'assigned',
+              latest_record_id BIGINT NULL,
+              content_item_id BIGINT NULL,
+              created_by VARCHAR(64) NOT NULL DEFAULT '',
+              created_at VARCHAR(40) NOT NULL,
+              updated_at VARCHAR(40) NOT NULL,
+              INDEX idx_content_assignments_project (project_id, module_key, status),
+              INDEX idx_content_assignments_teacher (teacher_username, status),
+              CONSTRAINT fk_content_assignments_project
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_content_assignments_teacher
+                FOREIGN KEY (teacher_username) REFERENCES users(username)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_content_assignments_record
+                FOREIGN KEY (latest_record_id) REFERENCES lowcode_records(id)
+                ON DELETE SET NULL,
+              CONSTRAINT fk_content_assignments_item
+                FOREIGN KEY (content_item_id) REFERENCES content_items(id)
+                ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            teacher_username TEXT NOT NULL,
+            module_key TEXT NOT NULL,
+            content_type TEXT NOT NULL DEFAULT 'article',
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'assigned',
+            latest_record_id INTEGER,
+            content_item_id INTEGER,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_assignments_project ON content_assignments(project_id, module_key, status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_assignments_teacher ON content_assignments(teacher_username, status)")
+
+
+def migrate_achievement_market_tables(conn):
+    if DATABASE_BACKEND == "mysql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS achievement_market_config (
+              id TINYINT PRIMARY KEY DEFAULT 1,
+              welcome_title VARCHAR(255) NOT NULL DEFAULT '成果超市',
+              welcome_subtitle VARCHAR(255) NOT NULL DEFAULT '',
+              welcome_intro TEXT NOT NULL,
+              welcome_image_url VARCHAR(1024) NOT NULL DEFAULT '',
+              welcome_carousel_json TEXT NOT NULL,
+              welcome_note VARCHAR(255) NOT NULL DEFAULT '',
+              updated_at VARCHAR(40) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        columns = set(table_columns(conn, "achievement_market_config"))
+        if "welcome_carousel_json" not in columns:
+            conn.execute("ALTER TABLE achievement_market_config ADD COLUMN welcome_carousel_json TEXT NULL")
+            conn.execute("UPDATE achievement_market_config SET welcome_carousel_json = '[]' WHERE welcome_carousel_json IS NULL")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS achievement_market_items (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              project_id BIGINT NOT NULL,
+              page_id BIGINT NOT NULL,
+              category_key VARCHAR(40) NOT NULL,
+              intro VARCHAR(512) NOT NULL DEFAULT '',
+              sort_order INT NOT NULL DEFAULT 0,
+              enabled TINYINT(1) NOT NULL DEFAULT 1,
+              created_at VARCHAR(40) NOT NULL,
+              updated_at VARCHAR(40) NOT NULL,
+              UNIQUE KEY uq_achievement_market_page (page_id),
+              INDEX idx_achievement_market_project (project_id, enabled, sort_order),
+              INDEX idx_achievement_market_category (category_key, enabled, sort_order),
+              CONSTRAINT fk_achievement_market_project
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+                ON DELETE CASCADE,
+              CONSTRAINT fk_achievement_market_page
+                FOREIGN KEY (page_id) REFERENCES pages(id)
+                ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO achievement_market_config (
+                id, welcome_title, welcome_subtitle, welcome_intro,
+                welcome_image_url, welcome_carousel_json, welcome_note, updated_at
+            )
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE id = id
+            """,
+            (
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeTitle"],
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeSubtitle"],
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeIntro"],
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeImageUrl"],
+                json.dumps(ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeCarouselImages"], ensure_ascii=False),
+                ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeNote"],
+                now_iso(),
+            ),
+        )
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS achievement_market_config (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            welcome_title TEXT NOT NULL DEFAULT '成果超市',
+            welcome_subtitle TEXT NOT NULL DEFAULT '',
+            welcome_intro TEXT NOT NULL,
+            welcome_image_url TEXT NOT NULL DEFAULT '',
+            welcome_carousel_json TEXT NOT NULL DEFAULT '[]',
+            welcome_note TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    columns = set(table_columns(conn, "achievement_market_config"))
+    if "welcome_carousel_json" not in columns:
+        conn.execute("ALTER TABLE achievement_market_config ADD COLUMN welcome_carousel_json TEXT NOT NULL DEFAULT '[]'")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS achievement_market_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            page_id INTEGER NOT NULL UNIQUE,
+            category_key TEXT NOT NULL,
+            intro TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_achievement_market_project ON achievement_market_items(project_id, enabled, sort_order)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_achievement_market_category ON achievement_market_items(category_key, enabled, sort_order)")
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO achievement_market_config (
+            id, welcome_title, welcome_subtitle, welcome_intro,
+            welcome_image_url, welcome_carousel_json, welcome_note, updated_at
+        )
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeTitle"],
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeSubtitle"],
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeIntro"],
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeImageUrl"],
+            json.dumps(ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeCarouselImages"], ensure_ascii=False),
+            ACHIEVEMENT_MARKET_DEFAULT_CONFIG["welcomeNote"],
+            now_iso(),
+        ),
+    )
+
+
+def seed_lowcode_forms(conn):
+    now = now_iso()
+    for form in builtin_lowcode_forms():
+        existing = conn.execute("SELECT id FROM lowcode_forms WHERE code = ?", (form["code"],)).fetchone()
+        if DATABASE_BACKEND == "mysql":
+            conn.execute(
+                """
+                INSERT INTO lowcode_forms (
+                    name, code, description, target_type, target_portal_type,
+                    target_content_type, target_module_key, enabled, created_by,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'system', ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    description = VALUES(description),
+                    target_type = VALUES(target_type),
+                    target_portal_type = VALUES(target_portal_type),
+                    target_content_type = VALUES(target_content_type),
+                    target_module_key = VALUES(target_module_key),
+                    enabled = 1,
+                    updated_at = VALUES(updated_at)
+                """,
+                (
+                    form["name"],
+                    form["code"],
+                    form["description"],
+                    form["targetType"],
+                    form["targetPortalType"],
+                    form["targetContentType"],
+                    form["targetModuleKey"],
+                    now,
+                    now,
+                ),
+            )
+            row = conn.execute("SELECT id FROM lowcode_forms WHERE code = ?", (form["code"],)).fetchone()
+            form_id = row["id"] if row else None
+        elif existing:
+            form_id = existing["id"]
+            conn.execute(
+                """
+                UPDATE lowcode_forms SET
+                    name = ?, description = ?, target_type = ?, target_portal_type = ?,
+                    target_content_type = ?, target_module_key = ?, enabled = 1,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    form["name"],
+                    form["description"],
+                    form["targetType"],
+                    form["targetPortalType"],
+                    form["targetContentType"],
+                    form["targetModuleKey"],
+                    now,
+                    form_id,
+                ),
+            )
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO lowcode_forms (
+                    name, code, description, target_type, target_portal_type,
+                    target_content_type, target_module_key, enabled, created_by,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'system', ?, ?)
+                """,
+                (
+                    form["name"],
+                    form["code"],
+                    form["description"],
+                    form["targetType"],
+                    form["targetPortalType"],
+                    form["targetContentType"],
+                    form["targetModuleKey"],
+                    now,
+                    now,
+                ),
+            )
+            form_id = cursor.lastrowid
+        if not form_id:
+            continue
+        version = conn.execute(
+            "SELECT id FROM lowcode_form_versions WHERE form_id = ? AND version_no = 1",
+            (form_id,),
+        ).fetchone()
+        if version:
+            conn.execute(
+                """
+                UPDATE lowcode_form_versions
+                SET schema_json = ?
+                WHERE id = ?
+                """,
+                (json_text(form["schema"], {}), version["id"]),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO lowcode_form_versions (
+                    form_id, version_no, schema_json, status, created_by, created_at
+                )
+                VALUES (?, 1, ?, 'active', 'system', ?)
+                """,
+                (form_id, json_text(form["schema"], {}), now),
+            )
 
 
 def ensure_default_user(conn):
@@ -964,6 +2801,7 @@ def page_snapshot_from_row(row):
         "subtitle": row["subtitle"],
         "body": row["body"],
         "imageUrl": row["image_url"],
+        "contentType": normalize_content_type(row["content_type"] if "content_type" in row.keys() else "article"),
         "accent": row["accent"],
         "enabled": bool(row["enabled"]),
     }
@@ -972,6 +2810,7 @@ def page_snapshot_from_row(row):
 def project_snapshot_from_row(row):
     return {
         "name": row["name"],
+        "portalType": normalize_portal_type(row["portal_type"] if "portal_type" in row.keys() else "department"),
         "ownerUsername": row["owner_username"] if "owner_username" in row.keys() else ADMIN_USERNAME,
         "idleKicker": row["idle_kicker"],
         "idleTitle": row["idle_title"],
@@ -1063,6 +2902,60 @@ def verify_password(password, stored):
         return False
 
 
+ROLE_ADMIN = "admin"
+ROLE_DEPARTMENT_ADMIN = "department_admin"
+ROLE_TEACHER = "teacher"
+VALID_USER_ROLES = {ROLE_ADMIN, ROLE_DEPARTMENT_ADMIN, ROLE_TEACHER}
+REVIEW_ROLES = {ROLE_ADMIN, ROLE_DEPARTMENT_ADMIN}
+
+
+def is_admin_user(user):
+    return bool(user and user.get("role") == ROLE_ADMIN)
+
+
+def is_department_admin_user(user):
+    return bool(user and user.get("role") == ROLE_DEPARTMENT_ADMIN)
+
+
+def can_review_user(user):
+    return bool(user and user.get("role") in REVIEW_ROLES)
+
+
+def user_role_label(role):
+    return {
+        ROLE_ADMIN: "管理员",
+        ROLE_DEPARTMENT_ADMIN: "系部专题管理员",
+        ROLE_TEACHER: "老师",
+    }.get(role or "", "老师")
+
+
+def normalize_user_role(role, default=ROLE_TEACHER):
+    text = str(role or "").strip().lower()
+    aliases = {
+        "admin": ROLE_ADMIN,
+        "管理员": ROLE_ADMIN,
+        "超级管理员": ROLE_ADMIN,
+        "department_admin": ROLE_DEPARTMENT_ADMIN,
+        "dept_admin": ROLE_DEPARTMENT_ADMIN,
+        "department-admin": ROLE_DEPARTMENT_ADMIN,
+        "系部管理员": ROLE_DEPARTMENT_ADMIN,
+        "专题管理员": ROLE_DEPARTMENT_ADMIN,
+        "部门管理员": ROLE_DEPARTMENT_ADMIN,
+        "teacher": ROLE_TEACHER,
+        "老师": ROLE_TEACHER,
+        "教师": ROLE_TEACHER,
+    }
+    return aliases.get(text, default if default in VALID_USER_ROLES else ROLE_TEACHER)
+
+
+def project_owner_department(username):
+    if not username:
+        return ""
+    with db_connect() as conn:
+        row = conn.execute("SELECT department FROM users WHERE username = ?", (username,)).fetchone()
+    return row["department"] if row else ""
+
+
 def row_to_user(row):
     if not row:
         return None
@@ -1091,21 +2984,344 @@ def list_users():
             """
             SELECT u.*,
                    COUNT(DISTINCT p.id) AS project_count,
-                   COUNT(DISTINCT pages.id) AS page_count
+                   COUNT(DISTINCT pages.id) AS page_count,
+                   COUNT(DISTINCT ca.id) AS assignment_count,
+                   COUNT(DISTINCT ca.project_id) AS assignment_project_count
             FROM users u
             LEFT JOIN projects p ON p.owner_username = u.username
             LEFT JOIN pages ON pages.project_id = p.id
+            LEFT JOIN content_assignments ca ON ca.teacher_username = u.username
             GROUP BY u.username
-            ORDER BY CASE u.role WHEN 'admin' THEN 0 ELSE 1 END, u.enabled DESC, u.username
+            ORDER BY CASE u.role WHEN 'admin' THEN 0 WHEN 'department_admin' THEN 1 ELSE 2 END,
+                     u.enabled DESC, u.username
             """
         ).fetchall()
+        assignment_rows = conn.execute(
+            """
+            SELECT ca.teacher_username, ca.project_id, ca.module_key, p.name AS project_name, p.portal_type
+            FROM content_assignments ca
+            JOIN projects p ON p.id = ca.project_id
+            ORDER BY p.name, ca.module_key, ca.updated_at DESC
+            """
+        ).fetchall()
+    assignment_map = {}
+    for row in assignment_rows:
+        portal_type = normalize_portal_type(row["portal_type"])
+        module = module_meta_for_key(row["module_key"], portal_type) or {"label": row["module_key"]}
+        entry = {
+            "projectId": row["project_id"],
+            "projectName": row["project_name"],
+            "moduleKey": row["module_key"],
+            "moduleLabel": module.get("label") or row["module_key"],
+        }
+        assignment_map.setdefault(row["teacher_username"], []).append(entry)
     users = []
     for row in rows:
         user = row_to_user(row)
         user["projectCount"] = int(row["project_count"] or 0)
         user["pageCount"] = int(row["page_count"] or 0)
+        user["assignmentCount"] = int(row["assignment_count"] or 0)
+        user["assignmentProjectCount"] = int(row["assignment_project_count"] or 0)
+        user["assignments"] = assignment_map.get(user["username"], [])
         users.append(user)
     return users
+
+
+def assignment_status_label(status):
+    return {
+        "assigned": "待填写",
+        "draft": "草稿",
+        "pending": "待审核",
+        "approved": "已通过",
+        "rejected": "已驳回",
+        "deleted": "已删除",
+    }.get(status or "", status or "待填写")
+
+
+def row_to_assignment(row):
+    if not row:
+        return None
+    portal_type = normalize_portal_type(row["portal_type"] if "portal_type" in row.keys() else "department")
+    module = module_meta_for_key(row["module_key"], portal_type) or {"key": row["module_key"], "label": row["module_key"]}
+    content_type = normalize_content_type(row["content_type"])
+    return {
+        "id": row["id"],
+        "projectId": row["project_id"],
+        "projectName": row["project_name"] if "project_name" in row.keys() else "",
+        "projectPortalType": portal_type,
+        "teacherUsername": row["teacher_username"],
+        "teacherDisplayName": row["teacher_display_name"] if "teacher_display_name" in row.keys() else row["teacher_username"],
+        "teacherDepartment": row["teacher_department"] if "teacher_department" in row.keys() else "",
+        "moduleKey": row["module_key"],
+        "moduleLabel": module.get("label") or row["module_key"],
+        "contentType": content_type,
+        "contentTypeLabel": content_type_label(content_type),
+        "title": row["title"],
+        "description": row["description"],
+        "status": row["status"],
+        "statusLabel": assignment_status_label(row["status"]),
+        "latestRecordId": row["latest_record_id"],
+        "contentItemId": row["content_item_id"],
+        "createdBy": row["created_by"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def get_assignment(assignment_id):
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT ca.*, p.name AS project_name, p.portal_type,
+                   users.display_name AS teacher_display_name,
+                   users.department AS teacher_department
+            FROM content_assignments ca
+            JOIN projects p ON p.id = ca.project_id
+            LEFT JOIN users ON users.username = ca.teacher_username
+            WHERE ca.id = ?
+            """,
+            (assignment_id,),
+        ).fetchone()
+    return row_to_assignment(row)
+
+
+def get_assignment_for_module(project_id, teacher_username, module_key):
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT ca.*, p.name AS project_name, p.portal_type,
+                   users.display_name AS teacher_display_name,
+                   users.department AS teacher_department
+            FROM content_assignments ca
+            JOIN projects p ON p.id = ca.project_id
+            LEFT JOIN users ON users.username = ca.teacher_username
+            WHERE ca.project_id = ? AND ca.teacher_username = ? AND ca.module_key = ?
+            ORDER BY
+              CASE ca.status WHEN 'rejected' THEN 0 WHEN 'assigned' THEN 1 WHEN 'draft' THEN 2
+                WHEN 'pending' THEN 3 WHEN 'approved' THEN 4 ELSE 5 END,
+              ca.updated_at DESC, ca.id DESC
+            LIMIT 1
+            """,
+            (project_id, teacher_username, module_key),
+        ).fetchone()
+    return row_to_assignment(row)
+
+
+def assignment_accessible(assignment, user, write=False):
+    if not assignment or not user:
+        return False
+    project = get_project(assignment["projectId"])
+    if not project or not project_accessible(project, user):
+        return False
+    if can_review_user(user):
+        return True
+    return not write and assignment.get("teacherUsername") == user.get("username")
+
+
+def assigned_module_keys(project_id, user):
+    if not project_id or not user or can_review_user(user):
+        return set()
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT module_key
+            FROM content_assignments
+            WHERE project_id = ? AND teacher_username = ?
+            """,
+            (project_id, user.get("username", "")),
+        ).fetchall()
+    keys = {str(row["module_key"] or "").strip() for row in rows if str(row["module_key"] or "").strip()}
+    normalized = {normalize_module_key_for_portal(key, (get_project(project_id) or {}).get("portalType")) for key in keys}
+    if "media" in normalized:
+        normalized.add("resources")
+    return keys | normalized
+
+
+def module_accessible(project_id, module_key, user):
+    if can_review_user(user):
+        return True
+    keys = assigned_module_keys(project_id, user)
+    if not keys:
+        return False
+    project = get_project(project_id) or {}
+    return normalize_module_key_for_portal(module_key, project.get("portalType")) in {
+        normalize_module_key_for_portal(key, project.get("portalType")) for key in keys
+    }
+
+
+def filter_items_by_assigned_modules(items, project_id, user, key_name="moduleKey"):
+    if can_review_user(user):
+        return items
+    keys = assigned_module_keys(project_id, user)
+    if not keys:
+        return []
+    project = get_project(project_id) or {}
+    normalized_keys = {normalize_module_key_for_portal(key, project.get("portalType")) for key in keys}
+    return [
+        item for item in items
+        if normalize_module_key_for_portal(item.get(key_name), project.get("portalType")) in normalized_keys
+    ]
+
+
+def list_assignments(user, project_id=0):
+    where = []
+    params = []
+    if project_id:
+        where.append("ca.project_id = ?")
+        params.append(project_id)
+    if not can_review_user(user):
+        where.append("ca.teacher_username = ?")
+        params.append(user.get("username", ""))
+    owner_join = ""
+    if can_review_user(user):
+        owner_join, owner_where, owner_params = project_scope_sql(user, "p", "project_owners")
+        if owner_where:
+            where.append(owner_where.removeprefix("WHERE ").strip())
+            params.extend(owner_params)
+    where_sql = f"WHERE {' AND '.join(f'({item})' for item in where)}" if where else ""
+    with db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT ca.*, p.name AS project_name, p.portal_type,
+                   users.display_name AS teacher_display_name,
+                   users.department AS teacher_department
+            FROM content_assignments ca
+            JOIN projects p ON p.id = ca.project_id
+            LEFT JOIN users ON users.username = ca.teacher_username
+            {owner_join}
+            {where_sql}
+            ORDER BY
+              CASE ca.status WHEN 'rejected' THEN 0 WHEN 'assigned' THEN 1 WHEN 'draft' THEN 2
+                WHEN 'pending' THEN 3 WHEN 'approved' THEN 4 ELSE 5 END,
+              ca.updated_at DESC, ca.id DESC
+            """,
+            params,
+        ).fetchall()
+    return [row_to_assignment(row) for row in rows]
+
+
+def assignment_scope_for_response(project_id, user):
+    keys = assigned_module_keys(project_id, user)
+    if not keys:
+        return []
+    project = get_project(project_id) or {}
+    display_keys = sorted({
+        normalize_module_key_for_portal(key, project.get("portalType"))
+        for key in keys
+        if module_meta_for_key(key, project.get("portalType"))
+    })
+    return [
+        {
+            "key": key,
+            "label": (module_meta_for_key(key, project.get("portalType")) or {"label": key}).get("label") or key,
+        }
+        for key in display_keys
+    ]
+
+
+def save_assignment(data, actor, assignment_id=0):
+    if not can_review_user(actor):
+        raise ValueError("只有管理员可以进行人员分配")
+    project_id = int_value(data.get("projectId") or data.get("project_id"))
+    project = get_project(project_id)
+    if not project or not project_accessible(project, actor):
+        raise ValueError("门户不存在或无权分配")
+    teacher_username = str(data.get("teacherUsername") or data.get("teacher_username") or "").strip()
+    teacher = get_user(teacher_username)
+    if not teacher or teacher.get("role") != ROLE_TEACHER or not teacher.get("enabled"):
+        raise ValueError("请选择已启用的老师账号")
+    portal_type = normalize_portal_type(project.get("portalType"))
+    module_key = normalize_module_key_for_portal(data.get("moduleKey") or data.get("module_key"), portal_type)
+    if not module_meta_for_key(module_key, portal_type):
+        raise ValueError("请选择有效板块")
+    title = str(data.get("title") or "").strip()
+    if not title:
+        module = module_meta_for_key(module_key, portal_type) or {"label": module_key}
+        title = f"{teacher.get('displayName') or teacher_username}负责{module.get('label') or module_key}板块"
+    description = str(data.get("description") or "").strip()
+    content_type = normalize_content_type(data.get("contentType") or default_content_type_for_module(module_key))
+    now = now_iso()
+    with db_connect() as conn:
+        if assignment_id:
+            row = conn.execute("SELECT * FROM content_assignments WHERE id = ?", (assignment_id,)).fetchone()
+            if not row:
+                return None
+            current = row_to_assignment({**dict(row), "project_name": project.get("name", ""), "portal_type": portal_type})
+            if not assignment_accessible(current, actor, write=True):
+                raise ValueError("无权修改该任务")
+            conn.execute(
+                """
+                UPDATE content_assignments SET project_id = ?, teacher_username = ?, module_key = ?,
+                    content_type = ?, title = ?, description = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (project_id, teacher_username, module_key, content_type, title[:255], description[:1024], now, assignment_id),
+            )
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO content_assignments (
+                    project_id, teacher_username, module_key, content_type, title, description,
+                    status, latest_record_id, content_item_id, created_by, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'assigned', NULL, NULL, ?, ?, ?)
+                """,
+                (project_id, teacher_username, module_key, content_type, title[:255], description[:1024], actor.get("username", ""), now, now),
+            )
+            assignment_id = cursor.lastrowid
+    return get_assignment(assignment_id)
+
+
+def delete_assignment(assignment_id, actor):
+    assignment = get_assignment(assignment_id)
+    if not assignment:
+        return None
+    if not assignment_accessible(assignment, actor, write=True):
+        raise ValueError("无权删除该任务")
+    with db_connect() as conn:
+        conn.execute("DELETE FROM content_assignments WHERE id = ?", (assignment_id,))
+    return assignment
+
+
+def assignment_for_submission(project_id, assignment_id, form, submitted, actor):
+    if not assignment_id:
+        if not can_review_user(actor):
+            assignment = get_assignment_for_module(project_id, actor.get("username", ""), form.get("targetModuleKey"))
+            if not assignment:
+                raise ValueError("请从已分配的可视化编辑板块进入填写")
+            assignment_id = assignment.get("id")
+        else:
+            return None
+    assignment = get_assignment(assignment_id)
+    if not assignment:
+        raise ValueError("人员分配不存在")
+    if assignment.get("projectId") != project_id:
+        raise ValueError("人员分配不属于当前门户")
+    if assignment.get("teacherUsername") != actor.get("username") and not can_review_user(actor):
+        raise ValueError("只能提交分配给自己的可视化编辑板块")
+    if assignment.get("status") == "approved" and not can_review_user(actor):
+        raise ValueError("任务已审核通过，如需修改请联系管理员")
+    if assignment.get("moduleKey") != form.get("targetModuleKey"):
+        raise ValueError("人员分配与当前模板板块不一致")
+    submitted.setdefault("title", assignment.get("title") or "")
+    submitted.setdefault("summary", assignment.get("description") or assignment.get("title") or "")
+    return assignment
+
+
+def update_assignment_progress(assignment_id, status, record_id=None, content_item_id=None):
+    if not assignment_id:
+        return
+    with db_connect() as conn:
+        conn.execute(
+            """
+            UPDATE content_assignments SET status = ?,
+                latest_record_id = COALESCE(?, latest_record_id),
+                content_item_id = COALESCE(?, content_item_id),
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (status, record_id, content_item_id, now_iso(), assignment_id),
+        )
 
 
 def upsert_user(data, actor="admin"):
@@ -1114,9 +3330,7 @@ def upsert_user(data, actor="admin"):
         raise ValueError("username 不能为空")
     if not re.match(r"^[A-Za-z0-9_.-]{2,64}$", username):
         raise ValueError("username 只能使用字母、数字、点、短横线或下划线")
-    role = str(data.get("role") or "teacher").strip()
-    if role not in {"admin", "teacher"}:
-        role = "teacher"
+    role = normalize_user_role(data.get("role"), ROLE_TEACHER)
     display_name = str(data.get("displayName") or data.get("name") or username).strip()
     department = str(data.get("department") or "").strip()
     enabled = 1 if data.get("enabled", True) else 0
@@ -1181,6 +3395,45 @@ def set_user_enabled(username, enabled):
     return get_user(username)
 
 
+def delete_user_account(username, actor):
+    username = str(username or "").strip()
+    actor_username = (actor or {}).get("username", "")
+    if not username:
+        raise ValueError("username 不能为空")
+    if username == ADMIN_USERNAME:
+        raise ValueError("内置 admin 账号不能删除")
+    if username == actor_username:
+        raise ValueError("不能删除当前登录账号")
+    with db_connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if not row:
+            return None
+        user = user_from_row(row)
+        now = now_iso()
+        conn.execute("UPDATE projects SET owner_username = ?, updated_at = ? WHERE owner_username = ?", (ADMIN_USERNAME, now, username))
+        conn.execute("UPDATE pages SET submitted_by = ?, updated_at = ? WHERE submitted_by = ?", (ADMIN_USERNAME, now, username))
+        conn.execute("UPDATE pages SET reviewed_by = ?, updated_at = ? WHERE reviewed_by = ?", (ADMIN_USERNAME, now, username))
+        conn.execute("UPDATE page_versions SET submitted_by = ? WHERE submitted_by = ?", (ADMIN_USERNAME, username))
+        conn.execute("UPDATE page_versions SET reviewed_by = ? WHERE reviewed_by = ?", (ADMIN_USERNAME, username))
+        conn.execute("UPDATE project_versions SET submitted_by = ? WHERE submitted_by = ?", (ADMIN_USERNAME, username))
+        conn.execute("UPDATE project_versions SET reviewed_by = ? WHERE reviewed_by = ?", (ADMIN_USERNAME, username))
+        conn.execute("UPDATE assets SET owner_username = ? WHERE owner_username = ?", (ADMIN_USERNAME, username))
+        conn.execute("UPDATE content_items SET submitted_by = ?, updated_at = ? WHERE submitted_by = ?", (ADMIN_USERNAME, now, username))
+        conn.execute("UPDATE content_items SET reviewed_by = ?, updated_at = ? WHERE reviewed_by = ?", (ADMIN_USERNAME, now, username))
+        conn.execute("UPDATE content_item_versions SET submitted_by = ? WHERE submitted_by = ?", (ADMIN_USERNAME, username))
+        conn.execute("UPDATE content_item_versions SET reviewed_by = ? WHERE reviewed_by = ?", (ADMIN_USERNAME, username))
+        conn.execute("UPDATE lowcode_records SET submitted_by = ?, updated_at = ? WHERE submitted_by = ?", (ADMIN_USERNAME, now, username))
+        conn.execute("UPDATE lowcode_records SET reviewed_by = ?, updated_at = ? WHERE reviewed_by = ?", (ADMIN_USERNAME, now, username))
+        conn.execute("UPDATE lowcode_forms SET created_by = ? WHERE created_by = ?", ("system", username))
+        conn.execute("UPDATE lowcode_form_versions SET created_by = ? WHERE created_by = ?", ("system", username))
+        conn.execute("UPDATE content_assignments SET created_by = ? WHERE created_by = ?", (ADMIN_USERNAME, username))
+        conn.execute("DELETE FROM content_assignments WHERE teacher_username = ?", (username,))
+        conn.execute("DELETE FROM user_sessions WHERE username = ?", (username,))
+        conn.execute("DELETE FROM admin_sessions WHERE username = ?", (username,))
+        conn.execute("DELETE FROM users WHERE username = ?", (username,))
+    return user
+
+
 def change_password(username, old_password, new_password):
     new_password = validate_user_password(new_password, username, required=True)
     with db_connect() as conn:
@@ -1209,6 +3462,7 @@ def get_session_user(token):
     if not token:
         return None
     now = int(time.time())
+    refreshed_expires_at = now + ADMIN_SESSION_SECONDS
     with db_connect() as conn:
         row = conn.execute(
             """
@@ -1227,6 +3481,10 @@ def get_session_user(token):
         if not bool(row["enabled"]):
             conn.execute("DELETE FROM user_sessions WHERE token = ?", (token,))
             return None
+        conn.execute(
+            "UPDATE user_sessions SET expires_at = ? WHERE token = ?",
+            (refreshed_expires_at, token),
+        )
         return row_to_user(row)
 
 
@@ -1260,6 +3518,35 @@ def normalize_text_list(value, fallback, max_items=8):
     return items[:max_items] if items else []
 
 
+def normalize_portal_home_chips(value):
+    source = value
+    if isinstance(source, str):
+        source = [line for line in re.split(r"[\n]+", source) if line.strip()]
+    if not isinstance(source, list):
+        return []
+    chips = []
+    for item in source:
+        if isinstance(item, dict):
+            label = clean_config_text(item.get("label"))
+            target_id = normalize_portal_slug(item.get("targetId") or item.get("id") or item.get("slug") or "")
+            target_kind = str(item.get("targetKind") or item.get("kind") or "departments").strip().lower()
+        else:
+            parts = [part.strip() for part in str(item or "").split("|")]
+            label = clean_config_text(parts[0] if parts else "")
+            target_id = normalize_portal_slug(parts[1] if len(parts) > 1 else "")
+            target_kind = parts[2].strip().lower() if len(parts) > 2 else "departments"
+        if not label:
+            continue
+        if target_kind in {"department", "dept"}:
+            target_kind = "departments"
+        elif target_kind in {"topic", "topics"}:
+            target_kind = "topics"
+        else:
+            target_kind = "departments"
+        chips.append({"label": label, "targetId": target_id, "targetKind": target_kind})
+    return chips[:8]
+
+
 def normalize_display_config(value):
     if isinstance(value, str):
         try:
@@ -1286,6 +3573,15 @@ def normalize_display_config(value):
         "brandColor",
         "brandDeepColor",
         "accent2",
+        "portalHomeKicker",
+        "portalHomeTitle",
+        "portalHomeCopy",
+        "portalHomeSectionKicker",
+        "portalHomeSectionTitle",
+        "portalHomeSectionCopy",
+        "portalHomeFooter",
+        "portalHomeCardLabel",
+        "portalHomeCardSummary",
     )
     for field in text_fields:
         if field in value:
@@ -1296,6 +3592,45 @@ def normalize_display_config(value):
             value.get("summaryTags"),
             DEFAULT_DISPLAY_CONFIG["summaryTags"],
         )
+    if "portalHomeRouteLabels" in value:
+        config["portalHomeRouteLabels"] = normalize_text_list(
+            value.get("portalHomeRouteLabels"),
+            DEFAULT_DISPLAY_CONFIG["portalHomeRouteLabels"],
+            max_items=6,
+        )
+    if "portalHomeCardChips" in value:
+        config["portalHomeCardChips"] = normalize_portal_home_chips(value.get("portalHomeCardChips"))
+    config["portalHomeCardSortOrder"] = int_value(
+        value.get("portalHomeCardSortOrder"),
+        DEFAULT_DISPLAY_CONFIG["portalHomeCardSortOrder"],
+    )
+    config["portalHomeCardHidden"] = bool_value(
+        value.get("portalHomeCardHidden"),
+        DEFAULT_DISPLAY_CONFIG["portalHomeCardHidden"],
+    )
+
+    source_quality = value.get("qualityRules") if isinstance(value.get("qualityRules"), dict) else {}
+    config["qualityRules"] = {
+        "minBodyChars": max(0, min(int_value(source_quality.get("minBodyChars"), DEFAULT_QUALITY_RULES["minBodyChars"]), 2000)),
+        "requireSummary": bool_value(source_quality.get("requireSummary"), DEFAULT_QUALITY_RULES["requireSummary"]),
+        "requireMedia": bool_value(source_quality.get("requireMedia"), DEFAULT_QUALITY_RULES["requireMedia"]),
+        "requireModule": bool_value(source_quality.get("requireModule"), DEFAULT_QUALITY_RULES["requireModule"]),
+        "requireTypeAssets": bool_value(source_quality.get("requireTypeAssets"), DEFAULT_QUALITY_RULES["requireTypeAssets"]),
+    }
+    config["moduleQualityRules"] = {}
+    source_module_quality = value.get("moduleQualityRules") if isinstance(value.get("moduleQualityRules"), dict) else {}
+    known_module_keys = {module["key"] for modules in MODULE_SETS.values() for module in modules}
+    for module_key, rules in source_module_quality.items():
+        key = str(module_key or "").strip()
+        if key not in known_module_keys or not isinstance(rules, dict):
+            continue
+        config["moduleQualityRules"][key] = {
+            "minBodyChars": max(0, min(int_value(rules.get("minBodyChars"), config["qualityRules"]["minBodyChars"]), 2000)),
+            "requireSummary": bool_value(rules.get("requireSummary"), config["qualityRules"]["requireSummary"]),
+            "requireMedia": bool_value(rules.get("requireMedia"), config["qualityRules"]["requireMedia"]),
+            "requireModule": bool_value(rules.get("requireModule"), config["qualityRules"]["requireModule"]),
+            "requireTypeAssets": bool_value(rules.get("requireTypeAssets"), config["qualityRules"]["requireTypeAssets"]),
+        }
 
     source_slides = value.get("slides")
     if not isinstance(source_slides, list):
@@ -1336,12 +3671,22 @@ def row_to_project(row):
     pending_page_count = row["pending_page_count"] if "pending_page_count" in row.keys() else 0
     owner_username = row["owner_username"] if "owner_username" in row.keys() else ADMIN_USERNAME
     owner_display_name = row["owner_display_name"] if "owner_display_name" in row.keys() else owner_username
+    owner_department = row["owner_department"] if "owner_department" in row.keys() else ""
     owner_enabled = row["owner_enabled"] if "owner_enabled" in row.keys() else 1
+    portal_type = normalize_portal_type(row["portal_type"] if "portal_type" in row.keys() else "department")
+    portal_slug = normalize_portal_slug(row["portal_slug"] if "portal_slug" in row.keys() else "")
+    deployed_at = row["deployed_at"] if "deployed_at" in row.keys() else ""
+    content_deployed_at = row["content_deployed_at"] if "content_deployed_at" in row.keys() else ""
     return {
         "id": row["id"],
         "name": row["name"],
+        "portalType": portal_type,
+        "portalTypeLabel": portal_type_label(portal_type),
+        "portalSlug": portal_slug,
+        "previewUrl": portal_preview_url(portal_type, portal_slug),
         "ownerUsername": owner_username,
         "ownerDisplayName": owner_display_name or owner_username,
+        "ownerDepartment": owner_department or "",
         "ownerEnabled": bool(owner_enabled),
         "idleKicker": row["idle_kicker"],
         "idleTitle": row["idle_title"],
@@ -1354,6 +3699,8 @@ def row_to_project(row):
         "displayConfig": normalize_display_config(display_config),
         "deployed": bool(row["deployed"]),
         "contentDeployed": bool(content_deployed),
+        "deployedAt": deployed_at or "",
+        "contentDeployedAt": content_deployed_at or "",
         "configStatus": row["config_status"] if "config_status" in row.keys() else "approved",
         "pendingConfigVersionId": row["pending_config_version_id"] if "pending_config_version_id" in row.keys() else None,
         "pageCount": int(page_count or 0),
@@ -1367,7 +3714,8 @@ def get_project(project_id):
     with db_connect() as conn:
         row = conn.execute(
             """
-            SELECT p.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
+            SELECT p.*, users.display_name AS owner_display_name,
+                   users.department AS owner_department, users.enabled AS owner_enabled
             FROM projects p
             LEFT JOIN users ON users.username = p.owner_username
             WHERE p.id = ?
@@ -1380,9 +3728,48 @@ def get_project(project_id):
 def project_accessible(project, user):
     if not project or not user:
         return False
-    if user.get("role") == "admin":
+    if is_admin_user(user):
         return True
-    return project.get("ownerUsername") == user.get("username")
+    if project.get("ownerUsername") == user.get("username"):
+        return True
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        owner_department = str(project.get("ownerDepartment") or "").strip()
+        if not owner_department:
+            owner_department = str(project_owner_department(project.get("ownerUsername")) or "").strip()
+        return bool(department and owner_department and department == owner_department)
+    with db_connect() as conn:
+        row = conn.execute(
+            "SELECT id FROM content_assignments WHERE project_id = ? AND teacher_username = ? LIMIT 1",
+            (project.get("id"), user.get("username", "")),
+        ).fetchone()
+    if row:
+        return True
+    return False
+
+
+def project_scope_sql(user, project_alias="projects", owner_alias="project_owners"):
+    if is_admin_user(user):
+        return "", "", []
+    username = user.get("username", "") if user else ""
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if department:
+            return (
+                f"LEFT JOIN users {owner_alias} ON {owner_alias}.username = {project_alias}.owner_username",
+                f"WHERE ({project_alias}.owner_username = ? OR {owner_alias}.department = ?)",
+                [username, department],
+            )
+    return (
+        "",
+        f"""WHERE ({project_alias}.owner_username = ?
+            OR EXISTS (
+                SELECT 1 FROM content_assignments scope_assignments
+                WHERE scope_assignments.project_id = {project_alias}.id
+                  AND scope_assignments.teacher_username = ?
+            ))""",
+        [username, username],
+    )
 
 
 def get_deployed_project():
@@ -1444,18 +3831,36 @@ def get_deployed_content_project():
 
 
 def list_projects(user=None):
-    user = user or {"role": "admin"}
+    user = user or {"role": ROLE_ADMIN}
     owner_filter = ""
     params = []
-    if user.get("role") != "admin":
-        owner_filter = "WHERE p.owner_username = ?"
-        params.append(user.get("username", ""))
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if department:
+            owner_filter = "WHERE (p.owner_username = ? OR users.department = ?)"
+            params.extend([user.get("username", ""), department])
+        else:
+            owner_filter = "WHERE p.owner_username = ?"
+            params.append(user.get("username", ""))
+    elif not is_admin_user(user):
+        owner_filter = """
+            WHERE (
+                p.owner_username = ?
+                OR EXISTS (
+                    SELECT 1 FROM content_assignments scope_assignments
+                    WHERE scope_assignments.project_id = p.id
+                      AND scope_assignments.teacher_username = ?
+                )
+            )
+        """
+        params.extend([user.get("username", ""), user.get("username", "")])
     with db_connect() as conn:
         rows = conn.execute(
             f"""
             SELECT
                 p.*,
                 users.display_name AS owner_display_name,
+                users.department AS owner_department,
                 users.enabled AS owner_enabled,
                 COUNT(DISTINCT pages.id) AS page_count,
                 SUM(CASE WHEN pages.review_status IN ('pending','pending_delete','rejected') THEN 1 ELSE 0 END) AS pending_page_count,
@@ -1471,6 +3876,399 @@ def list_projects(user=None):
             params,
         ).fetchall()
     return [row_to_project(row) for row in rows]
+
+
+def module_key_for_category(category, portal_type="department"):
+    text = str(category or "").strip().lower()
+    if not text:
+        return ""
+    modules = module_set_for_portal_type(portal_type)
+    for module in modules:
+        if text == module["label"].lower() or text == module["key"].lower():
+            return module["key"]
+    for module in modules:
+        for alias in module["aliases"]:
+            if alias and alias.lower() in text:
+                return module["key"]
+    return ""
+
+
+def standard_module_payload(module, pages=None):
+    pages = pages or []
+    approved = [
+        page for page in pages
+        if page.get("enabled", True) and page.get("reviewStatus", "approved") == "approved"
+    ]
+    pending = [
+        page for page in pages
+        if page.get("reviewStatus") in {"pending", "pending_delete"}
+    ]
+    return {
+        "key": module["key"],
+        "label": module["label"],
+        "description": module["description"],
+        "count": len(pages),
+        "approvedCount": len(approved),
+        "pendingCount": len(pending),
+        "covered": bool(pages),
+        "publishReady": bool(approved),
+        "pages": [
+            {
+                "id": page.get("id"),
+                "code": page.get("code", ""),
+                "title": page.get("title", ""),
+                "reviewStatus": page.get("reviewStatus", ""),
+                "enabled": bool(page.get("enabled", True)),
+            }
+            for page in pages[:6]
+        ],
+    }
+
+
+def module_coverage_from_pages(pages, portal_type="department"):
+    normalized_portal_type = normalize_portal_type(portal_type)
+    modules_config = module_set_for_portal_type(normalized_portal_type)
+    grouped = {module["key"]: [] for module in modules_config}
+    unmatched = []
+    for page in pages or []:
+        module_key = page.get("moduleKey") or module_key_for_category(page.get("category", ""), normalized_portal_type)
+        if module_key in grouped:
+            grouped[module_key].append(page)
+        else:
+            unmatched.append(page)
+    modules = [standard_module_payload(module, grouped[module["key"]]) for module in modules_config]
+    covered = sum(1 for module in modules if module["covered"])
+    publish_ready = sum(1 for module in modules if module["publishReady"])
+    return {
+        "portalType": normalized_portal_type,
+        "portalTypeLabel": portal_type_label(normalized_portal_type),
+        "total": len(modules),
+        "covered": covered,
+        "missing": len(modules) - covered,
+        "publishReady": publish_ready,
+        "modules": modules,
+        "missingLabels": [module["label"] for module in modules if not module["covered"]],
+        "unmatched": [
+            {
+                "id": page.get("id"),
+                "code": page.get("code", ""),
+                "title": page.get("title", ""),
+                "category": page.get("category", ""),
+            }
+            for page in unmatched[:8]
+        ],
+    }
+
+
+def normalize_quality_rules(value=None, fallback=None):
+    value = value if isinstance(value, dict) else {}
+    fallback = fallback if isinstance(fallback, dict) else DEFAULT_QUALITY_RULES
+    return {
+        "minBodyChars": max(0, min(int_value(value.get("minBodyChars"), fallback["minBodyChars"]), 2000)),
+        "requireSummary": bool_value(value.get("requireSummary"), fallback["requireSummary"]),
+        "requireMedia": bool_value(value.get("requireMedia"), fallback["requireMedia"]),
+        "requireModule": bool_value(value.get("requireModule"), fallback["requireModule"]),
+        "requireTypeAssets": bool_value(value.get("requireTypeAssets"), fallback["requireTypeAssets"]),
+    }
+
+
+def project_quality_rules(project):
+    config = (project or {}).get("displayConfig") or {}
+    return normalize_quality_rules(config.get("qualityRules"))
+
+
+def project_module_quality_rules(project):
+    config = (project or {}).get("displayConfig") or {}
+    base = project_quality_rules(project)
+    source = config.get("moduleQualityRules") if isinstance(config.get("moduleQualityRules"), dict) else {}
+    result = {}
+    portal_type = normalize_portal_type((project or {}).get("portalType"))
+    known_keys = {module["key"] for module in module_set_for_portal_type(portal_type)}
+    for module_key, rules in source.items():
+        key = str(module_key or "").strip()
+        if key in known_keys:
+            result[key] = normalize_quality_rules(rules, base)
+    return result
+
+
+def quality_rules_summary(rules):
+    return "；".join(
+        [
+            f"正文不少于{int_value(rules.get('minBodyChars'))}字",
+            "要求摘要" if rules.get("requireSummary") else "不强制摘要",
+            "要求图片/视频" if rules.get("requireMedia") else "不强制素材",
+            "要求标准板块" if rules.get("requireModule") else "不强制板块",
+            "检查类型素材" if rules.get("requireTypeAssets") else "不检查类型素材",
+        ]
+    )
+
+
+def text_from_body_json(value):
+    blocks = value
+    if isinstance(blocks, dict):
+        if isinstance(blocks.get("blocks"), list):
+            blocks = blocks["blocks"]
+        elif isinstance(blocks.get("paragraphs"), list):
+            blocks = [{"type": "paragraph", "text": item} for item in blocks["paragraphs"]]
+        else:
+            blocks = [blocks]
+    if isinstance(blocks, str):
+        blocks = [{"type": "paragraph", "text": blocks}]
+    if not isinstance(blocks, list):
+        return ""
+    parts = []
+    for block in blocks:
+        if isinstance(block, str):
+            parts.append(block)
+            continue
+        if not isinstance(block, dict):
+            continue
+        block_type = str(block.get("type") or "").lower()
+        if block_type == "html":
+            text = re.sub(r"<[^>]+>", " ", str(block.get("html") or ""))
+            parts.append(unescape(text))
+        elif isinstance(block.get("items"), list):
+            parts.extend(str(item or "") for item in block["items"])
+        else:
+            parts.append(str(block.get("text") or block.get("title") or block.get("content") or ""))
+    return re.sub(r"\s+", " ", " ".join(parts)).strip()
+
+
+def quality_asset_url(asset):
+    return str((asset or {}).get("url") or "").strip()
+
+
+def looks_like_video_asset(asset):
+    mime_type = str((asset or {}).get("mimeType") or "").lower()
+    url = quality_asset_url(asset)
+    return (asset or {}).get("role") == "video" or mime_type.startswith("video/") or bool(re.search(r"\.(mp4|mov|m4v|webm|ogg)(\?.*)?$", url, flags=re.I))
+
+
+def looks_like_image_asset(asset):
+    mime_type = str((asset or {}).get("mimeType") or "").lower()
+    url = quality_asset_url(asset)
+    return mime_type.startswith("image/") or bool(re.search(r"\.(png|jpe?g|webp|gif|svg)(\?.*)?$", url, flags=re.I))
+
+
+def looks_like_attachment_asset(asset):
+    return (asset or {}).get("role") == "attachment" or (not looks_like_image_asset(asset) and not looks_like_video_asset(asset))
+
+
+def content_item_quality_issues(item, project):
+    issues = []
+    module_key = str(item.get("moduleKey") or "").strip()
+    module_rules = project_module_quality_rules(project)
+    rules = module_rules.get(module_key) or project_quality_rules(project)
+    assets = content_assets_from_data(item.get("assets") or [])
+    body_text = text_from_body_json(item.get("bodyJson") or "")
+    summary_text = str(item.get("summary") or item.get("subtitle") or "").strip()
+    content_type = normalize_content_type(item.get("contentType"))
+    has_visual_asset = bool(item.get("coverAssetId")) or any(not looks_like_attachment_asset(asset) for asset in assets)
+    has_video = any(asset.get("role") == "video" or looks_like_video_asset(asset) for asset in assets)
+    has_portrait = bool(item.get("coverAssetId")) or any(asset.get("role") in {"portrait", "cover"} for asset in assets)
+    has_certificate = bool(item.get("coverAssetId")) or any(asset.get("role") in {"certificate", "cover", "gallery"} for asset in assets)
+    has_attachment = any(asset.get("role") == "attachment" or looks_like_attachment_asset(asset) for asset in assets)
+
+    def add(level, label, code):
+        issues.append({"level": level, "label": label, "code": code})
+
+    if rules.get("requireModule") and not module_key:
+        add("high", "未匹配标准板块", "missing_module")
+    if not str(item.get("title") or "").strip():
+        add("high", "缺少标题", "missing_title")
+    if rules.get("requireSummary") and not summary_text:
+        add("medium", "缺少卡片摘要", "missing_summary")
+    min_body_chars = int_value(rules.get("minBodyChars"))
+    if min_body_chars > 0 and len(body_text) < min_body_chars:
+        add("medium", f"正文少于 {min_body_chars} 字", "short_body")
+    if rules.get("requireMedia") and content_type != "attachment" and not has_visual_asset:
+        add("medium", "缺少图片/视频素材", "missing_media")
+    if rules.get("requireTypeAssets") and content_type == "video" and not has_video:
+        add("high", "视频类资料缺少视频素材", "missing_video")
+    if rules.get("requireTypeAssets") and content_type == "person" and not has_portrait:
+        add("medium", "人物类资料建议配置人物照", "missing_portrait")
+    if rules.get("requireTypeAssets") and content_type == "honor" and not has_certificate:
+        add("medium", "荣誉类资料建议配置证书/荣誉图", "missing_certificate")
+    if rules.get("requireTypeAssets") and content_type == "attachment" and not has_attachment:
+        add("high", "附件资料缺少附件", "missing_attachment")
+    if item.get("reviewStatus") == "rejected":
+        add("high", "资料已驳回，需修改后重新提交", "rejected")
+    if item.get("reviewStatus") in {"pending", "pending_delete"}:
+        add("medium", "资料仍在审核中", "pending_review")
+    return issues, rules
+
+
+def content_quality_report(project_id):
+    project = get_project(project_id)
+    if not project:
+        return None
+    items = list_content_items(project_id)
+    module_rules = project_module_quality_rules(project)
+    entries = []
+    high_count = 0
+    medium_count = 0
+    for item in items:
+        issues, rules = content_item_quality_issues(item, project)
+        module_key = str(item.get("moduleKey") or "").strip()
+        module_meta = module_meta_for_key(module_key, project.get("portalType")) if module_key else None
+        high_count += sum(1 for issue in issues if issue["level"] == "high")
+        medium_count += sum(1 for issue in issues if issue["level"] != "high")
+        entries.append(
+            {
+                "itemId": item.get("id"),
+                "projectId": item.get("projectId"),
+                "code": item.get("code", ""),
+                "title": item.get("title", ""),
+                "moduleKey": module_key,
+                "moduleLabel": item.get("moduleLabel") or (module_meta["label"] if module_meta else module_key),
+                "contentType": normalize_content_type(item.get("contentType")),
+                "contentTypeLabel": content_type_label(item.get("contentType")),
+                "reviewStatus": item.get("reviewStatus", ""),
+                "enabled": bool(item.get("enabled", True)),
+                "assetCount": len(item.get("assets") or []),
+                "rules": rules,
+                "ruleSource": "板块特例" if module_key in module_rules else "门户默认",
+                "ruleSummary": quality_rules_summary(rules),
+                "issues": issues,
+                "previewUrl": f"/display?project={project_id}&code={item.get('code', '')}" if item.get("reviewStatus") == "approved" and item.get("enabled", True) else "",
+            }
+        )
+    issue_entries = [entry for entry in entries if entry["issues"]]
+    return {
+        "projectId": project_id,
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "checked": len(items),
+        "issueItemCount": len(issue_entries),
+        "highCount": high_count,
+        "mediumCount": medium_count,
+        "defaultRules": project_quality_rules(project),
+        "defaultRuleSummary": quality_rules_summary(project_quality_rules(project)),
+        "moduleRuleCount": len(module_rules),
+        "entries": entries,
+    }
+
+
+def asset_kind_label(asset):
+    if looks_like_video_asset(asset):
+        return "VIDEO"
+    if looks_like_attachment_asset(asset):
+        return "FILE"
+    return "IMAGE"
+
+
+def content_item_archive_assets(item):
+    assets = content_assets_from_data(item.get("assets") or [])
+    cover_asset_id = int_value(item.get("coverAssetId"))
+    if cover_asset_id and not any(int_value(asset.get("assetId")) == cover_asset_id for asset in assets):
+        asset = get_asset(cover_asset_id)
+        if asset:
+            assets.insert(
+                0,
+                {
+                    "assetId": cover_asset_id,
+                    "role": "cover",
+                    "title": asset.get("originalFilename", ""),
+                    "caption": asset.get("originalFilename", ""),
+                    "url": asset.get("url", ""),
+                    "mimeType": asset.get("mimeType", ""),
+                    "sortOrder": -1,
+                },
+            )
+    return sorted(assets, key=lambda asset: int_value(asset.get("sortOrder")))
+
+
+def asset_archive_entry(project, source, owner, asset, index):
+    role = str(asset.get("role") or "gallery").strip() or "gallery"
+    return {
+        "projectId": project.get("id"),
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "source": source,
+        "ownerId": owner.get("id") or "",
+        "ownerCode": owner.get("code") or "",
+        "ownerTitle": owner.get("title") or "",
+        "moduleKey": owner.get("moduleKey") or "",
+        "moduleLabel": owner.get("moduleLabel") or "",
+        "contentType": owner.get("contentType") or "",
+        "contentTypeLabel": owner.get("contentTypeLabel") or "",
+        "reviewStatus": owner.get("reviewStatus") or "",
+        "submittedBy": owner.get("submittedBy") or "",
+        "submittedDisplayName": owner.get("submittedDisplayName") or owner.get("submittedBy") or "",
+        "submittedDepartment": owner.get("submittedDepartment") or "",
+        "sortOrder": index + 1,
+        "assetId": asset.get("assetId") or "",
+        "role": role,
+        "roleLabel": {
+            "cover": "封面",
+            "portrait": "人物照",
+            "certificate": "证书/荣誉",
+            "gallery": "图集",
+            "video": "视频",
+            "attachment": "附件",
+        }.get(role, role or "素材"),
+        "kind": asset_kind_label(asset),
+        "caption": asset.get("caption") or asset.get("title") or "",
+        "url": asset.get("url") or "",
+        "mimeType": asset.get("mimeType") or "",
+    }
+
+
+def asset_archive_report(project_id, actor=None):
+    project = get_project(project_id)
+    if not project:
+        return None
+    entries = []
+    for item in list_content_items(project_id):
+        owner = {
+            "id": item.get("id"),
+            "code": item.get("code", ""),
+            "title": item.get("title", ""),
+            "moduleKey": item.get("moduleKey", ""),
+            "moduleLabel": item.get("moduleLabel", ""),
+            "contentType": item.get("contentType", ""),
+            "contentTypeLabel": item.get("contentTypeLabel", ""),
+            "reviewStatus": item.get("reviewStatus", ""),
+            "submittedBy": item.get("submittedBy", ""),
+        }
+        for index, asset in enumerate(content_item_archive_assets(item)):
+            if asset.get("url") or asset.get("assetId"):
+                entries.append(asset_archive_entry(project, "结构化资料", owner, asset, index))
+    for record in list_lowcode_records(project_id, actor):
+        fields = (record.get("data") or {}).get("fields") if isinstance(record.get("data"), dict) else {}
+        fields = fields if isinstance(fields, dict) else {}
+        owner = {
+            "id": record.get("id"),
+            "code": record.get("contentCode", ""),
+            "title": record.get("contentTitle") or fields.get("title") or "",
+            "moduleKey": record.get("contentModuleKey", ""),
+            "moduleLabel": record.get("contentModuleLabel", ""),
+            "contentType": record.get("contentType", ""),
+            "contentTypeLabel": record.get("contentTypeLabel", ""),
+            "reviewStatus": record.get("effectiveStatus") or record.get("contentReviewStatus") or record.get("status", ""),
+            "submittedBy": record.get("submittedBy", ""),
+            "submittedDisplayName": record.get("submittedDisplayName", ""),
+            "submittedDepartment": record.get("submittedDepartment", ""),
+        }
+        for index, asset in enumerate(content_assets_from_data(fields.get("assets") or [])):
+            if asset.get("url") or asset.get("assetId"):
+                entries.append(asset_archive_entry(project, "模板填报", owner, asset, index))
+    return {
+        "projectId": project_id,
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "generatedAt": now_iso(),
+        "total": len(entries),
+        "byKind": {
+            "IMAGE": sum(1 for entry in entries if entry["kind"] == "IMAGE"),
+            "VIDEO": sum(1 for entry in entries if entry["kind"] == "VIDEO"),
+            "FILE": sum(1 for entry in entries if entry["kind"] == "FILE"),
+        },
+        "entries": entries,
+    }
 
 
 def create_admin_log(action, target_type="", target_id="", target_label="", detail="", username="", role="", ip="", changes=""):
@@ -1547,23 +4345,35 @@ def list_admin_logs(limit=80, username="", action="", date_from="", date_to=""):
 
 
 def operations_summary(user=None):
-    user = user or {"role": "admin", "username": ""}
+    user = user or {"role": ROLE_ADMIN, "username": ""}
     ready = ready_status()
-    owner_join = ""
-    owner_where = ""
-    owner_params = []
-    if user.get("role") != "admin":
-        owner_join = "JOIN projects ON projects.id = pages.project_id"
-        owner_where = "WHERE projects.owner_username = ?"
-        owner_params.append(user.get("username", ""))
+    page_project_join = "JOIN projects ON projects.id = pages.project_id"
+    owner_join, owner_where, owner_params = project_scope_sql(user, "projects", "project_owners")
+    asset_join = ""
+    asset_where = ""
+    asset_params = []
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if department:
+            asset_join = "LEFT JOIN users asset_owners ON asset_owners.username = assets.owner_username"
+            asset_where = "WHERE assets.owner_username = ? OR asset_owners.department = ?"
+            asset_params.extend([user.get("username", ""), department])
+        else:
+            asset_where = "WHERE assets.owner_username = ?"
+            asset_params.append(user.get("username", ""))
+    elif not is_admin_user(user):
+        asset_where = "WHERE assets.owner_username = ?"
+        asset_params.append(user.get("username", ""))
     with db_connect() as conn:
         deployed = conn.execute(
             """
             SELECT
                 MAX(CASE WHEN deployed = 1 THEN id ELSE 0 END) AS welcome_id,
                 MAX(CASE WHEN deployed = 1 THEN name ELSE '' END) AS welcome_name,
+                MAX(CASE WHEN deployed = 1 THEN deployed_at ELSE '' END) AS welcome_at,
                 MAX(CASE WHEN content_deployed = 1 THEN id ELSE 0 END) AS content_id,
-                MAX(CASE WHEN content_deployed = 1 THEN name ELSE '' END) AS content_name
+                MAX(CASE WHEN content_deployed = 1 THEN name ELSE '' END) AS content_name,
+                MAX(CASE WHEN content_deployed = 1 THEN content_deployed_at ELSE '' END) AS content_at
             FROM projects
             """
         ).fetchone()
@@ -1571,19 +4381,35 @@ def operations_summary(user=None):
             f"""
             SELECT COUNT(*) AS value
             FROM pages
+            {page_project_join}
             {owner_join}
             {owner_where + (' AND' if owner_where else 'WHERE')} pages.review_status IN ('pending','pending_delete')
             """,
             owner_params,
         ).fetchone()["value"]
         pending_projects = 0
-        if user.get("role") == "admin":
+        if is_admin_user(user):
             pending_projects = conn.execute(
                 "SELECT COUNT(*) AS value FROM projects WHERE config_status = 'pending'"
             ).fetchone()["value"]
+        elif can_review_user(user):
+            pending_projects = conn.execute(
+                f"""
+                SELECT COUNT(*) AS value
+                FROM projects
+                {owner_join}
+                {owner_where + (' AND' if owner_where else 'WHERE')} projects.config_status = 'pending'
+                """,
+                owner_params,
+            ).fetchone()["value"]
         asset_count = conn.execute(
-            "SELECT COUNT(*) AS value FROM assets" if user.get("role") == "admin" else "SELECT COUNT(*) AS value FROM assets WHERE owner_username = ?",
-            () if user.get("role") == "admin" else (user.get("username", ""),),
+            f"""
+            SELECT COUNT(*) AS value
+            FROM assets
+            {asset_join}
+            {asset_where}
+            """,
+            asset_params,
         ).fetchone()["value"]
         recent_errors = conn.execute(
             """
@@ -1592,14 +4418,16 @@ def operations_summary(user=None):
             ORDER BY created_at DESC, id DESC
             LIMIT 5
             """
-        ).fetchall() if user.get("role") == "admin" else []
+        ).fetchall() if is_admin_user(user) else []
     return {
         "ready": ready,
         "deployed": {
             "welcomeProjectId": int(deployed["welcome_id"] or 0),
             "welcomeProjectName": deployed["welcome_name"] or "",
+            "welcomeDeployedAt": deployed["welcome_at"] or "",
             "contentProjectId": int(deployed["content_id"] or 0),
             "contentProjectName": deployed["content_name"] or "",
+            "contentDeployedAt": deployed["content_at"] or "",
         },
         "pending": {
             "pages": int(pending_pages or 0),
@@ -1607,7 +4435,7 @@ def operations_summary(user=None):
         },
         "assets": {"count": int(asset_count or 0)},
         "recentErrors": [row_to_admin_log(row) for row in recent_errors],
-        "config": online_config_audit() if user.get("role") == "admin" else {"ok": True, "errors": [], "warnings": []},
+        "config": online_config_audit() if is_admin_user(user) else {"ok": True, "errors": [], "warnings": []},
     }
 
 
@@ -1656,6 +4484,61 @@ def online_config_audit():
     }
 
 
+def acceptance_portal_reports(project_id, user):
+    if not project_id:
+        return {
+            "projectId": 0,
+            "projectName": "",
+            "contentQuality": {"checked": 0, "issueItemCount": 0, "highCount": 0, "mediumCount": 0},
+            "assetArchive": {"total": 0, "byKind": {"IMAGE": 0, "VIDEO": 0, "FILE": 0}},
+            "lowcode": {"stats": lowcode_record_stats([]), "pendingReminderCount": 0},
+            "reminders": [],
+        }
+    quality = content_quality_report(project_id) or {}
+    archive = asset_archive_report(project_id, user) or {}
+    lowcode = lowcode_progress_report(project_id, user) or {}
+    reminders = [
+        row for row in (lowcode.get("groups", {}).get("reminders") or [])
+        if not row.get("publishReady")
+    ]
+    return {
+        "projectId": project_id,
+        "projectName": quality.get("projectName") or archive.get("projectName") or lowcode.get("projectName") or "",
+        "portalType": quality.get("portalType") or archive.get("portalType") or lowcode.get("portalType") or "",
+        "portalTypeLabel": quality.get("portalTypeLabel") or archive.get("portalTypeLabel") or lowcode.get("portalTypeLabel") or "",
+        "contentQuality": {
+            "checked": int_value(quality.get("checked")),
+            "issueItemCount": int_value(quality.get("issueItemCount")),
+            "highCount": int_value(quality.get("highCount")),
+            "mediumCount": int_value(quality.get("mediumCount")),
+            "moduleRuleCount": int_value(quality.get("moduleRuleCount")),
+        },
+        "assetArchive": {
+            "total": int_value(archive.get("total")),
+            "byKind": archive.get("byKind") or {"IMAGE": 0, "VIDEO": 0, "FILE": 0},
+        },
+        "lowcode": {
+            "stats": lowcode.get("stats") or lowcode_record_stats([]),
+            "templateQuality": lowcode.get("templateQuality") or {"total": 0, "danger": 0, "warn": 0, "ok": 0},
+            "templateCount": len(lowcode.get("groups", {}).get("templates") or []),
+            "departmentCount": len(lowcode.get("groups", {}).get("departments") or []),
+            "submitterCount": len(lowcode.get("groups", {}).get("submitters") or []),
+            "pendingReminderCount": len(reminders),
+        },
+        "reminders": [
+            {
+                "key": row.get("key", ""),
+                "label": row.get("label", ""),
+                "status": row.get("status", ""),
+                "owner": row.get("owner", ""),
+                "action": row.get("action", ""),
+                "kind": row.get("kind", ""),
+            }
+            for row in reminders[:8]
+        ],
+    }
+
+
 def acceptance_report(user):
     dashboard = admin_dashboard(user)
     operations = dashboard.get("operations", {})
@@ -1669,9 +4552,10 @@ def acceptance_report(user):
         "warnings": [],
         "eligiblePageIds": [],
     }
-    reviews = list_reviews("pending")
+    reviews = list_reviews("pending", user)
+    portal_reports = acceptance_portal_reports(content_project_id, user)
     return {
-        "ok": bool(operations.get("ready", {}).get("ok")) and bool(operations.get("config", {}).get("ok")) and bool(content_check.get("ok")),
+        "ok": bool(operations.get("ready", {}).get("ok")) and bool(operations.get("config", {}).get("ok")) and bool(content_check.get("ok")) and portal_reports.get("contentQuality", {}).get("highCount", 0) == 0,
         "generatedAt": now_iso(),
         "generatedBy": user.get("username", ""),
         "summary": dashboard.get("summary", {}),
@@ -1682,8 +4566,10 @@ def acceptance_report(user):
         "pending": {
             "pages": len(reviews.get("pages", [])),
             "projects": len(reviews.get("projects", [])),
+            "contentItems": len(reviews.get("contentItems", [])),
         },
         "assets": operations.get("assets", {}),
+        "portalReports": portal_reports,
         "recentErrors": operations.get("recentErrors", []),
     }
 
@@ -1712,16 +4598,27 @@ def list_assets(user, limit=80):
     limit = max(1, min(limit, 200))
     where = ""
     params = []
-    if user.get("role") != "admin":
-        where = "WHERE owner_username = ?"
+    join = ""
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if department:
+            join = "LEFT JOIN users ON users.username = assets.owner_username"
+            where = "WHERE assets.owner_username = ? OR users.department = ?"
+            params.extend([user.get("username", ""), department])
+        else:
+            where = "WHERE assets.owner_username = ?"
+            params.append(user.get("username", ""))
+    elif not is_admin_user(user):
+        where = "WHERE assets.owner_username = ?"
         params.append(user.get("username", ""))
     with db_connect() as conn:
         rows = conn.execute(
             f"""
-            SELECT *
+            SELECT assets.*
             FROM assets
+            {join}
             {where}
-            ORDER BY created_at DESC, id DESC
+            ORDER BY assets.created_at DESC, assets.id DESC
             LIMIT ?
             """,
             (*params, limit),
@@ -1738,8 +4635,12 @@ def get_asset(asset_id):
 def asset_accessible(asset, user):
     if not asset or not user:
         return False
-    if user.get("role") == "admin":
+    if is_admin_user(user):
         return True
+    if is_department_admin_user(user):
+        owner_department = project_owner_department(asset.get("ownerUsername"))
+        department = str(user.get("department") or "").strip()
+        return bool(department and owner_department and department == owner_department)
     return asset.get("ownerUsername") == user.get("username")
 
 
@@ -1769,7 +4670,7 @@ def create_asset_record(user, original_filename, storage_key, url, mime_type, si
 
 
 def asset_usage_summary(url):
-    empty = {"projects": 0, "pages": 0, "pendingPageVersions": 0, "pendingProjectVersions": 0, "total": 0}
+    empty = {"projects": 0, "pages": 0, "contentItems": 0, "achievementMarket": 0, "pendingPageVersions": 0, "pendingProjectVersions": 0, "total": 0}
     if not url:
         return empty
     pattern = f"%{url}%"
@@ -1790,6 +4691,26 @@ def asset_usage_summary(url):
             """,
             (url, pattern),
         ).fetchone()["value"]
+        content_items = conn.execute(
+            """
+            SELECT COUNT(DISTINCT content_items.id) AS value
+            FROM content_items
+            LEFT JOIN assets cover ON cover.id = content_items.cover_asset_id
+            LEFT JOIN content_item_assets cia ON cia.content_item_id = content_items.id
+            LEFT JOIN assets linked ON linked.id = cia.asset_id
+            WHERE cover.url = ? OR linked.url = ? OR cia.url = ?
+               OR content_items.body_json LIKE ? OR content_items.meta_json LIKE ?
+            """,
+            (url, url, url, pattern, pattern),
+        ).fetchone()["value"] if table_exists(conn, "content_items") else 0
+        achievement_market = conn.execute(
+            """
+            SELECT COUNT(*) AS value
+            FROM achievement_market_config
+            WHERE welcome_image_url = ? OR welcome_carousel_json LIKE ?
+            """,
+            (url, pattern),
+        ).fetchone()["value"] if table_exists(conn, "achievement_market_config") else 0
         page_versions = conn.execute(
             """
             SELECT COUNT(*) AS value
@@ -1809,6 +4730,8 @@ def asset_usage_summary(url):
     summary = {
         "projects": int(projects or 0),
         "pages": int(pages or 0),
+        "contentItems": int(content_items or 0),
+        "achievementMarket": int(achievement_market or 0),
         "pendingPageVersions": int(page_versions or 0),
         "pendingProjectVersions": int(project_versions or 0),
     }
@@ -1822,6 +4745,10 @@ def asset_usage_message(summary):
         parts.append(f"{summary['projects']} 个项目")
     if summary.get("pages"):
         parts.append(f"{summary['pages']} 个展示页")
+    if summary.get("contentItems"):
+        parts.append(f"{summary['contentItems']} 条结构化资料")
+    if summary.get("achievementMarket"):
+        parts.append("成果超市欢迎页")
     if summary.get("pendingPageVersions"):
         parts.append(f"{summary['pendingPageVersions']} 个待审核页面草稿")
     if summary.get("pendingProjectVersions"):
@@ -1842,69 +4769,2458 @@ def delete_asset(asset_id, user):
     return asset
 
 
-def admin_dashboard(user=None):
-    user = user or {"role": "admin", "username": ""}
-    owner_where = ""
-    owner_params = []
-    scan_owner_where = ""
-    scan_owner_params = []
-    if user.get("role") != "admin":
-        owner_where = "WHERE projects.owner_username = ?"
-        owner_params.append(user.get("username", ""))
-        scan_owner_where = "WHERE projects.owner_username = ?"
-        scan_owner_params.append(user.get("username", ""))
+def json_value(value, fallback):
+    if isinstance(value, (dict, list)):
+        return value
+    if value is None:
+        return fallback
+    text = str(value or "").strip()
+    if not text:
+        return fallback
+    try:
+        return json.loads(text)
+    except (TypeError, json.JSONDecodeError):
+        return fallback
+
+
+def json_text(value, fallback):
+    return json.dumps(value if value is not None else fallback, ensure_ascii=False)
+
+
+def int_value(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def bool_value(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on", "是"}
+    return bool(value)
+
+
+def content_body_json_from_data(value, legacy_body=""):
+    if isinstance(value, (dict, list)):
+        return value
+    text = str(value or legacy_body or "").strip()
+    if not text:
+        return []
+    if re.search(r"<[a-z][\s\S]*>", text, flags=re.I):
+        return [{"type": "html", "html": sanitize_rich_html(text)}]
+    return [
+        {"type": "paragraph", "text": item.strip()}
+        for item in re.split(r"\n{2,}", text)
+        if item.strip()
+    ]
+
+
+def content_assets_from_data(value):
+    if not isinstance(value, list):
+        return []
+    result = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            continue
+        asset_id = int_value(item.get("assetId") or item.get("asset_id"))
+        result.append(
+            {
+                "id": int_value(item.get("id")),
+                "assetId": asset_id if asset_id > 0 else None,
+                "role": str(item.get("role") or "gallery").strip()[:40] or "gallery",
+                "title": str(item.get("title") or "").strip()[:255],
+                "caption": str(item.get("caption") or "").strip()[:512],
+                "url": str(item.get("url") or "").strip()[:2048],
+                "mimeType": str(item.get("mimeType") or item.get("mime_type") or "").strip()[:120],
+                "sortOrder": int_value(item.get("sortOrder") if "sortOrder" in item else item.get("sort_order"), index),
+            }
+        )
+    return result
+
+
+def validate_content_asset_access(cover_asset_id, assets, user):
+    asset_ids = {int_value(cover_asset_id)}
+    asset_ids.update(int_value(item.get("assetId")) for item in assets or [])
+    for asset_id in sorted(item for item in asset_ids if item > 0):
+        asset = get_asset(asset_id)
+        if not asset or not asset_accessible(asset, user):
+            raise ValueError(f"素材 {asset_id} 不存在或无权使用")
+
+
+def content_item_asset_rows(conn, content_item_id):
+    rows = conn.execute(
+        """
+            SELECT
+                content_item_assets.*,
+                assets.url AS asset_url,
+                assets.original_filename AS asset_filename,
+                assets.mime_type AS asset_mime_type
+        FROM content_item_assets
+        LEFT JOIN assets ON assets.id = content_item_assets.asset_id
+        WHERE content_item_assets.content_item_id = ?
+        ORDER BY content_item_assets.sort_order, content_item_assets.id
+        """,
+        (content_item_id,),
+    ).fetchall()
+    result = []
+    for row in rows:
+        result.append(
+            {
+                "id": row["id"],
+                "assetId": row["asset_id"],
+                "role": row["role"],
+                "title": row["title"],
+                "caption": row["caption"],
+                "url": row["url"] or row["asset_url"] or "",
+                "mimeType": row["asset_mime_type"] or "",
+                "assetFilename": row["asset_filename"] or "",
+                "sortOrder": int(row["sort_order"] or 0),
+                "createdAt": row["created_at"],
+            }
+        )
+    return result
+
+
+def row_to_content_item(row, assets=None, project=None):
+    if not row:
+        return None
+    portal_type = normalize_portal_type(
+        (project or {}).get("portalType")
+        or (row["project_portal_type"] if "project_portal_type" in row.keys() else "department")
+    )
+    module_key = str(row["module_key"] or "").strip()
+    module_meta = module_meta_for_key(module_key, portal_type)
+    content_type = normalize_content_type(row["content_type"])
+    return {
+        "id": row["id"],
+        "projectId": row["project_id"],
+        "pageId": row["page_id"] if "page_id" in row.keys() else None,
+        "code": row["code"],
+        "moduleKey": module_key,
+        "moduleLabel": module_meta["label"] if module_meta else module_key,
+        "contentType": content_type,
+        "contentTypeLabel": content_type_label(content_type),
+        "title": row["title"],
+        "subtitle": row["subtitle"],
+        "summary": row["summary"],
+        "bodyJson": json_value(row["body_json"], []),
+        "metaJson": json_value(row["meta_json"], {}),
+        "coverAssetId": row["cover_asset_id"],
+        "sortOrder": int(row["sort_order"] or 0),
+        "featured": bool(row["featured"]),
+        "enabled": bool(row["enabled"]),
+        "reviewStatus": row["review_status"],
+        "pendingVersionId": row["pending_version_id"],
+        "submittedBy": row["submitted_by"],
+        "reviewedBy": row["reviewed_by"],
+        "reviewNote": row["review_note"],
+        "assets": assets or [],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def get_content_item(project_id, content_item_id):
     with db_connect() as conn:
-        project_count = conn.execute(f"SELECT COUNT(*) AS value FROM projects {owner_where}", owner_params).fetchone()["value"]
+        row = conn.execute(
+            """
+            SELECT content_items.*, projects.portal_type AS project_portal_type
+            FROM content_items
+            JOIN projects ON projects.id = content_items.project_id
+            WHERE content_items.project_id = ? AND content_items.id = ?
+            """,
+            (project_id, content_item_id),
+        ).fetchone()
+        assets = content_item_asset_rows(conn, content_item_id) if row else []
+    return row_to_content_item(row, assets)
+
+
+def get_content_item_by_id(content_item_id):
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT content_items.*, projects.portal_type AS project_portal_type
+            FROM content_items
+            JOIN projects ON projects.id = content_items.project_id
+            WHERE content_items.id = ?
+            """,
+            (content_item_id,),
+        ).fetchone()
+        assets = content_item_asset_rows(conn, content_item_id) if row else []
+    return row_to_content_item(row, assets)
+
+
+def list_content_items(project_id, filters=None):
+    filters = filters or {}
+    where = ["content_items.project_id = ?"]
+    params = [project_id]
+    if filters.get("moduleKey"):
+        where.append("content_items.module_key = ?")
+        params.append(str(filters["moduleKey"]))
+    if filters.get("contentType"):
+        where.append("content_items.content_type = ?")
+        params.append(normalize_content_type(filters["contentType"]))
+    if filters.get("reviewStatus"):
+        where.append("content_items.review_status = ?")
+        params.append(str(filters["reviewStatus"]))
+    if filters.get("enabled") in {"0", "1", 0, 1, False, True}:
+        where.append("content_items.enabled = ?")
+        params.append(1 if bool_value(filters.get("enabled")) else 0)
+    sql = " AND ".join(where)
+    with db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT content_items.*, projects.portal_type AS project_portal_type
+            FROM content_items
+            JOIN projects ON projects.id = content_items.project_id
+            WHERE {sql}
+            ORDER BY content_items.module_key, content_items.sort_order, content_items.updated_at DESC, content_items.id DESC
+            """,
+            params,
+        ).fetchall()
+        asset_map = {row["id"]: content_item_asset_rows(conn, row["id"]) for row in rows}
+    return [row_to_content_item(row, asset_map.get(row["id"], [])) for row in rows]
+
+
+LOWCODE_TEMPLATE_QUALITY_PROFILES = {
+    "article": {
+        "bodyLabel": "正文内容",
+        "assetLabel": "图片素材",
+        "assetMappings": ["content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "普通图文建议至少准备封面或图集，前台会按原比例轮播展示。",
+    },
+    "person": {
+        "bodyLabel": "人物事迹",
+        "assetLabel": "人物照片",
+        "assetMappings": ["content_item.assets.portrait", "content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "人物类建议上传人物照；也可以在素材区把图片角色设为人物照。",
+    },
+    "activity": {
+        "bodyLabel": "活动过程",
+        "assetLabel": "活动图片",
+        "assetMappings": ["content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "活动类适合多图轮播，素材区可继续补现场照片。",
+    },
+    "honor": {
+        "bodyLabel": "荣誉说明",
+        "assetLabel": "证书/奖状图片",
+        "assetMappings": ["content_item.assets.certificate", "content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "荣誉类建议上传证书或奖状图片；素材区可把图片角色设为证书/荣誉。",
+    },
+    "achievement": {
+        "bodyLabel": "成果价值",
+        "assetLabel": "成果图片",
+        "assetMappings": ["content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "成果类建议用封面或图集承载案例、项目、获奖现场等图片。",
+    },
+    "scene": {
+        "bodyLabel": "教学应用",
+        "assetLabel": "场景图片",
+        "assetMappings": ["content_item.assets.cover", "content_item.assets.gallery"],
+        "assetHint": "场景类建议上传实训室、设备或课堂场景图片。",
+    },
+    "video": {
+        "bodyLabel": "资源简介",
+        "assetLabel": "数字资源",
+        "assetMappings": ["content_item.assets.video"],
+        "assetHint": "数字资源可设置资源地址字段，或在素材区上传视频、文档、压缩包等文件。",
+    },
+    "attachment": {
+        "bodyLabel": "附件说明",
+        "assetLabel": "附件资源",
+        "assetMappings": ["content_item.assets.attachment"],
+        "assetHint": "附件类建议设置附件地址字段，或在素材区上传 PDF、Word、Excel、PPT 等附件。",
+    },
+}
+
+
+def lowcode_template_quality_profile(content_type):
+    return LOWCODE_TEMPLATE_QUALITY_PROFILES.get(normalize_content_type(content_type), LOWCODE_TEMPLATE_QUALITY_PROFILES["article"])
+
+
+def lowcode_template_quality_status(kind, title, detail, fix=""):
+    return {"kind": kind, "title": title, "detail": detail, "fix": fix}
+
+
+def lowcode_template_fields_for_quality(fields):
+    result = []
+    for index, field in enumerate(fields or []):
+        if not isinstance(field, dict):
+            continue
+        key = str(field.get("key") or "").strip()
+        label = str(field.get("label") or key).strip()
+        if not key or not label:
+            continue
+        field_type = str(field.get("type") or "text").strip() or "text"
+        result.append(
+            {
+                "key": key,
+                "label": label,
+                "type": field_type,
+                "required": bool_value(field.get("required")),
+                "mapping": str(field.get("mapping") or "").strip(),
+                "sortOrder": int_value(field.get("sortOrder"), index),
+            }
+        )
+    return result
+
+
+def lowcode_quality_mapped_fields(fields, mapping):
+    return [field for field in fields if field.get("mapping") == mapping]
+
+
+def lowcode_quality_has_any_mapping(fields, mappings):
+    return any(field.get("mapping") in set(mappings or []) for field in fields or [])
+
+
+def lowcode_required_mapping_status(fields, mapping, title, missing_fix):
+    mapped = lowcode_quality_mapped_fields(fields, mapping)
+    if not mapped:
+        return lowcode_template_quality_status("danger", title, "缺少展示映射。", missing_fix)
+    labels = "、".join(field["label"] for field in mapped)
+    if not any(field.get("required") for field in mapped):
+        return lowcode_template_quality_status("warn", title, f"已绑定到 {labels}，但不是必填。", "建议设为必填，避免老师提交后前台卡片信息不完整。")
+    return lowcode_template_quality_status("ok", title, f"已绑定到 {labels}，且设为必填。")
+
+
+def lowcode_template_quality_checks(fields, content_type, module_key, portal_type):
+    normalized_fields = lowcode_template_fields_for_quality(fields)
+    profile = lowcode_template_quality_profile(content_type)
+    checks = [
+        lowcode_required_mapping_status(normalized_fields, "content_item.title", "前台标题", "添加标题字段并绑定到 content_item.title。"),
+        lowcode_required_mapping_status(normalized_fields, "content_item.summary", "卡片摘要", "添加摘要字段并绑定到 content_item.summary。"),
+    ]
+    body_fields = lowcode_quality_mapped_fields(normalized_fields, "content_item.body_text")
+    if not body_fields:
+        checks.append(lowcode_template_quality_status("danger", profile["bodyLabel"], "缺少详情正文映射。", "添加正文/说明字段并绑定到 content_item.body_text。"))
+    elif not any(field.get("type") in {"textarea", "richtext"} for field in body_fields):
+        labels = "、".join(field["label"] for field in body_fields)
+        checks.append(lowcode_template_quality_status("warn", profile["bodyLabel"], f"已绑定到 {labels}，但字段类型偏短。", "建议使用多行文本或富文本，方便填写完整介绍。"))
+    else:
+        labels = "、".join(field["label"] for field in body_fields)
+        checks.append(lowcode_template_quality_status("ok", profile["bodyLabel"], f"已绑定到 {labels}。"))
+
+    if lowcode_quality_has_any_mapping(normalized_fields, profile["assetMappings"]):
+        asset_fields = [field for field in normalized_fields if field.get("mapping") in profile["assetMappings"]]
+        checks.append(lowcode_template_quality_status("ok", profile["assetLabel"], f"已设置 {'、'.join(field['label'] for field in asset_fields)}。"))
+    elif normalize_content_type(content_type) in {"video", "attachment"}:
+        checks.append(lowcode_template_quality_status("warn", profile["assetLabel"], "未设置专门的资源/附件地址字段，但老师仍可在素材区上传。", profile["assetHint"]))
+    else:
+        checks.append(lowcode_template_quality_status("ok", profile["assetLabel"], "老师填写时会看到统一素材区，可上传图片、视频、文档、压缩包或安装包。", profile["assetHint"]))
+
+    display_mappings = [
+        "content_item.title",
+        "content_item.subtitle",
+        "content_item.summary",
+        "content_item.body_text",
+        "content_item.sort_order",
+        "content_item.featured",
+    ]
+    duplicated = []
+    for mapping in display_mappings:
+        mapped = lowcode_quality_mapped_fields(normalized_fields, mapping)
+        if len(mapped) > 1:
+            duplicated.append({"mapping": mapping, "fields": mapped})
+    if duplicated:
+        detail = "；".join(f"{item['mapping']}：{'、'.join(field['label'] for field in item['fields'])}" for item in duplicated)
+        checks.append(lowcode_template_quality_status("warn", "重复展示映射", detail, "同一个展示槽位建议只绑定一个主字段，其他信息可绑定到扩展字段。"))
+    else:
+        checks.append(lowcode_template_quality_status("ok", "展示映射", "核心展示槽位没有重复绑定。"))
+
+    unmapped = [field for field in normalized_fields if not field.get("mapping")]
+    if unmapped:
+        labels = "、".join(field["label"] for field in unmapped[:4])
+        checks.append(lowcode_template_quality_status("warn", "未归档字段", f"{len(unmapped)} 个字段没有映射：{labels}{'等' if len(unmapped) > 4 else ''}。", "需要前台展示或导出追溯的字段，建议绑定到扩展字段。"))
+    else:
+        checks.append(lowcode_template_quality_status("ok", "字段归档", "所有字段都有展示或扩展字段映射。"))
+
+    module = module_meta_for_key(module_key, portal_type)
+    if module:
+        checks.append(lowcode_template_quality_status("ok", "板块归属", f"{module['label']} · {content_type_label(content_type)}，审核通过后会同步到对应门户板块。"))
+    else:
+        checks.append(lowcode_template_quality_status("warn", "板块归属", "当前模板没有匹配到标准板块。", "建议选择固定专题板块，方便完整度统计。"))
+    return checks
+
+
+def lowcode_template_quality_summary(fields, content_type, module_key, portal_type):
+    checks = lowcode_template_quality_checks(fields, content_type, module_key, portal_type)
+    danger = sum(1 for item in checks if item["kind"] == "danger")
+    warn = sum(1 for item in checks if item["kind"] == "warn")
+    return {
+        "checks": checks,
+        "danger": danger,
+        "warn": warn,
+        "ok": len(checks) - danger - warn,
+        "label": f"需处理 {danger}" if danger else f"建议 {warn}" if warn else "完整",
+        "kind": "danger" if danger else "warn" if warn else "ok",
+    }
+
+
+def lowcode_template_quality_report(project_id, actor=None):
+    project = get_project(project_id)
+    if not project:
+        return None
+    filters = {"portalType": project.get("portalType")}
+    if actor and not is_admin_user(actor):
+        filters["enabled"] = "1"
+    forms = list_lowcode_forms(filters)
+    entries = []
+    for form in forms:
+        quality = form.get("quality") or {}
+        checks = quality.get("checks") or []
+        entries.append(
+            {
+                "formId": form.get("id"),
+                "name": form.get("name", ""),
+                "code": form.get("code", ""),
+                "enabled": bool(form.get("enabled")),
+                "targetPortalType": form.get("targetPortalType", ""),
+                "targetModuleKey": form.get("targetModuleKey", ""),
+                "targetContentType": form.get("targetContentType", ""),
+                "targetContentTypeLabel": content_type_label(form.get("targetContentType")),
+                "moduleLabel": (module_meta_for_key(form.get("targetModuleKey"), form.get("targetPortalType")) or {}).get("label", form.get("targetModuleKey", "")),
+                "quality": quality,
+                "issues": [item for item in checks if item.get("kind") in {"danger", "warn"}],
+            }
+        )
+    summary = {
+        "total": len(entries),
+        "danger": sum(1 for entry in entries if (entry.get("quality") or {}).get("kind") == "danger"),
+        "warn": sum(1 for entry in entries if (entry.get("quality") or {}).get("kind") == "warn"),
+        "ok": sum(1 for entry in entries if (entry.get("quality") or {}).get("kind") == "ok"),
+        "enabled": sum(1 for entry in entries if entry.get("enabled")),
+        "disabled": sum(1 for entry in entries if not entry.get("enabled")),
+    }
+    return {
+        "projectId": project_id,
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "generatedAt": now_iso(),
+        "summary": summary,
+        "entries": entries,
+    }
+
+
+def row_to_lowcode_form(row, version_row=None):
+    if not row:
+        return None
+    schema = json_value(version_row["schema_json"], {}) if version_row else {}
+    portal_type = normalize_portal_type(row["target_portal_type"])
+    content_type = normalize_content_type(row["target_content_type"])
+    quality = lowcode_template_quality_summary(
+        schema.get("fields") if isinstance(schema, dict) else [],
+        content_type,
+        row["target_module_key"],
+        portal_type,
+    )
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "code": row["code"],
+        "description": row["description"],
+        "targetType": row["target_type"],
+        "targetPortalType": portal_type,
+        "targetContentType": content_type,
+        "targetModuleKey": row["target_module_key"],
+        "enabled": bool(row["enabled"]),
+        "createdBy": row["created_by"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+        "version": {
+            "id": version_row["id"],
+            "versionNo": int(version_row["version_no"] or 1),
+            "status": version_row["status"],
+            "createdBy": version_row["created_by"],
+            "createdAt": version_row["created_at"],
+        } if version_row else None,
+        "schema": schema,
+        "quality": quality,
+    }
+
+
+def active_lowcode_form_version(conn, form_id):
+    return conn.execute(
+        """
+        SELECT * FROM lowcode_form_versions
+        WHERE form_id = ? AND status = 'active'
+        ORDER BY version_no DESC, id DESC
+        LIMIT 1
+        """,
+        (form_id,),
+    ).fetchone()
+
+
+def list_lowcode_forms(filters=None):
+    filters = filters or {}
+    where = []
+    params = []
+    if filters.get("portalType"):
+        where.append("target_portal_type = ?")
+        params.append(normalize_portal_type(filters["portalType"]))
+    if filters.get("moduleKey"):
+        where.append("target_module_key = ?")
+        params.append(str(filters["moduleKey"]))
+    if filters.get("moduleKeys") is not None:
+        module_keys = [str(key or "").strip() for key in (filters.get("moduleKeys") or []) if str(key or "").strip()]
+        if module_keys:
+            where.append(f"target_module_key IN ({','.join('?' for _ in module_keys)})")
+            params.extend(module_keys)
+        else:
+            where.append("1 = 0")
+    if filters.get("enabled") in {"0", "1", 0, 1, False, True}:
+        where.append("enabled = ?")
+        params.append(1 if bool_value(filters.get("enabled")) else 0)
+    sql = f"WHERE {' AND '.join(where)}" if where else ""
+    with db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT * FROM lowcode_forms
+            {sql}
+            ORDER BY target_portal_type, id
+            """,
+            params,
+        ).fetchall()
+        versions = {row["id"]: active_lowcode_form_version(conn, row["id"]) for row in rows}
+    return [row_to_lowcode_form(row, versions.get(row["id"])) for row in rows]
+
+
+def get_lowcode_form(form_id):
+    with db_connect() as conn:
+        row = conn.execute("SELECT * FROM lowcode_forms WHERE id = ?", (form_id,)).fetchone()
+        version = active_lowcode_form_version(conn, form_id) if row else None
+    return row_to_lowcode_form(row, version)
+
+
+def latest_lowcode_version_no(conn, form_id):
+    row = conn.execute(
+        "SELECT MAX(version_no) AS value FROM lowcode_form_versions WHERE form_id = ?",
+        (form_id,),
+    ).fetchone()
+    return int(row["value"] or 0) if row else 0
+
+
+def row_to_lowcode_form_version(row):
+    if not row:
+        return None
+    schema = json_value(row["schema_json"], {})
+    fields = schema.get("fields") if isinstance(schema, dict) and isinstance(schema.get("fields"), list) else []
+    return {
+        "id": row["id"],
+        "formId": row["form_id"],
+        "versionNo": int(row["version_no"] or 0),
+        "status": row["status"],
+        "fieldCount": len([field for field in fields if isinstance(field, dict) and field.get("type") != "asset_list"]),
+        "schema": schema,
+        "createdBy": row["created_by"],
+        "createdAt": row["created_at"],
+    }
+
+
+def list_lowcode_form_versions(form_id):
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM lowcode_form_versions
+            WHERE form_id = ?
+            ORDER BY version_no DESC, id DESC
+            """,
+            (form_id,),
+        ).fetchall()
+    return [row_to_lowcode_form_version(row) for row in rows]
+
+
+def restore_lowcode_form_version(form_id, version_id, actor):
+    with db_connect() as conn:
+        form_row = conn.execute("SELECT * FROM lowcode_forms WHERE id = ?", (form_id,)).fetchone()
+        if not form_row:
+            raise ValueError("资料采集模板不存在")
+        version_row = conn.execute(
+            "SELECT * FROM lowcode_form_versions WHERE id = ? AND form_id = ?",
+            (version_id, form_id),
+        ).fetchone()
+        if not version_row:
+            raise ValueError("模板版本不存在")
+        form_base = {
+            "name": form_row["name"],
+            "description": form_row["description"],
+            "targetPortalType": normalize_portal_type(form_row["target_portal_type"]),
+            "targetContentType": normalize_content_type(form_row["target_content_type"]),
+            "targetModuleKey": form_row["target_module_key"],
+        }
+        schema = normalize_lowcode_schema(json_value(version_row["schema_json"], {}), form_base)
+        now = now_iso()
+        conn.execute("UPDATE lowcode_form_versions SET status = 'archived' WHERE form_id = ? AND status = 'active'", (form_id,))
+        version_no = latest_lowcode_version_no(conn, form_id) + 1
+        conn.execute(
+            """
+            INSERT INTO lowcode_form_versions (
+                form_id, version_no, schema_json, status, created_by, created_at
+            )
+            VALUES (?, ?, ?, 'active', ?, ?)
+            """,
+            (form_id, version_no, json_text(schema, {}), actor.get("username", ADMIN_USERNAME), now),
+        )
+        conn.execute("UPDATE lowcode_forms SET updated_at = ? WHERE id = ?", (now, form_id))
+    return get_lowcode_form(form_id)
+
+
+def unique_lowcode_form_code(conn, base_code):
+    base = re.sub(r"[^A-Za-z0-9_-]+", "-", str(base_code or "LC-COPY").strip()).strip("-").upper()[:100] or "LC-COPY"
+    code = base
+    index = 2
+    while conn.execute("SELECT id FROM lowcode_forms WHERE code = ? LIMIT 1", (code,)).fetchone():
+        code = f"{base}-{index}"
+        index += 1
+    return code
+
+
+def copy_lowcode_form(form_id, data, actor):
+    source = get_lowcode_form(form_id)
+    if not source:
+        raise ValueError("模板不存在")
+    with db_connect() as conn:
+        code = unique_lowcode_form_code(conn, data.get("code") or f"{source['code']}-COPY")
+    name = str(data.get("name") or f"{source['name']} 副本").strip()
+    payload = {
+        "name": name,
+        "code": code,
+        "description": str(data.get("description") or source.get("description") or "").strip(),
+        "targetPortalType": source.get("targetPortalType"),
+        "targetModuleKey": source.get("targetModuleKey"),
+        "targetContentType": source.get("targetContentType"),
+        "enabled": bool_value(data.get("enabled"), False),
+        "schema": source.get("schema") or {},
+    }
+    return save_lowcode_form(None, payload, actor)
+
+
+def default_lowcode_field_group(field):
+    field_type = str(field.get("type") or "")
+    mapping = str(field.get("mapping") or "")
+    key = str(field.get("key") or "")
+    if field_type in {"asset_list", "image_upload", "video_upload", "attachment_upload"} or mapping.startswith("content_item.assets."):
+        return "媒体素材"
+    if key in {"title", "subtitle", "summary"} or mapping in {"content_item.title", "content_item.subtitle", "content_item.summary"}:
+        return "基础信息"
+    if mapping in {"content_item.sort_order", "content_item.featured"} or key in {"sortOrder", "featured", "enabled"}:
+        return "展示设置"
+    return "详情内容"
+
+
+def normalize_lowcode_mapping(mapping, label=""):
+    mapping = str(mapping or "").strip()[:160]
+    if not mapping:
+        return ""
+    if mapping in {
+        "content_item.title",
+        "content_item.subtitle",
+        "content_item.summary",
+        "content_item.body_text",
+        "content_item.sort_order",
+        "content_item.featured",
+    }:
+        return mapping
+    if mapping.startswith("content_item.assets."):
+        role = mapping.removeprefix("content_item.assets.").strip()
+        if role in {"cover", "portrait", "certificate", "gallery", "video", "attachment"}:
+            return mapping
+    if mapping.startswith("content_item.meta_json."):
+        meta_key = mapping.removeprefix("content_item.meta_json.").strip()
+        if meta_key and len(meta_key) <= 80 and not re.search(r"[\x00-\x1f<>/\\]", meta_key):
+            return f"content_item.meta_json.{meta_key}"
+    raise ValueError(f"{label or '字段'}的映射目标不合法")
+
+
+def normalize_lowcode_field_key(key, label=""):
+    key = str(key or "").strip()[:80]
+    if not key:
+        raise ValueError(f"{label or '字段'}的字段编码不能为空")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,79}", key):
+        raise ValueError(f"{label or key}的字段编码只能以英文字母开头，并使用字母、数字、下划线或短横线")
+    return key
+
+
+def normalize_lowcode_visible_when(value, label=""):
+    if not isinstance(value, dict):
+        return None
+    depends_on = str(value.get("field") or "").strip()
+    if not depends_on:
+        return None
+    depends_on = normalize_lowcode_field_key(depends_on, f"{label or '字段'}的条件字段")
+    return {
+        "field": depends_on,
+        "value": str(value.get("value") or "").strip()[:200],
+    }
+
+
+def normalize_lowcode_schema(schema, form):
+    schema = json_value(schema, {})
+    if not isinstance(schema, dict):
+        schema = {}
+    fields = schema.get("fields") if isinstance(schema.get("fields"), list) else []
+    normalized_fields = []
+    seen_keys = set()
+    for index, field in enumerate(fields):
+        if not isinstance(field, dict):
+            continue
+        key = str(field.get("key") or "").strip()
+        label = str(field.get("label") or key).strip()
+        if not key or not label:
+            continue
+        key = normalize_lowcode_field_key(key, label)
+        key_identity = key.lower()
+        if key_identity in seen_keys:
+            raise ValueError(f"{label}的字段编码重复：{key}")
+        seen_keys.add(key_identity)
+        normalized = {
+            "key": key,
+            "label": label[:120],
+            "type": str(field.get("type") or "text").strip()[:40] or "text",
+            "required": bool_value(field.get("required")),
+            "mapping": normalize_lowcode_mapping(field.get("mapping"), label),
+            "placeholder": str(field.get("placeholder") or "").strip()[:512],
+            "defaultValue": str(field.get("defaultValue") if "defaultValue" in field else field.get("default_value") or "").strip()[:1024],
+            "group": str(field.get("group") or "").strip()[:80],
+            "maxLength": max(0, min(int_value(field.get("maxLength")), 20000)),
+            "pattern": str(field.get("pattern") or "").strip()[:512],
+            "patternMessage": str(field.get("patternMessage") or "").strip()[:200],
+            "sortOrder": int_value(field.get("sortOrder"), index),
+        }
+        if normalized["pattern"]:
+            try:
+                re.compile(normalized["pattern"])
+            except re.error as exc:
+                raise ValueError(f"{label}的格式规则不合法：{exc}")
+        visible_when = normalize_lowcode_visible_when(field.get("visibleWhen"), label)
+        if visible_when:
+            if visible_when["field"].lower() == key_identity:
+                raise ValueError(f"{label}不能依赖自身显示")
+            normalized["visibleWhen"] = visible_when
+        if not normalized["group"]:
+            normalized["group"] = default_lowcode_field_group(normalized)
+        options = field.get("options")
+        if isinstance(options, list):
+            normalized["options"] = [
+                {
+                    "label": str(item.get("label") if isinstance(item, dict) else item).strip(),
+                    "value": str(item.get("value") if isinstance(item, dict) else item).strip(),
+                }
+                for item in options
+                if str(item.get("value") if isinstance(item, dict) else item).strip()
+            ]
+        normalized_fields.append(normalized)
+    if not normalized_fields:
+        module = module_meta_for_key(form.get("targetModuleKey"), form.get("targetPortalType")) or {
+            "key": form.get("targetModuleKey") or "overview",
+            "label": form.get("name") or "资料",
+            "description": form.get("description") or "",
+        }
+        schema = lowcode_schema_for_module(form.get("targetPortalType", "department"), module)
+    else:
+        schema["fields"] = sorted(normalized_fields, key=lambda item: item.get("sortOrder", 0))
+    field_key_set = {str(field.get("key") or "").lower() for field in schema.get("fields", []) if isinstance(field, dict)}
+    for field in schema.get("fields", []):
+        visible_when = field.get("visibleWhen") if isinstance(field, dict) and isinstance(field.get("visibleWhen"), dict) else None
+        if visible_when and str(visible_when.get("field") or "").lower() not in field_key_set:
+            raise ValueError(f"{field.get('label') or field.get('key') or '字段'}的条件字段不存在：{visible_when.get('field')}")
+    schema["moduleKey"] = form.get("targetModuleKey") or schema.get("moduleKey") or ""
+    schema["contentType"] = normalize_content_type(form.get("targetContentType") or schema.get("contentType"))
+    schema["portalType"] = normalize_portal_type(form.get("targetPortalType") or schema.get("portalType"))
+    schema["moduleLabel"] = schema.get("moduleLabel") or (module_meta_for_key(schema["moduleKey"], schema["portalType"]) or {}).get("label", schema["moduleKey"])
+    schema["contentTypeLabel"] = content_type_label(schema["contentType"])
+    schema["mapping"] = {
+        "target": "content_items",
+        "moduleKey": schema["moduleKey"],
+        "contentType": schema["contentType"],
+    }
+    return schema
+
+
+def save_lowcode_form(form_id, data, actor):
+    name = str(data.get("name") or "").strip()[:255]
+    if not name:
+        raise ValueError("模板名称不能为空")
+    code = re.sub(r"[^A-Za-z0-9_-]+", "-", str(data.get("code") or name).strip()).strip("-").upper()[:120]
+    if not code:
+        raise ValueError("模板编码不能为空")
+    target_portal_type = normalize_portal_type(data.get("targetPortalType") or data.get("portalType") or "department")
+    target_module_key = normalize_module_key_for_portal(data.get("targetModuleKey") or data.get("moduleKey"), target_portal_type)
+    if not module_meta_for_key(target_module_key, target_portal_type):
+        raise ValueError("模板绑定板块无效")
+    target_content_type = normalize_content_type(data.get("targetContentType") or data.get("contentType") or default_content_type_for_module(target_module_key))
+    form_base = {
+        "name": name,
+        "code": code,
+        "description": str(data.get("description") or "").strip()[:1024],
+        "targetType": "content_item",
+        "targetPortalType": target_portal_type,
+        "targetContentType": target_content_type,
+        "targetModuleKey": target_module_key,
+    }
+    schema = normalize_lowcode_schema(data.get("schema") or data.get("schemaJson"), form_base)
+    enabled = bool_value(data.get("enabled"), True)
+    now = now_iso()
+    with db_connect() as conn:
+        if form_id:
+            current = conn.execute("SELECT * FROM lowcode_forms WHERE id = ?", (form_id,)).fetchone()
+            if not current:
+                raise ValueError("模板不存在")
+            conflict = conn.execute("SELECT id FROM lowcode_forms WHERE code = ? AND id != ? LIMIT 1", (code, form_id)).fetchone()
+            if conflict:
+                raise ValueError("模板编码已存在")
+            conn.execute(
+                """
+                UPDATE lowcode_forms SET
+                    name = ?, code = ?, description = ?, target_type = 'content_item',
+                    target_portal_type = ?, target_content_type = ?, target_module_key = ?,
+                    enabled = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (name, code, form_base["description"], target_portal_type, target_content_type, target_module_key, 1 if enabled else 0, now, form_id),
+            )
+        else:
+            conflict = conn.execute("SELECT id FROM lowcode_forms WHERE code = ? LIMIT 1", (code,)).fetchone()
+            if conflict:
+                raise ValueError("模板编码已存在")
+            cursor = conn.execute(
+                """
+                INSERT INTO lowcode_forms (
+                    name, code, description, target_type, target_portal_type,
+                    target_content_type, target_module_key, enabled, created_by,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, 'content_item', ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    name,
+                    code,
+                    form_base["description"],
+                    target_portal_type,
+                    target_content_type,
+                    target_module_key,
+                    1 if enabled else 0,
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    now,
+                ),
+            )
+            form_id = cursor.lastrowid
+        conn.execute("UPDATE lowcode_form_versions SET status = 'archived' WHERE form_id = ? AND status = 'active'", (form_id,))
+        version_no = latest_lowcode_version_no(conn, form_id) + 1
+        conn.execute(
+            """
+            INSERT INTO lowcode_form_versions (
+                form_id, version_no, schema_json, status, created_by, created_at
+            )
+            VALUES (?, ?, ?, 'active', ?, ?)
+            """,
+            (form_id, version_no, json_text(schema, {}), actor.get("username", ADMIN_USERNAME), now),
+        )
+    return get_lowcode_form(form_id)
+
+
+def lowcode_assets_from_value(value, role="gallery"):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        assets = value
+    else:
+        assets = [
+            {"url": line.strip(), "role": role}
+            for line in re.split(r"[\r\n]+", str(value or ""))
+            if line.strip()
+        ]
+    normalized = []
+    for index, asset in enumerate(assets):
+        if isinstance(asset, str):
+            asset = {"url": asset, "role": role}
+        if not isinstance(asset, dict):
+            continue
+        normalized_asset = {
+            "assetId": int_value(asset.get("assetId") or asset.get("asset_id")) or None,
+            "role": str(asset.get("role") or role or "gallery").strip()[:40] or "gallery",
+            "title": str(asset.get("title") or "").strip()[:255],
+            "caption": str(asset.get("caption") or "").strip()[:512],
+            "url": str(asset.get("url") or "").strip()[:2048],
+            "sortOrder": int_value(asset.get("sortOrder"), index),
+        }
+        if normalized_asset["url"] or normalized_asset["assetId"]:
+            normalized.append(normalized_asset)
+    return normalized
+
+
+def lowcode_scalar_text(value):
+    if isinstance(value, list):
+        return "、".join(str(item).strip() for item in value if str(item).strip())
+    if isinstance(value, dict):
+        return json_text(value, {})
+    return str(value or "").strip()
+
+
+def valid_lowcode_link(value):
+    text = str(value or "").strip()
+    if not text or re.search(r"[\x00-\x1f\s<>]", text):
+        return False
+    if text.startswith("/"):
+        return not text.startswith("//")
+    parsed = urlparse(text)
+    return parsed.scheme in {"http", "https", "mailto", "tel"} and bool(parsed.path or parsed.netloc)
+
+
+def lowcode_field_visible(field, submitted):
+    condition = field.get("visibleWhen") if isinstance(field.get("visibleWhen"), dict) else None
+    if not condition:
+        return True
+    depends_on = str(condition.get("field") or "").strip()
+    if not depends_on:
+        return True
+    expected = str(condition.get("value") or "").strip()
+    current = submitted.get(depends_on)
+    if not expected:
+        return bool(lowcode_scalar_text(current))
+    if isinstance(current, list):
+        return expected in {str(item) for item in current}
+    return str(current if current is not None else "") == expected
+
+
+def lowcode_record_payload(form, submitted, validate_required=True):
+    schema = form.get("schema") or {}
+    submitted = submitted if isinstance(submitted, dict) else {}
+    fields = schema.get("fields") if isinstance(schema.get("fields"), list) else []
+    payload = {
+        "moduleKey": form.get("targetModuleKey") or schema.get("moduleKey"),
+        "contentType": normalize_content_type(form.get("targetContentType") or schema.get("contentType")),
+        "title": "",
+        "subtitle": "",
+        "summary": "",
+        "bodyJson": [],
+        "metaJson": {},
+        "assets": [],
+        "sortOrder": 0,
+        "featured": False,
+        "enabled": True,
+    }
+    body_parts = []
+    errors = []
+    field_keys = {str(field.get("key") or "") for field in fields if isinstance(field, dict)}
+    for field in fields:
+        key = str(field.get("key") or "")
+        if not key:
+            continue
+        if not lowcode_field_visible(field, submitted):
+            continue
+        value = submitted.get(key)
+        if (value is None or lowcode_scalar_text(value) == "") and field.get("defaultValue") not in (None, ""):
+            value = field.get("defaultValue")
+        text_value = lowcode_scalar_text(value)
+        if validate_required and field.get("required") and (value is None or text_value == ""):
+            errors.append(f"{field.get('label') or key}不能为空")
+            continue
+        if str(field.get("type") or "") == "link" and text_value and not valid_lowcode_link(text_value):
+            errors.append(f"{field.get('label') or key}不是有效链接")
+            continue
+        max_length = int_value(field.get("maxLength"))
+        if max_length > 0 and text_value and len(text_value) > max_length:
+            errors.append(f"{field.get('label') or key}不能超过{max_length}字")
+            continue
+        pattern = str(field.get("pattern") or "")
+        if validate_required and pattern and text_value:
+            try:
+                matched = re.fullmatch(pattern, text_value)
+            except re.error as exc:
+                raise ValueError(f"{field.get('label') or key}的格式规则不合法：{exc}")
+            if not matched:
+                errors.append(str(field.get("patternMessage") or f"{field.get('label') or key}格式不正确"))
+                continue
+        mapping = str(field.get("mapping") or "")
+        if mapping == "content_item.title":
+            payload["title"] = text_value
+        elif mapping == "content_item.subtitle":
+            payload["subtitle"] = text_value
+        elif mapping == "content_item.summary":
+            payload["summary"] = text_value
+        elif mapping == "content_item.body_text":
+            if text_value:
+                body_parts.append(text_value)
+        elif mapping == "content_item.sort_order":
+            payload["sortOrder"] = int_value(value)
+        elif mapping == "content_item.featured":
+            payload["featured"] = bool_value(value)
+        elif mapping.startswith("content_item.meta_json."):
+            meta_key = mapping.removeprefix("content_item.meta_json.").strip() or field.get("label") or key
+            if text_value:
+                payload["metaJson"][meta_key] = text_value
+        elif mapping.startswith("content_item.assets."):
+            role = mapping.rsplit(".", 1)[-1] or "gallery"
+            payload["assets"].extend(lowcode_assets_from_value(value, role))
+    if "bodyText" not in field_keys and submitted.get("bodyText"):
+        body_parts.append(str(submitted.get("bodyText") or "").strip())
+    if "assets" not in field_keys:
+        payload["assets"].extend(lowcode_assets_from_value(submitted.get("assets"), "gallery"))
+    if errors:
+        raise ValueError("；".join(errors))
+    if body_parts:
+        payload["bodyJson"] = content_body_json_from_data("\n\n".join(body_parts))
+    if not payload["summary"]:
+        payload["summary"] = payload["subtitle"] or (body_parts[0][:120] if body_parts else "")
+    return payload
+
+
+def row_to_lowcode_record(row):
+    if not row:
+        return None
+    keys = row.keys()
+    record_data = json_value(row["data_json"], {})
+    payload = record_data.get("contentItemPayload") if isinstance(record_data, dict) else {}
+    payload = payload if isinstance(payload, dict) else {}
+    fields = record_data.get("fields") if isinstance(record_data, dict) else {}
+    fields = fields if isinstance(fields, dict) else {}
+    project_portal_type = normalize_portal_type(row["project_portal_type"] if "project_portal_type" in keys else "department")
+    module_key = row["content_module_key"] if "content_module_key" in keys and row["content_module_key"] else payload.get("moduleKey", "")
+    module_meta = module_meta_for_key(module_key, project_portal_type)
+    content_type = normalize_content_type(row["content_type"] if "content_type" in keys and row["content_type"] else payload.get("contentType", "article"))
+    content_status = row["content_review_status"] if "content_review_status" in keys and row["content_review_status"] else ""
+    content_code = row["content_code"] if "content_code" in keys and row["content_code"] else ""
+    content_title = row["content_title"] if "content_title" in keys and row["content_title"] else payload.get("title") or fields.get("title") or ""
+    return {
+        "id": row["id"],
+        "formId": row["form_id"],
+        "formVersionId": row["form_version_id"],
+        "projectId": row["project_id"],
+        "contentItemId": row["content_item_id"],
+        "status": row["status"],
+        "effectiveStatus": row["status"] if row["status"] == "draft" else content_status or row["status"],
+        "formName": row["form_name"] if "form_name" in keys else "",
+        "formCode": row["form_code"] if "form_code" in keys else "",
+        "formVersionNo": int_value(row["form_version_no"] if "form_version_no" in keys else 0),
+        "contentTitle": content_title,
+        "contentCode": content_code,
+        "contentModuleKey": module_key,
+        "contentModuleLabel": module_meta["label"] if module_meta else module_key,
+        "contentType": content_type,
+        "contentTypeLabel": content_type_label(content_type),
+        "contentReviewStatus": content_status,
+        "previewUrl": f"/display?project={row['project_id']}&code={content_code}" if content_code else "",
+        "data": record_data,
+        "submittedBy": row["submitted_by"],
+        "submittedDisplayName": row["submitted_display_name"] if "submitted_display_name" in keys else row["submitted_by"],
+        "submittedDepartment": row["submitted_department"] if "submitted_department" in keys else "",
+        "submittedAt": row["submitted_at"],
+        "reviewedBy": row["reviewed_by"],
+        "reviewedAt": row["reviewed_at"],
+        "reviewNote": row["review_note"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def get_lowcode_record(record_id, actor=None):
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                lowcode_records.*,
+                lowcode_forms.name AS form_name,
+                lowcode_forms.code AS form_code,
+                lowcode_form_versions.version_no AS form_version_no,
+                content_items.code AS content_code,
+                content_items.title AS content_title,
+                content_items.module_key AS content_module_key,
+                content_items.content_type AS content_type,
+                content_items.review_status AS content_review_status,
+                projects.portal_type AS project_portal_type,
+                submitters.display_name AS submitted_display_name,
+                submitters.department AS submitted_department
+            FROM lowcode_records
+            LEFT JOIN lowcode_forms ON lowcode_forms.id = lowcode_records.form_id
+            LEFT JOIN lowcode_form_versions ON lowcode_form_versions.id = lowcode_records.form_version_id
+            LEFT JOIN content_items ON content_items.id = lowcode_records.content_item_id
+            LEFT JOIN projects ON projects.id = lowcode_records.project_id
+            LEFT JOIN users submitters ON submitters.username = lowcode_records.submitted_by
+            WHERE lowcode_records.id = ?
+            """,
+            (record_id,),
+        ).fetchone()
+    record = row_to_lowcode_record(row) if row else None
+    if not record or not actor:
+        return record
+    project = get_project(record["projectId"])
+    if not project_accessible(project, actor):
+        return None
+    if not can_review_user(actor) and record.get("submittedBy") != actor.get("username", ""):
+        return None
+    return record
+
+
+def list_lowcode_records(project_id, actor=None):
+    where = "WHERE lowcode_records.project_id = ?"
+    params = [project_id]
+    if actor and not can_review_user(actor):
+        where += " AND lowcode_records.submitted_by = ?"
+        params.append(actor.get("username", ""))
+    with db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT
+                lowcode_records.*,
+                lowcode_forms.name AS form_name,
+                lowcode_forms.code AS form_code,
+                lowcode_form_versions.version_no AS form_version_no,
+                content_items.code AS content_code,
+                content_items.title AS content_title,
+                content_items.module_key AS content_module_key,
+                content_items.content_type AS content_type,
+                content_items.review_status AS content_review_status,
+                projects.portal_type AS project_portal_type,
+                submitters.display_name AS submitted_display_name,
+                submitters.department AS submitted_department
+            FROM lowcode_records
+            LEFT JOIN lowcode_forms ON lowcode_forms.id = lowcode_records.form_id
+            LEFT JOIN lowcode_form_versions ON lowcode_form_versions.id = lowcode_records.form_version_id
+            LEFT JOIN content_items ON content_items.id = lowcode_records.content_item_id
+            LEFT JOIN projects ON projects.id = lowcode_records.project_id
+            LEFT JOIN users submitters ON submitters.username = lowcode_records.submitted_by
+            {where}
+            ORDER BY lowcode_records.submitted_at DESC, lowcode_records.id DESC
+            """,
+            params,
+        ).fetchall()
+    return [row_to_lowcode_record(row) for row in rows]
+
+
+def lowcode_record_status(record):
+    return record.get("effectiveStatus") or record.get("contentReviewStatus") or record.get("status") or ""
+
+
+def lowcode_record_stats(records):
+    stats = {"total": 0, "draft": 0, "pending": 0, "approved": 0, "rejected": 0}
+    for record in records or []:
+        status = lowcode_record_status(record)
+        stats["total"] += 1
+        if status in stats:
+            stats[status] += 1
+    return stats
+
+
+def lowcode_record_age_days(record):
+    value = record.get("updatedAt") or record.get("submittedAt") or ""
+    if not value:
+        return 0
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return max(0, int((datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() // 86400))
+
+
+def lowcode_overdue_stats(records):
+    stats = {"draft": 0, "pending": 0, "maxDays": 0, "labels": []}
+    for record in records or []:
+        status = lowcode_record_status(record)
+        age = lowcode_record_age_days(record)
+        stats["maxDays"] = max(stats["maxDays"], age)
+        if status == "draft" and age >= 7:
+            stats["draft"] += 1
+        if status == "pending" and age >= 3:
+            stats["pending"] += 1
+    if stats["draft"]:
+        stats["labels"].append(f"草稿超 7 天 {stats['draft']}")
+    if stats["pending"]:
+        stats["labels"].append(f"待审超 3 天 {stats['pending']}")
+    return stats
+
+
+def lowcode_report_sort_key(row):
+    return (-int_value((row.get("stats") or {}).get("total")), str(row.get("label") or ""))
+
+
+def lowcode_template_report_rows(forms, records):
+    rows = {}
+    for form in forms or []:
+        module_meta = module_meta_for_key(form.get("targetModuleKey"), form.get("targetPortalType"))
+        module_label = module_meta["label"] if module_meta else form.get("targetModuleKey") or "未绑定板块"
+        key = str(form.get("id") or "")
+        rows[key] = {
+            "key": key,
+            "label": form.get("name") or f"模板 {key}",
+            "subline": f"{module_label} · {content_type_label(form.get('targetContentType'))}{' · 已停用' if form.get('enabled') is False else ''}",
+            "stats": lowcode_record_stats([]),
+            "records": [],
+        }
+    for record in records or []:
+        key = str(record.get("formId") or "unknown")
+        if key not in rows:
+            rows[key] = {
+                "key": key,
+                "label": record.get("formName") or "未匹配模板",
+                "subline": f"{record.get('contentModuleLabel') or '未绑定板块'} · {record.get('contentTypeLabel') or content_type_label(record.get('contentType'))}",
+                "stats": lowcode_record_stats([]),
+                "records": [],
+            }
+        rows[key]["records"].append(record)
+        rows[key]["stats"] = lowcode_record_stats(rows[key]["records"])
+    return sorted(rows.values(), key=lowcode_report_sort_key)
+
+
+def lowcode_department_report_rows(records):
+    rows = {}
+    for record in records or []:
+        key = record.get("submittedDepartment") or "未记录部门"
+        rows.setdefault(key, {
+            "key": key,
+            "label": key,
+            "subline": "按专题/部门统计资料填报进度",
+            "stats": lowcode_record_stats([]),
+            "records": [],
+        })
+        rows[key]["records"].append(record)
+        rows[key]["stats"] = lowcode_record_stats(rows[key]["records"])
+    return sorted(rows.values(), key=lowcode_report_sort_key)
+
+
+def lowcode_submitter_report_rows(records):
+    rows = {}
+    for record in records or []:
+        key = record.get("submittedBy") or "未记录提交人"
+        rows.setdefault(key, {
+            "key": key,
+            "label": record.get("submittedDisplayName") or key,
+            "subline": f"{record.get('submittedDepartment') or '未记录部门'} · {key}",
+            "stats": lowcode_record_stats([]),
+            "records": [],
+        })
+        rows[key]["records"].append(record)
+        rows[key]["stats"] = lowcode_record_stats(rows[key]["records"])
+    return sorted(rows.values(), key=lowcode_report_sort_key)
+
+
+def lowcode_reminder_action(module, record_stats, rejected_count, enabled_templates, overdue_stats):
+    if module.get("publishReady"):
+        return "ok", "已完成", "保持资料更新"
+    if overdue_stats.get("draft"):
+        return "danger", "草稿超期", "优先提醒填报人提交草稿，避免资料长期停留。"
+    if overdue_stats.get("pending"):
+        return "danger", "审核超期", "优先处理超期待审资料，审核通过后前台自动展示。"
+    if record_stats.get("pending"):
+        return "warn", "待审核", "尽快审核模板提交，审核通过后前台自动展示。"
+    if module.get("pendingCount"):
+        return "warn", "待审核", "处理结构化资料审核，让该板块进入可发布状态。"
+    if record_stats.get("rejected") or rejected_count:
+        return "danger", "需修改", "按退回意见修改后重新提交。"
+    if record_stats.get("draft"):
+        return "warn", "催交草稿", "提醒填报人提交草稿，避免资料停留在后台。"
+    if not module.get("covered"):
+        if enabled_templates:
+            return "danger", "未开始", "通知负责人按启用模板补齐该标准板块。"
+        return "danger", "缺模板", "先为该板块启用资料采集模板，再组织填报。"
+    return "warn", "待完善", "补充一条审核通过的可展示资料。"
+
+
+def lowcode_reminder_target(records, project, actor):
+    names = []
+    seen = set()
+    for record in records or []:
+        name = record.get("submittedDisplayName") or record.get("submittedBy") or ""
+        if name and name not in seen:
+            names.append(name)
+            seen.add(name)
+    if names:
+        return "、".join(names)
+    return project.get("ownerDisplayName") or project.get("ownerUsername") or actor.get("displayName") or actor.get("username") or "待分配"
+
+
+def lowcode_reminder_rows(project, coverage, forms, records, actor):
+    rows = []
+    for module in coverage.get("modules", []) or []:
+        module_records = [record for record in records or [] if record.get("contentModuleKey") == module.get("key")]
+        record_stats = lowcode_record_stats(module_records)
+        overdue_stats = lowcode_overdue_stats(module_records)
+        rejected_count = len([page for page in module.get("pages", []) or [] if page.get("reviewStatus") == "rejected"])
+        enabled_templates = [
+            form.get("name") or form.get("code")
+            for form in forms or []
+            if form.get("enabled") is not False and form.get("targetModuleKey") == module.get("key")
+        ]
+        enabled_templates = [item for item in enabled_templates if item]
+        kind, status, action = lowcode_reminder_action(module, record_stats, rejected_count, enabled_templates, overdue_stats)
+        rows.append(
+            {
+                "key": module.get("key"),
+                "label": module.get("label"),
+                "description": module.get("description", ""),
+                "kind": kind,
+                "status": status,
+                "action": action,
+                "owner": lowcode_reminder_target(module_records, project, actor or {}),
+                "templates": enabled_templates,
+                "pageCount": module.get("count", 0),
+                "approvedCount": module.get("approvedCount", 0),
+                "pendingCount": module.get("pendingCount", 0),
+                "rejectedCount": rejected_count,
+                "stats": record_stats,
+                "overdue": overdue_stats,
+                "publishReady": bool(module.get("publishReady")),
+            }
+        )
+    order = {"danger": 0, "warn": 1, "ok": 2}
+    return sorted(rows, key=lambda row: (order.get(row["kind"], 9), -int_value(row.get("overdue", {}).get("maxDays")), str(row.get("label") or "")))
+
+
+def lowcode_progress_report(project_id, actor=None):
+    project = get_project(project_id)
+    if not project:
+        return None
+    pages = list_pages(project_id)
+    coverage = module_coverage_from_pages(pages, project.get("portalType"))
+    form_filters = {"portalType": project.get("portalType")}
+    if actor and not is_admin_user(actor):
+        form_filters["enabled"] = "1"
+    forms = list_lowcode_forms(form_filters)
+    records = list_lowcode_records(project_id, actor)
+    stats = lowcode_record_stats(records)
+    template_rows = lowcode_template_report_rows(forms, records)
+    department_rows = lowcode_department_report_rows(records)
+    submitter_rows = lowcode_submitter_report_rows(records)
+    reminder_rows = lowcode_reminder_rows(project, coverage, forms, records, actor or {})
+    template_quality = {
+        "total": len(forms),
+        "danger": sum(1 for form in forms if (form.get("quality") or {}).get("kind") == "danger"),
+        "warn": sum(1 for form in forms if (form.get("quality") or {}).get("kind") == "warn"),
+        "ok": sum(1 for form in forms if (form.get("quality") or {}).get("kind") == "ok"),
+    }
+    return {
+        "projectId": project_id,
+        "projectName": project.get("name", ""),
+        "portalType": project.get("portalType", "department"),
+        "portalTypeLabel": portal_type_label(project.get("portalType")),
+        "generatedAt": now_iso(),
+        "stats": stats,
+        "templateQuality": template_quality,
+        "groups": {
+            "templates": template_rows,
+            "departments": department_rows,
+            "submitters": submitter_rows,
+            "reminders": reminder_rows,
+        },
+    }
+
+
+def lowcode_review_source_for_content_item(content_item_id):
+    if not content_item_id:
+        return None
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                lowcode_records.id AS record_id,
+                lowcode_records.form_id,
+                lowcode_records.form_version_id,
+                lowcode_records.status,
+                lowcode_records.submitted_by,
+                lowcode_records.submitted_at,
+                lowcode_forms.name AS form_name,
+                lowcode_forms.code AS form_code,
+                lowcode_form_versions.version_no AS form_version_no
+            FROM lowcode_records
+            LEFT JOIN lowcode_forms ON lowcode_forms.id = lowcode_records.form_id
+            LEFT JOIN lowcode_form_versions ON lowcode_form_versions.id = lowcode_records.form_version_id
+            WHERE lowcode_records.content_item_id = ?
+            ORDER BY lowcode_records.updated_at DESC, lowcode_records.id DESC
+            LIMIT 1
+            """,
+            (content_item_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "recordId": row["record_id"],
+        "formId": row["form_id"],
+        "formVersionId": row["form_version_id"],
+        "formName": row["form_name"] or "",
+        "formCode": row["form_code"] or "",
+        "formVersionNo": int_value(row["form_version_no"]),
+        "status": row["status"],
+        "submittedBy": row["submitted_by"],
+        "submittedAt": row["submitted_at"],
+    }
+
+
+def lowcode_submitted_data(data):
+    data = data if isinstance(data, dict) else {}
+    submitted = data.get("data") if isinstance(data.get("data"), dict) else data
+    submitted = dict(submitted or {})
+    if isinstance(data.get("assets"), list):
+        submitted["assets"] = data.get("assets")
+    return submitted
+
+
+def ensure_lowcode_form_for_project(project_id, form_id):
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("项目不存在")
+    form = get_lowcode_form(form_id)
+    if not form or not form.get("enabled"):
+        raise ValueError("资料采集模板不存在或已停用")
+    project_portal_type = normalize_portal_type(project.get("portalType"))
+    if normalize_portal_type(form.get("targetPortalType")) != project_portal_type:
+        raise ValueError("资料采集模板不适用于当前门户")
+    version_id = (form.get("version") or {}).get("id")
+    if not version_id:
+        raise ValueError("资料采集模板缺少有效版本")
+    return project, form, version_id
+
+
+def assert_lowcode_record_editable(conn, record_id, project_id, form_id, actor, allowed_statuses=("draft",)):
+    row = conn.execute(
+        """
+        SELECT * FROM lowcode_records
+        WHERE id = ? AND project_id = ? AND form_id = ?
+        """,
+        (record_id, project_id, form_id),
+    ).fetchone()
+    if not row or row["status"] not in allowed_statuses:
+        raise ValueError("记录不存在或当前状态不可继续修改")
+    if not can_review_user(actor) and row["submitted_by"] != actor.get("username", ""):
+        raise ValueError("只能继续修改自己的模板记录")
+    return row
+
+
+def assert_lowcode_draft_owner(conn, record_id, project_id, form_id, actor):
+    return assert_lowcode_record_editable(conn, record_id, project_id, form_id, actor, ("draft",))
+
+
+def replace_lowcode_record_assets(conn, record_id, assets, now):
+    conn.execute("DELETE FROM lowcode_record_assets WHERE record_id = ?", (record_id,))
+    for index, asset in enumerate(assets or []):
+        conn.execute(
+            """
+            INSERT INTO lowcode_record_assets (
+                record_id, asset_id, role, title, caption, url, sort_order, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record_id,
+                asset.get("assetId"),
+                asset.get("role") or "gallery",
+                asset.get("title") or "",
+                asset.get("caption") or "",
+                asset.get("url") or "",
+                int_value(asset.get("sortOrder"), index),
+                now,
+            ),
+        )
+
+
+def lowcode_record_result(project_id, record_id, item=None):
+    record = next((entry for entry in list_lowcode_records(project_id) if entry["id"] == record_id), None)
+    result = {"record": record}
+    if item is not None:
+        result["item"] = item
+    return result
+
+
+def save_lowcode_record_draft(project_id, form_id, data, actor):
+    _, form, version_id = ensure_lowcode_form_for_project(project_id, form_id)
+    data = data if isinstance(data, dict) else {}
+    submitted = lowcode_submitted_data(data)
+    assignment_id = int_value(data.get("assignmentId"))
+    assignment = assignment_for_submission(project_id, assignment_id, form, submitted, actor)
+    assignment_id = int_value((assignment or {}).get("id"))
+    payload = lowcode_record_payload(form, submitted, validate_required=False)
+    validate_content_asset_access(payload.get("coverAssetId"), payload.get("assets", []), actor)
+    now = now_iso()
+    draft_record_id = int_value(data.get("draftRecordId"))
+    with db_connect() as conn:
+        if draft_record_id:
+            existing_record = assert_lowcode_record_editable(conn, draft_record_id, project_id, form_id, actor, ("draft", "rejected"))
+            keep_review = existing_record["status"] == "rejected"
+            conn.execute(
+                """
+                UPDATE lowcode_records SET
+                    form_version_id = ?, content_item_id = ?, status = 'draft',
+                    data_json = ?, submitted_by = ?, submitted_at = ?,
+                    reviewed_by = ?, reviewed_at = ?, review_note = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    version_id,
+                    existing_record["content_item_id"],
+                    json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    existing_record["reviewed_by"] if keep_review else "",
+                    existing_record["reviewed_at"] if keep_review else "",
+                    existing_record["review_note"] if keep_review else "",
+                    now,
+                    draft_record_id,
+                ),
+            )
+            record_id = draft_record_id
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO lowcode_records (
+                    form_id, form_version_id, project_id, content_item_id, status,
+                    data_json, submitted_by, submitted_at, reviewed_by, reviewed_at,
+                    review_note, created_at, updated_at
+                )
+                VALUES (?, ?, ?, NULL, 'draft', ?, ?, ?, '', '', '', ?, ?)
+                """,
+                (
+                    form_id,
+                    version_id,
+                    project_id,
+                    json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    now,
+                    now,
+                ),
+            )
+            record_id = cursor.lastrowid
+        replace_lowcode_record_assets(conn, record_id, payload.get("assets", []), now)
+    update_assignment_progress(assignment_id, "draft", record_id=record_id)
+    return lowcode_record_result(project_id, record_id)
+
+
+def delete_lowcode_record_draft(project_id, record_id, actor):
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("项目不存在")
+    with db_connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM lowcode_records WHERE id = ? AND project_id = ?",
+            (record_id, project_id),
+        ).fetchone()
+        if not row:
+            return None
+        if row["status"] != "draft":
+            raise ValueError("只能删除草稿记录")
+        if not can_review_user(actor) and row["submitted_by"] != actor.get("username", ""):
+            raise ValueError("只能删除自己的草稿")
+        conn.execute("DELETE FROM lowcode_record_assets WHERE record_id = ?", (record_id,))
+        conn.execute("DELETE FROM lowcode_records WHERE id = ?", (record_id,))
+    return row_to_lowcode_record({**dict(row), **{
+        "form_name": "",
+        "form_code": "",
+        "form_version_no": 0,
+        "content_code": "",
+        "content_title": "",
+        "content_module_key": "",
+        "content_type": "",
+        "content_review_status": "",
+        "project_portal_type": project.get("portalType", "department"),
+    }})
+
+
+def submit_lowcode_record(project_id, form_id, data, actor):
+    _, form, version_id = ensure_lowcode_form_for_project(project_id, form_id)
+    data = data if isinstance(data, dict) else {}
+    submitted = lowcode_submitted_data(data)
+    assignment_id = int_value(data.get("assignmentId"))
+    assignment = assignment_for_submission(project_id, assignment_id, form, submitted, actor)
+    assignment_id = int_value((assignment or {}).get("id"))
+    draft_record_id = int_value(data.get("draftRecordId"))
+    content_item_id = None
+    if draft_record_id:
+        with db_connect() as conn:
+            existing_record = assert_lowcode_record_editable(conn, draft_record_id, project_id, form_id, actor, ("draft", "rejected"))
+            content_item_id = existing_record["content_item_id"]
+    payload = lowcode_record_payload(form, submitted, validate_required=not can_review_user(actor))
+    validate_content_asset_access(payload.get("coverAssetId"), payload.get("assets", []), actor)
+    approve_now = can_review_user(actor)
+    item = save_content_item(project_id, content_item_id, payload, actor, approve_now=approve_now)
+    now = now_iso()
+    status = "approved" if approve_now else "pending"
+    with db_connect() as conn:
+        if draft_record_id:
+            assert_lowcode_record_editable(conn, draft_record_id, project_id, form_id, actor, ("draft", "rejected"))
+            conn.execute(
+                """
+                UPDATE lowcode_records SET
+                    form_version_id = ?, content_item_id = ?, status = ?,
+                    data_json = ?, submitted_by = ?, submitted_at = ?,
+                    reviewed_by = ?, reviewed_at = ?, review_note = '',
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    version_id,
+                    item["id"],
+                    status,
+                    json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    actor.get("username", ADMIN_USERNAME) if approve_now else "",
+                    now if approve_now else "",
+                    now,
+                    draft_record_id,
+                ),
+            )
+            record_id = draft_record_id
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO lowcode_records (
+                    form_id, form_version_id, project_id, content_item_id, status,
+                    data_json, submitted_by, submitted_at, reviewed_by, reviewed_at,
+                    review_note, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+                """,
+                (
+                    form_id,
+                    version_id,
+                    project_id,
+                    item["id"],
+                    status,
+                    json_text({"fields": submitted, "contentItemPayload": payload}, {}),
+                    actor.get("username", ADMIN_USERNAME),
+                    now,
+                    actor.get("username", ADMIN_USERNAME) if approve_now else "",
+                    now if approve_now else "",
+                    now,
+                    now,
+                ),
+            )
+            record_id = cursor.lastrowid
+        replace_lowcode_record_assets(conn, record_id, payload.get("assets", []), now)
+    update_assignment_progress(assignment_id, status, record_id=record_id, content_item_id=item["id"])
+    return lowcode_record_result(project_id, record_id, item)
+
+
+def content_modules_payload(items, portal_type="department"):
+    grouped = {module["key"]: [] for module in module_set_for_portal_type(portal_type)}
+    for item in items or []:
+        key = item.get("moduleKey", "")
+        if key in grouped:
+            grouped[key].append(item)
+    return [
+        {
+            "key": module["key"],
+            "label": module["label"],
+            "description": module["description"],
+            "items": grouped[module["key"]],
+        }
+        for module in module_set_for_portal_type(portal_type)
+    ]
+
+
+def content_item_code_conflict(conn, project_id, code, exclude_item_id=None, current_page_id=None):
+    if exclude_item_id:
+        row = conn.execute(
+            "SELECT id FROM content_items WHERE project_id = ? AND code = ? AND id != ? LIMIT 1",
+            (project_id, code, exclude_item_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id FROM content_items WHERE project_id = ? AND code = ? LIMIT 1",
+            (project_id, code),
+        ).fetchone()
+    if row:
+        return "结构化资料编号已存在"
+    if current_page_id:
+        page_row = conn.execute(
+            "SELECT id FROM pages WHERE project_id = ? AND code = ? AND id != ? LIMIT 1",
+            (project_id, code, current_page_id),
+        ).fetchone()
+    else:
+        page_row = conn.execute(
+            "SELECT id FROM pages WHERE project_id = ? AND code = ? LIMIT 1",
+            (project_id, code),
+        ).fetchone()
+    if page_row:
+        return "展示页编号已存在"
+    return ""
+
+
+def unique_content_item_code(conn, project_id, module_key):
+    base = f"CI-{str(module_key or 'ITEM').upper()}-{project_id}-{uuid.uuid4().hex[:6].upper()}"
+    code = base
+    index = 2
+    while content_item_code_conflict(conn, project_id, code):
+        code = f"{base}-{index}"
+        index += 1
+    return code
+
+
+def content_item_payload_from_data(data, current=None, project=None):
+    current = current or {}
+    project = project or {}
+    portal_type = normalize_portal_type(project.get("portalType", "department"))
+
+    def field(name, default=""):
+        if name in data:
+            return str(data.get(name) or "").strip()
+        return str(current.get(name, default) or "").strip()
+
+    module_key = str(data.get("moduleKey") or current.get("moduleKey") or "").strip()
+    if not module_key:
+        module_key = module_key_for_category(data.get("category") or current.get("moduleLabel") or "", portal_type)
+    if not module_meta_for_key(module_key, portal_type):
+        raise ValueError("所属板块无效")
+    content_type = normalize_content_type(
+        data.get("contentType") or current.get("contentType") or default_content_type_for_module(module_key)
+    )
+    title = field("title")
+    if "bodyJson" in data:
+        body_json = content_body_json_from_data(data.get("bodyJson"), data.get("body") or "")
+    elif data.get("body"):
+        body_json = content_body_json_from_data(None, data.get("body"))
+    else:
+        body_json = current.get("bodyJson", [])
+    meta_json = data.get("metaJson") if "metaJson" in data else data.get("meta")
+    if meta_json is None:
+        meta_json = current.get("metaJson", {})
+    cover_asset_id = int_value(data.get("coverAssetId") if "coverAssetId" in data else current.get("coverAssetId"))
+    assets = content_assets_from_data(data.get("assets") if "assets" in data else current.get("assets", []))
+    return {
+        "code": field("code", current.get("code", "")),
+        "moduleKey": module_key,
+        "contentType": content_type,
+        "title": title[:255],
+        "subtitle": field("subtitle")[:512],
+        "summary": field("summary", field("subtitle"))[:1024],
+        "bodyJson": body_json,
+        "metaJson": json_value(meta_json, {}),
+        "coverAssetId": cover_asset_id if cover_asset_id > 0 else None,
+        "sortOrder": int_value(data.get("sortOrder") if "sortOrder" in data else current.get("sortOrder")),
+        "featured": bool_value(data.get("featured"), bool(current.get("featured", False))),
+        "enabled": bool_value(data.get("enabled"), bool(current.get("enabled", True))),
+        "assets": assets,
+    }
+
+
+def render_content_body_block(block):
+    if isinstance(block, str):
+        text = block.strip()
+        return f"<p>{html_attr(text)}</p>" if text else ""
+    if not isinstance(block, dict):
+        return ""
+    block_type = str(block.get("type") or "paragraph").strip().lower()
+    if block_type == "html":
+        return sanitize_rich_html(str(block.get("html") or ""))
+    if block_type in {"heading", "h2", "title"}:
+        return f"<h2>{html_attr(block.get('text') or block.get('title') or '')}</h2>"
+    if block_type in {"h3", "subheading"}:
+        return f"<h3>{html_attr(block.get('text') or block.get('title') or '')}</h3>"
+    if block_type in {"list", "ul"}:
+        items = block.get("items") if isinstance(block.get("items"), list) else []
+        lis = "".join(f"<li>{html_attr(item)}</li>" for item in items if str(item).strip())
+        return f"<ul>{lis}</ul>" if lis else ""
+    if block_type in {"quote", "blockquote"}:
+        return f"<blockquote>{html_attr(block.get('text') or '')}</blockquote>"
+    text = str(block.get("text") or block.get("content") or "").strip()
+    return f"<p>{html_attr(text).replace(chr(10), '<br>')}</p>" if text else ""
+
+
+def content_item_body_html(snapshot, assets):
+    body = snapshot.get("bodyJson", [])
+    if isinstance(body, dict):
+        if isinstance(body.get("blocks"), list):
+            body = body["blocks"]
+        elif isinstance(body.get("paragraphs"), list):
+            body = [{"type": "paragraph", "text": item} for item in body["paragraphs"]]
+        else:
+            body = [body]
+    if not isinstance(body, list):
+        body = []
+    html = "".join(render_content_body_block(block) for block in body)
+    for asset in assets or []:
+        url = str(asset.get("url") or "").strip()
+        if not url:
+            continue
+        caption = asset.get("caption") or asset.get("title") or snapshot.get("title", "")
+        role = str(asset.get("role") or "").lower()
+        if role == "external_link":
+            html += (
+                f'<p class="external-link-entry"><strong>{html_attr(asset.get("title") or "跳转入口")}</strong>：'
+                f'<a href="{html_attr(url)}">{html_attr(caption or "打开入口")}</a></p>'
+            )
+        elif role == "video" or re.search(r"\.(mp4|webm|ogg)(\?|#|$)", url, flags=re.I):
+            poster = asset.get("poster") or ""
+            html += (
+                f'<figure><img src="{html_attr(poster)}" alt="{html_attr(caption)}">'
+                f'<figcaption><strong>{html_attr(asset.get("title") or "数字资源")}</strong> '
+                f'<a href="{html_attr(url)}">{html_attr(caption or "视频")}</a></figcaption></figure>'
+            )
+        elif role == "attachment" or re.search(r"\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip)(\?|#|$)", url, flags=re.I):
+            html += (
+                f'<p><strong>{html_attr(asset.get("title") or "附件资料")}</strong>：'
+                f'<a href="{html_attr(url)}">{html_attr(caption or "查看附件")}</a></p>'
+            )
+        else:
+            html += (
+                f'<figure><img src="{html_attr(url)}" alt="{html_attr(caption)}">'
+                f'<figcaption>{html_attr(caption)}</figcaption></figure>'
+            )
+    return sanitize_rich_html(html)
+
+
+def content_item_cover_url(conn, snapshot, assets):
+    cover_asset_id = int_value(snapshot.get("coverAssetId"))
+    if cover_asset_id:
+        row = conn.execute("SELECT url FROM assets WHERE id = ?", (cover_asset_id,)).fetchone()
+        if row and row["url"]:
+            return row["url"]
+    preferred_roles = {"cover", "portrait", "certificate", "gallery"}
+    for asset in assets or []:
+        if asset.get("role") in preferred_roles and asset.get("url"):
+            return asset["url"]
+    for asset in assets or []:
+        if asset.get("role") == "external_link":
+            continue
+        if asset.get("url") and not re.search(r"\.(mp4|webm|ogg|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip)(\?|#|$)", asset["url"], flags=re.I):
+            return asset["url"]
+    return ""
+
+
+def replace_content_item_assets(conn, content_item_id, assets):
+    conn.execute("DELETE FROM content_item_assets WHERE content_item_id = ?", (content_item_id,))
+    for index, asset in enumerate(assets or []):
+        conn.execute(
+            """
+            INSERT INTO content_item_assets (
+                content_item_id, asset_id, role, title, caption, url, sort_order, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                content_item_id,
+                asset.get("assetId"),
+                asset.get("role", "gallery"),
+                asset.get("title", ""),
+                asset.get("caption", ""),
+                asset.get("url", ""),
+                int_value(asset.get("sortOrder"), index),
+                now_iso(),
+            ),
+        )
+
+
+def sync_content_item_page(conn, project_id, content_item_id, snapshot, actor):
+    row = conn.execute("SELECT page_id FROM content_items WHERE id = ?", (content_item_id,)).fetchone()
+    page_id = row["page_id"] if row and row["page_id"] else None
+    project_row = conn.execute(
+        """
+        SELECT projects.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
+        FROM projects
+        LEFT JOIN users ON users.username = projects.owner_username
+        WHERE projects.id = ?
+        """,
+        (project_id,),
+    ).fetchone()
+    project = row_to_project(project_row) if project_row else (get_project(project_id) or {})
+    module_meta = module_meta_for_key(snapshot["moduleKey"], project.get("portalType", "department"))
+    category = module_meta["label"] if module_meta else snapshot["moduleKey"]
+    assets = content_item_asset_rows(conn, content_item_id)
+    body_html = content_item_body_html(snapshot, assets)
+    image_url = content_item_cover_url(conn, snapshot, assets)
+    page_snapshot = {
+        "code": snapshot["code"],
+        "category": category,
+        "source": "结构化资料",
+        "publishedAt": now_iso()[:10],
+        "title": snapshot["title"],
+        "subtitle": snapshot.get("summary") or snapshot.get("subtitle", ""),
+        "body": body_html,
+        "imageUrl": image_url,
+        "contentType": snapshot["contentType"],
+        "accent": project.get("accent", "#0f766e"),
+        "enabled": bool(snapshot.get("enabled", True)),
+    }
+    existing = None
+    if page_id:
+        existing = conn.execute(
+            "SELECT id FROM pages WHERE id = ? AND project_id = ?",
+            (page_id, project_id),
+        ).fetchone()
+    if not existing:
+        existing = conn.execute(
+            "SELECT id FROM pages WHERE project_id = ? AND code = ?",
+            (project_id, snapshot["code"]),
+        ).fetchone()
+    page_id = apply_page_snapshot(conn, project_id, existing["id"] if existing else None, page_snapshot, actor)
+    conn.execute("UPDATE content_items SET page_id = ? WHERE id = ?", (page_id, content_item_id))
+    return page_id
+
+
+def content_item_snapshot_from_row(conn, row):
+    item = row_to_content_item(row, content_item_asset_rows(conn, row["id"])) if row else None
+    if not item:
+        return {}
+    return {
+        "code": item["code"],
+        "moduleKey": item["moduleKey"],
+        "contentType": item["contentType"],
+        "title": item["title"],
+        "subtitle": item["subtitle"],
+        "summary": item["summary"],
+        "bodyJson": item["bodyJson"],
+        "metaJson": item["metaJson"],
+        "coverAssetId": item["coverAssetId"],
+        "sortOrder": item["sortOrder"],
+        "featured": item["featured"],
+        "enabled": item["enabled"],
+        "assets": item["assets"],
+    }
+
+
+def write_content_item_version(conn, project_id, content_item_id, snapshot, actor, status="approved", operation="upsert"):
+    current = {}
+    if content_item_id:
+        row = conn.execute("SELECT * FROM content_items WHERE id = ?", (content_item_id,)).fetchone()
+        current = content_item_snapshot_from_row(conn, row)
+    changes = summarize_changes(current, snapshot)
+    cursor = conn.execute(
+        """
+        INSERT INTO content_item_versions (
+            content_item_id, project_id, operation, status, snapshot_json,
+            submitted_by, submitted_at, reviewed_by, reviewed_at, changes
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            content_item_id,
+            project_id,
+            operation,
+            status,
+            json_text(snapshot, {}),
+            actor.get("username", ADMIN_USERNAME),
+            now_iso(),
+            actor.get("username", ADMIN_USERNAME) if status == "approved" else "",
+            now_iso() if status == "approved" else "",
+            changes,
+        ),
+    )
+    return cursor.lastrowid
+
+
+def apply_content_item_snapshot(conn, project_id, content_item_id, snapshot, actor):
+    now = now_iso()
+    if content_item_id:
+        conn.execute(
+            """
+            UPDATE content_items SET
+                code = ?, module_key = ?, content_type = ?, title = ?, subtitle = ?,
+                summary = ?, body_json = ?, meta_json = ?, cover_asset_id = ?,
+                sort_order = ?, featured = ?, enabled = ?, review_status = 'approved',
+                pending_version_id = NULL, reviewed_by = ?, review_note = '', updated_at = ?
+            WHERE id = ? AND project_id = ?
+            """,
+            (
+                snapshot["code"],
+                snapshot["moduleKey"],
+                snapshot["contentType"],
+                snapshot["title"],
+                snapshot["subtitle"],
+                snapshot["summary"],
+                json_text(snapshot["bodyJson"], []),
+                json_text(snapshot["metaJson"], {}),
+                snapshot.get("coverAssetId"),
+                int_value(snapshot.get("sortOrder")),
+                1 if snapshot.get("featured") else 0,
+                1 if snapshot.get("enabled", True) else 0,
+                actor.get("username", ADMIN_USERNAME),
+                now,
+                content_item_id,
+                project_id,
+            ),
+        )
+    else:
+        cursor = conn.execute(
+            """
+            INSERT INTO content_items (
+                project_id, code, module_key, content_type, title, subtitle,
+                summary, body_json, meta_json, cover_asset_id, sort_order,
+                featured, enabled, review_status, submitted_by, reviewed_by,
+                review_note, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, '', ?, ?)
+            """,
+            (
+                project_id,
+                snapshot["code"],
+                snapshot["moduleKey"],
+                snapshot["contentType"],
+                snapshot["title"],
+                snapshot["subtitle"],
+                snapshot["summary"],
+                json_text(snapshot["bodyJson"], []),
+                json_text(snapshot["metaJson"], {}),
+                snapshot.get("coverAssetId"),
+                int_value(snapshot.get("sortOrder")),
+                1 if snapshot.get("featured") else 0,
+                1 if snapshot.get("enabled", True) else 0,
+                actor.get("username", ADMIN_USERNAME),
+                actor.get("username", ADMIN_USERNAME),
+                now,
+                now,
+            ),
+        )
+        content_item_id = cursor.lastrowid
+    replace_content_item_assets(conn, content_item_id, snapshot.get("assets", []))
+    sync_content_item_page(conn, project_id, content_item_id, snapshot, actor)
+    return content_item_id
+
+
+def save_content_item(project_id, content_item_id, data, actor, approve_now=False):
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("项目不存在")
+    current = get_content_item(project_id, content_item_id) if content_item_id else {}
+    if content_item_id and not current:
+        raise ValueError("资料不存在")
+    snapshot = content_item_payload_from_data(data, current, project)
+    if not module_accessible(project_id, snapshot.get("moduleKey"), actor):
+        raise ValueError("只能编辑分配给自己的板块")
+    with db_connect() as conn:
+        if not snapshot["code"]:
+            snapshot["code"] = unique_content_item_code(conn, project_id, snapshot["moduleKey"])
+        conflict = content_item_code_conflict(
+            conn,
+            project_id,
+            snapshot["code"],
+            content_item_id or None,
+            current.get("pageId") if current else None,
+        )
+        if conflict:
+            raise ValueError(conflict)
+    validate_content_asset_access(snapshot.get("coverAssetId"), snapshot.get("assets", []), actor)
+    with db_connect() as conn:
+        if approve_now:
+            item_id = apply_content_item_snapshot(conn, project_id, content_item_id or None, snapshot, actor)
+            version_id = write_content_item_version(conn, project_id, item_id, snapshot, actor, "approved", "upsert")
+            conn.execute("UPDATE content_item_versions SET content_item_id = ? WHERE id = ?", (item_id, version_id))
+        else:
+            now = now_iso()
+            if content_item_id:
+                item_id = content_item_id
+            else:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO content_items (
+                        project_id, code, module_key, content_type, title, subtitle,
+                        summary, body_json, meta_json, cover_asset_id, sort_order,
+                        featured, enabled, review_status, submitted_by, reviewed_by,
+                        review_note, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, '', '', ?, ?)
+                    """,
+                    (
+                        project_id,
+                        snapshot["code"],
+                        snapshot["moduleKey"],
+                        snapshot["contentType"],
+                        snapshot["title"],
+                        snapshot["subtitle"],
+                        snapshot["summary"],
+                        json_text(snapshot["bodyJson"], []),
+                        json_text(snapshot["metaJson"], {}),
+                        snapshot.get("coverAssetId"),
+                        int_value(snapshot.get("sortOrder")),
+                        1 if snapshot.get("featured") else 0,
+                        actor.get("username", ""),
+                        now,
+                        now,
+                    ),
+                )
+                item_id = cursor.lastrowid
+            version_id = write_content_item_version(conn, project_id, item_id, snapshot, actor, "pending", "upsert")
+            conn.execute(
+                """
+                UPDATE content_items SET review_status = 'pending', pending_version_id = ?,
+                    submitted_by = ?, review_note = '', updated_at = ?
+                WHERE id = ?
+                """,
+                (version_id, actor.get("username", ""), now_iso(), item_id),
+            )
+    return get_content_item(project_id, item_id)
+
+
+def delete_content_item(project_id, content_item_id, actor, approve_now=False):
+    item = get_content_item(project_id, content_item_id)
+    if not item:
+        return None
+    if not module_accessible(project_id, item.get("moduleKey"), actor):
+        raise ValueError("只能操作分配给自己的板块")
+    snapshot = {
+        "code": item["code"],
+        "moduleKey": item["moduleKey"],
+        "contentType": item["contentType"],
+        "title": item["title"],
+        "subtitle": item["subtitle"],
+        "summary": item["summary"],
+        "bodyJson": item["bodyJson"],
+        "metaJson": item["metaJson"],
+        "coverAssetId": item["coverAssetId"],
+        "sortOrder": item["sortOrder"],
+        "featured": item["featured"],
+        "enabled": False,
+        "assets": item["assets"],
+    }
+    with db_connect() as conn:
+        if approve_now:
+            if item.get("pageId"):
+                conn.execute("DELETE FROM deployed_pages WHERE page_id = ?", (item["pageId"],))
+                conn.execute(
+                    "UPDATE pages SET enabled = 0, review_status = 'deleted', pending_version_id = NULL, updated_at = ? WHERE id = ?",
+                    (now_iso(), item["pageId"]),
+                )
+            conn.execute(
+                """
+                UPDATE content_items SET enabled = 0, review_status = 'deleted',
+                    pending_version_id = NULL, reviewed_by = ?, review_note = '', updated_at = ?
+                WHERE id = ? AND project_id = ?
+                """,
+                (actor.get("username", ADMIN_USERNAME), now_iso(), content_item_id, project_id),
+            )
+            write_content_item_version(conn, project_id, content_item_id, snapshot, actor, "approved", "delete")
+        else:
+            version_id = write_content_item_version(conn, project_id, content_item_id, snapshot, actor, "pending", "delete")
+            conn.execute(
+                """
+                UPDATE content_items SET review_status = 'pending_delete', pending_version_id = ?,
+                    submitted_by = ?, review_note = '', updated_at = ?
+                WHERE id = ?
+                """,
+                (version_id, actor.get("username", ""), now_iso(), content_item_id),
+            )
+    return item
+
+
+def row_to_content_item_version(row):
+    if not row:
+        return None
+    snapshot = json_value(row["snapshot_json"], {})
+    current_item = get_content_item_by_id(row["content_item_id"]) if row["content_item_id"] else None
+    current = {
+        "code": current_item.get("code", ""),
+        "moduleKey": current_item.get("moduleKey", ""),
+        "contentType": current_item.get("contentType", ""),
+        "title": current_item.get("title", ""),
+        "subtitle": current_item.get("subtitle", ""),
+        "summary": current_item.get("summary", ""),
+        "bodyJson": current_item.get("bodyJson", []),
+        "metaJson": current_item.get("metaJson", {}),
+        "coverAssetId": current_item.get("coverAssetId"),
+        "sortOrder": current_item.get("sortOrder", 0),
+        "featured": current_item.get("featured", False),
+        "enabled": current_item.get("enabled", True),
+        "assets": current_item.get("assets", []),
+    } if current_item else {}
+    code = snapshot.get("code") or row["content_item_id"] or ""
+    return {
+        "id": row["id"],
+        "contentItemId": row["content_item_id"],
+        "projectId": row["project_id"],
+        "projectName": row["project_name"] if "project_name" in row.keys() else "",
+        "operation": row["operation"],
+        "status": row["status"],
+        "snapshot": snapshot,
+        "current": current,
+        "diffs": review_diffs(current, snapshot),
+        "previewUrl": f"/display?project={row['project_id']}&code={code}&preview=review&reviewVersion={row['id']}",
+        "submittedBy": row["submitted_by"],
+        "submittedAt": row["submitted_at"],
+        "reviewedBy": row["reviewed_by"],
+        "reviewedAt": row["reviewed_at"],
+        "reviewNote": row["review_note"],
+        "changes": row["changes"],
+        "lowcodeRecord": lowcode_review_source_for_content_item(row["content_item_id"]),
+    }
+
+
+def approve_content_item_version(version_id, actor, note=""):
+    with db_connect() as conn:
+        row = conn.execute("SELECT * FROM content_item_versions WHERE id = ?", (version_id,)).fetchone()
+        if not row:
+            return None
+        version = row_to_content_item_version(row)
+        snapshot = version["snapshot"]
+        if version["operation"] == "delete":
+            item = get_content_item_by_id(version["contentItemId"])
+            if item and item.get("pageId"):
+                conn.execute("DELETE FROM deployed_pages WHERE page_id = ?", (item["pageId"],))
+                conn.execute(
+                    "UPDATE pages SET enabled = 0, review_status = 'deleted', pending_version_id = NULL, updated_at = ? WHERE id = ?",
+                    (now_iso(), item["pageId"]),
+                )
+            conn.execute(
+                """
+                UPDATE content_items SET enabled = 0, review_status = 'deleted',
+                    pending_version_id = NULL, reviewed_by = ?, review_note = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (actor["username"], note, now_iso(), version["contentItemId"]),
+            )
+            item_id = version["contentItemId"]
+        else:
+            item_id = apply_content_item_snapshot(conn, version["projectId"], version["contentItemId"], snapshot, actor)
+            conn.execute("UPDATE content_item_versions SET content_item_id = ? WHERE id = ?", (item_id, version_id))
+        conn.execute(
+            """
+            UPDATE content_item_versions SET status = 'approved', reviewed_by = ?,
+                reviewed_at = ?, review_note = ?
+            WHERE id = ?
+            """,
+            (actor["username"], now_iso(), note, version_id),
+        )
+        conn.execute(
+            """
+            UPDATE lowcode_records SET status = 'approved', reviewed_by = ?,
+                reviewed_at = ?, review_note = ?, updated_at = ?
+            WHERE content_item_id = ?
+            """,
+            (actor["username"], now_iso(), note, now_iso(), item_id),
+        )
+        conn.execute(
+            "UPDATE content_assignments SET status = 'approved', updated_at = ? WHERE content_item_id = ?",
+            (now_iso(), item_id),
+        )
+    return get_content_item_by_id(item_id)
+
+
+def reject_content_item_version(version_id, actor, note=""):
+    with db_connect() as conn:
+        row = conn.execute("SELECT * FROM content_item_versions WHERE id = ?", (version_id,)).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            """
+            UPDATE content_item_versions SET status = 'rejected', reviewed_by = ?,
+                reviewed_at = ?, review_note = ?
+            WHERE id = ?
+            """,
+            (actor["username"], now_iso(), note, version_id),
+        )
+        conn.execute(
+            """
+            UPDATE content_items SET review_status = 'rejected', review_note = ?,
+                reviewed_by = ?, updated_at = ?
+            WHERE pending_version_id = ?
+            """,
+            (note, actor["username"], now_iso(), version_id),
+        )
+        conn.execute(
+            """
+            UPDATE lowcode_records SET status = 'rejected', reviewed_by = ?,
+                reviewed_at = ?, review_note = ?, updated_at = ?
+            WHERE content_item_id IN (
+                SELECT content_item_id FROM content_item_versions WHERE id = ?
+            )
+            """,
+            (actor["username"], now_iso(), note, now_iso(), version_id),
+        )
+        conn.execute(
+            """
+            UPDATE content_assignments SET status = 'rejected', updated_at = ?
+            WHERE content_item_id IN (
+                SELECT content_item_id FROM content_item_versions WHERE id = ?
+            )
+            """,
+            (now_iso(), version_id),
+        )
+    return row_to_content_item_version(row)
+
+
+def add_content_item_asset(content_item_id, data, actor):
+    item = get_content_item_by_id(content_item_id)
+    if not item:
+        return None
+    project = get_project(item["projectId"])
+    if not project_accessible(project, actor):
+        return None
+    if not can_review_user(actor):
+        raise ValueError("素材关联直接修改需要管理员权限，请通过资料草稿提交")
+    asset_id = int_value(data.get("assetId") or data.get("asset_id"))
+    if asset_id:
+        validate_content_asset_access(asset_id, [], actor)
+    payload = content_assets_from_data([{**data, "assetId": asset_id or None}])[0]
+    with db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO content_item_assets (
+                content_item_id, asset_id, role, title, caption, url, sort_order, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                content_item_id,
+                payload.get("assetId"),
+                payload.get("role", "gallery"),
+                payload.get("title", ""),
+                payload.get("caption", ""),
+                payload.get("url", ""),
+                int_value(payload.get("sortOrder")),
+                now_iso(),
+            ),
+        )
+        row = conn.execute("SELECT * FROM content_items WHERE id = ?", (content_item_id,)).fetchone()
+        snapshot = content_item_snapshot_from_row(conn, row)
+        if item.get("reviewStatus") == "approved":
+            sync_content_item_page(conn, item["projectId"], content_item_id, snapshot, actor)
+    return get_content_item_by_id(content_item_id)
+
+
+def reorder_content_item_assets(content_item_id, assets, actor):
+    item = get_content_item_by_id(content_item_id)
+    if not item:
+        return None
+    project = get_project(item["projectId"])
+    if not project_accessible(project, actor):
+        return None
+    if not can_review_user(actor):
+        raise ValueError("素材排序直接修改需要管理员权限，请通过资料草稿提交")
+    with db_connect() as conn:
+        for index, asset in enumerate(assets or []):
+            relation_id = int_value(asset.get("id"))
+            sort_order = int_value(asset.get("sortOrder"), index)
+            if relation_id:
+                conn.execute(
+                    "UPDATE content_item_assets SET sort_order = ? WHERE id = ? AND content_item_id = ?",
+                    (sort_order, relation_id, content_item_id),
+                )
+        row = conn.execute("SELECT * FROM content_items WHERE id = ?", (content_item_id,)).fetchone()
+        snapshot = content_item_snapshot_from_row(conn, row)
+        if item.get("reviewStatus") == "approved":
+            sync_content_item_page(conn, item["projectId"], content_item_id, snapshot, actor)
+    return get_content_item_by_id(content_item_id)
+
+
+def delete_content_item_asset(content_item_id, asset_ref, actor):
+    item = get_content_item_by_id(content_item_id)
+    if not item:
+        return None
+    project = get_project(item["projectId"])
+    if not project_accessible(project, actor):
+        return None
+    if not can_review_user(actor):
+        raise ValueError("素材关联直接删除需要管理员权限，请通过资料草稿提交")
+    ref = int_value(asset_ref)
+    with db_connect() as conn:
+        row = conn.execute(
+            "SELECT id FROM content_item_assets WHERE id = ? AND content_item_id = ?",
+            (ref, content_item_id),
+        ).fetchone()
+        if row:
+            conn.execute("DELETE FROM content_item_assets WHERE id = ?", (row["id"],))
+        else:
+            conn.execute(
+                "DELETE FROM content_item_assets WHERE asset_id = ? AND content_item_id = ?",
+                (ref, content_item_id),
+            )
+        item_row = conn.execute("SELECT * FROM content_items WHERE id = ?", (content_item_id,)).fetchone()
+        snapshot = content_item_snapshot_from_row(conn, item_row)
+        if item.get("reviewStatus") == "approved":
+            sync_content_item_page(conn, item["projectId"], content_item_id, snapshot, actor)
+    return get_content_item_by_id(content_item_id)
+
+
+def admin_dashboard(user=None):
+    user = user or {"role": ROLE_ADMIN, "username": ""}
+    owner_join, owner_where, owner_params = project_scope_sql(user, "projects", "project_owners")
+    scan_owner_join, scan_owner_where, scan_owner_params = project_scope_sql(user, "projects", "scan_project_owners")
+    recent_project_join, recent_project_where, recent_project_params = project_scope_sql(user, "p", "recent_project_owners")
+    active_portal_filter = "portal_type IN ('school', 'topic')"
+
+    def scoped_where(base_where, alias="projects"):
+        clause = f"{alias}.{active_portal_filter}" if alias else active_portal_filter
+        return f"{base_where} AND {clause}" if base_where else f"WHERE {clause}"
+
+    with db_connect() as conn:
+        project_count = conn.execute(
+            f"""
+            SELECT COUNT(*) AS value
+            FROM projects
+            {owner_join}
+            {scoped_where(owner_where)}
+            """,
+            owner_params,
+        ).fetchone()["value"]
         page_count = conn.execute(
-            f"SELECT COUNT(*) AS value FROM pages JOIN projects ON projects.id = pages.project_id {owner_where}",
+            f"""
+            SELECT COUNT(*) AS value
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
+            {scoped_where(owner_where)}
+            """,
             owner_params,
         ).fetchone()["value"]
         enabled_page_count = conn.execute(
             f"""
             SELECT COUNT(*) AS value
-            FROM pages JOIN projects ON projects.id = pages.project_id
-            {owner_where + (' AND' if owner_where else 'WHERE')} pages.enabled = 1 AND pages.review_status = 'approved'
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
+            {scoped_where(owner_where)} AND pages.enabled = 1 AND pages.review_status = 'approved'
             """,
             owner_params,
         ).fetchone()["value"]
         pending_count = conn.execute(
             f"""
             SELECT COUNT(*) AS value
-            FROM pages JOIN projects ON projects.id = pages.project_id
-            {owner_where + (' AND' if owner_where else 'WHERE')} pages.review_status IN ('pending','pending_delete')
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
+            {scoped_where(owner_where)} AND pages.review_status IN ('pending','pending_delete')
             """,
             owner_params,
         ).fetchone()["value"]
         rejected_count = conn.execute(
             f"""
             SELECT COUNT(*) AS value
-            FROM pages JOIN projects ON projects.id = pages.project_id
-            {owner_where + (' AND' if owner_where else 'WHERE')} pages.review_status = 'rejected'
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
+            {scoped_where(owner_where)} AND pages.review_status = 'rejected'
             """,
             owner_params,
         ).fetchone()["value"]
-        if user.get("role") == "admin":
-            scan_count = conn.execute("SELECT COUNT(*) AS value FROM scans").fetchone()["value"]
+        if is_admin_user(user):
+            scan_count = conn.execute(
+                f"""
+                SELECT COUNT(*) AS value
+                FROM scans
+                JOIN projects ON projects.id = scans.project_id
+                {scoped_where("")}
+                """
+            ).fetchone()["value"]
             today_scan_count = conn.execute(
-                "SELECT COUNT(*) AS value FROM scans WHERE substr(created_at, 1, 10) = ?",
+                f"""
+                SELECT COUNT(*) AS value
+                FROM scans
+                JOIN projects ON projects.id = scans.project_id
+                {scoped_where("")} AND substr(scans.created_at, 1, 10) = ?
+                """,
                 (now_iso()[:10],),
             ).fetchone()["value"]
         else:
             scan_count = conn.execute(
-                """
+                f"""
                 SELECT COUNT(*) AS value
                 FROM scans
                 JOIN projects ON projects.id = scans.project_id
-                WHERE projects.owner_username = ?
+                {scan_owner_join}
+                {scoped_where(scan_owner_where)}
                 """,
                 scan_owner_params,
             ).fetchone()["value"]
             today_scan_count = conn.execute(
-                """
+                f"""
                 SELECT COUNT(*) AS value
                 FROM scans
                 JOIN projects ON projects.id = scans.project_id
-                WHERE projects.owner_username = ? AND substr(scans.created_at, 1, 10) = ?
+                {scan_owner_join}
+                {scoped_where(scan_owner_where)} AND substr(scans.created_at, 1, 10) = ?
                 """,
                 (*scan_owner_params, now_iso()[:10]),
             ).fetchone()["value"]
@@ -1914,15 +7230,18 @@ def admin_dashboard(user=None):
                 MAX(CASE WHEN deployed = 1 THEN name ELSE '' END) AS welcome_name,
                 MAX(CASE WHEN content_deployed = 1 THEN name ELSE '' END) AS content_name
             FROM projects
-            {owner_where}
+            {owner_join}
+            {scoped_where(owner_where)}
             """,
             owner_params,
         ).fetchone()
         categories = conn.execute(
             f"""
             SELECT category, COUNT(*) AS count
-            FROM pages JOIN projects ON projects.id = pages.project_id
-            {owner_where}
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            {owner_join}
+            {scoped_where(owner_where)}
             GROUP BY category
             ORDER BY count DESC, category
             LIMIT 8
@@ -1933,9 +7252,10 @@ def admin_dashboard(user=None):
             f"""
             SELECT scans.id, scans.code, scans.raw_url, scans.created_at, pages.title, projects.name AS project_name
             FROM scans
-            LEFT JOIN projects ON projects.id = scans.project_id
+            JOIN projects ON projects.id = scans.project_id
+            {scan_owner_join}
             LEFT JOIN pages ON pages.project_id = scans.project_id AND pages.code = scans.code
-            {scan_owner_where}
+            {scoped_where(scan_owner_where)}
             ORDER BY scans.created_at DESC, scans.id DESC
             LIMIT 8
             """,
@@ -1948,13 +7268,66 @@ def admin_dashboard(user=None):
             FROM projects p
             LEFT JOIN users ON users.username = p.owner_username
             LEFT JOIN pages ON pages.project_id = p.id
-            {owner_where.replace('projects.', 'p.')}
+            {recent_project_join}
+            {scoped_where(recent_project_where, "p")}
             GROUP BY p.id
             ORDER BY p.updated_at DESC, p.id DESC
             LIMIT 6
             """,
+            recent_project_params,
+        ).fetchall()
+        content_item_stats = conn.execute(
+            f"""
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN content_items.review_status = 'approved' AND content_items.enabled = 1 THEN 1 ELSE 0 END) AS published,
+                SUM(CASE WHEN content_items.review_status IN ('pending', 'pending_delete') THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN content_items.review_status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+                SUM(CASE WHEN content_items.review_status = 'draft' THEN 1 ELSE 0 END) AS draft
+            FROM content_items
+            JOIN projects ON projects.id = content_items.project_id
+            {owner_join}
+            {scoped_where(owner_where)}
+            """,
+            owner_params,
+        ).fetchone()
+        market_stats = conn.execute(
+            f"""
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN achievement_market_items.enabled = 1 THEN 1 ELSE 0 END) AS enabled
+            FROM achievement_market_items
+            JOIN projects ON projects.id = achievement_market_items.project_id
+            {owner_join}
+            {scoped_where(owner_where)}
+            """,
+            owner_params,
+        ).fetchone()
+        market_categories = conn.execute(
+            f"""
+            SELECT achievement_market_items.category_key, COUNT(*) AS count
+            FROM achievement_market_items
+            JOIN projects ON projects.id = achievement_market_items.project_id
+            {owner_join}
+            {scoped_where(owner_where)}
+            GROUP BY achievement_market_items.category_key
+            """,
             owner_params,
         ).fetchall()
+        user_stats = {"total": 0, "enabled": 0, "teachers": 0, "reviewers": 0, "admins": 0}
+        if is_admin_user(user):
+            user_row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END) AS enabled,
+                    SUM(CASE WHEN role = 'teacher' THEN 1 ELSE 0 END) AS teachers,
+                    SUM(CASE WHEN role = 'department_admin' THEN 1 ELSE 0 END) AS reviewers,
+                    SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) AS admins
+                FROM users
+                """
+            ).fetchone()
+            user_stats = {key: int(user_row[key] or 0) for key in user_stats}
 
     return {
         "summary": {
@@ -1982,7 +7355,30 @@ def admin_dashboard(user=None):
             for row in recent_scans
         ],
         "recentProjects": [row_to_project(row) for row in recent_projects],
-        "logs": list_admin_logs(8) if user.get("role") == "admin" else list_admin_logs(8, username=user.get("username", "")),
+        "logs": list_admin_logs(8) if is_admin_user(user) else list_admin_logs(8, username=user.get("username", "")),
+        "management": {
+            "contentItems": {
+                "total": int(content_item_stats["total"] or 0),
+                "published": int(content_item_stats["published"] or 0),
+                "pending": int(content_item_stats["pending"] or 0),
+                "rejected": int(content_item_stats["rejected"] or 0),
+                "draft": int(content_item_stats["draft"] or 0),
+            },
+            "achievementMarket": {
+                "total": int(market_stats["total"] or 0),
+                "enabled": int(market_stats["enabled"] or 0),
+                "categories": [
+                    {
+                        "key": normalize_market_category(row["category_key"]),
+                        "label": ACHIEVEMENT_MARKET_CATEGORY_MAP[normalize_market_category(row["category_key"])]["label"],
+                        "color": ACHIEVEMENT_MARKET_CATEGORY_MAP[normalize_market_category(row["category_key"])]["color"],
+                        "count": int(row["count"] or 0),
+                    }
+                    for row in market_categories
+                ],
+            },
+            "users": user_stats,
+        },
         "operations": operations_summary(user),
     }
 
@@ -1998,6 +7394,8 @@ def upsert_project(project_id, data):
 
     project = {
         "name": field("name", "新的学校大屏项目") or "新的学校大屏项目",
+        "portal_type": normalize_portal_type(field("portalType", current.get("portalType", "department"))),
+        "portal_slug": normalize_portal_slug(field("portalSlug", current.get("portalSlug", ""))),
         "idle_kicker": field("idleKicker", "学校简介"),
         "idle_title": field("idleTitle", "欢迎来到毕节职业技术学院"),
         "idle_copy": field("idleCopy", DEFAULT_DISPLAY_CONFIG["summaryCopy"]),
@@ -2011,19 +7409,23 @@ def upsert_project(project_id, data):
         ),
         "updated_at": now_iso(),
     }
+    if project["portal_type"] == "school":
+        project["portal_slug"] = ""
 
     with db_connect() as conn:
         if project_id:
             conn.execute(
                 """
                 UPDATE projects SET
-                    name = ?, idle_kicker = ?, idle_title = ?, idle_copy = ?,
+                    name = ?, portal_type = ?, portal_slug = ?, idle_kicker = ?, idle_title = ?, idle_copy = ?,
                     welcome_kicker = ?, welcome_title = ?, welcome_subtitle = ?,
                     default_image_url = ?, accent = ?, display_config = ?, updated_at = ?
                 WHERE id = ?
                 """,
                 (
                     project["name"],
+                    project["portal_type"],
+                    project["portal_slug"],
                     project["idle_kicker"],
                     project["idle_title"],
                     project["idle_copy"],
@@ -2041,13 +7443,15 @@ def upsert_project(project_id, data):
             cursor = conn.execute(
                 """
                 INSERT INTO projects (
-                    name, idle_kicker, idle_title, idle_copy, welcome_kicker,
+                    name, portal_type, portal_slug, idle_kicker, idle_title, idle_copy, welcome_kicker,
                     welcome_title, welcome_subtitle, default_image_url, accent, display_config, deployed, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                 """,
                 (
                     project["name"],
+                    project["portal_type"],
+                    project["portal_slug"],
                     project["idle_kicker"],
                     project["idle_title"],
                     project["idle_copy"],
@@ -2076,6 +7480,8 @@ def summarize_changes(before, after):
 
 REVIEW_FIELD_LABELS = {
     "name": "项目名称",
+    "portalType": "门户类型",
+    "portalSlug": "门户路由",
     "ownerUsername": "归属账号",
     "idleKicker": "欢迎页小标题",
     "idleTitle": "欢迎页标题",
@@ -2092,8 +7498,17 @@ REVIEW_FIELD_LABELS = {
     "publishedAt": "发布日期",
     "title": "标题",
     "subtitle": "副标题",
+    "summary": "摘要",
     "body": "正文",
     "imageUrl": "图片",
+    "contentType": "资料类型",
+    "moduleKey": "标准板块",
+    "bodyJson": "结构化正文",
+    "metaJson": "类型字段",
+    "coverAssetId": "封面素材",
+    "sortOrder": "排序",
+    "featured": "重点展示",
+    "assets": "资料素材",
     "enabled": "启用状态",
 }
 
@@ -2128,8 +7543,12 @@ def review_diffs(before, after):
 
 
 def project_public_payload(project):
+    portal_type = normalize_portal_type(project.get("portalType", "department"))
+    portal_slug = normalize_portal_slug(project.get("portalSlug", ""))
     return {
         "name": project.get("name", ""),
+        "portalType": portal_type,
+        "portalSlug": "" if portal_type == "school" else portal_slug,
         "ownerUsername": project.get("ownerUsername", ADMIN_USERNAME),
         "idleKicker": project.get("idleKicker", ""),
         "idleTitle": project.get("idleTitle", ""),
@@ -2154,6 +7573,7 @@ def page_public_payload(page):
         "subtitle": page.get("subtitle", ""),
         "body": page.get("body", ""),
         "imageUrl": page.get("imageUrl", ""),
+        "contentType": normalize_content_type(page.get("contentType", "article")),
         "accent": page.get("accent", "#0f766e"),
         "enabled": bool(page.get("enabled", True)),
     }
@@ -2168,8 +7588,14 @@ def project_payload_from_data(data, current=None):
         return str(current.get(name, default) or "").strip()
 
     display_config = data.get("displayConfig") if "displayConfig" in data else current.get("displayConfig", {})
+    portal_type = normalize_portal_type(field("portalType", current.get("portalType", "department")))
+    portal_slug = normalize_portal_slug(field("portalSlug", current.get("portalSlug", "")))
+    if portal_type == "school":
+        portal_slug = ""
     return {
         "name": field("name", "New display project") or "New display project",
+        "portal_type": portal_type,
+        "portal_slug": portal_slug,
         "owner_username": field("ownerUsername", current.get("ownerUsername", ADMIN_USERNAME)) or ADMIN_USERNAME,
         "idle_kicker": field("idleKicker", "School intro"),
         "idle_title": field("idleTitle", DEFAULT_PROJECT_NAME),
@@ -2185,8 +7611,12 @@ def project_payload_from_data(data, current=None):
 
 
 def project_payload_to_public(payload):
+    portal_type = normalize_portal_type(payload.get("portal_type", "department"))
+    portal_slug = normalize_portal_slug(payload.get("portal_slug", ""))
     return {
         "name": payload["name"],
+        "portalType": portal_type,
+        "portalSlug": "" if portal_type == "school" else portal_slug,
         "ownerUsername": payload["owner_username"],
         "idleKicker": payload["idle_kicker"],
         "idleTitle": payload["idle_title"],
@@ -2212,7 +7642,7 @@ def save_project(project_id, data, actor=None):
             conn.execute(
                 """
                 UPDATE projects SET
-                    name = ?, owner_username = ?, idle_kicker = ?, idle_title = ?, idle_copy = ?,
+                    name = ?, portal_type = ?, portal_slug = ?, owner_username = ?, idle_kicker = ?, idle_title = ?, idle_copy = ?,
                     welcome_kicker = ?, welcome_title = ?, welcome_subtitle = ?,
                     default_image_url = ?, accent = ?, display_config = ?,
                     config_status = 'approved', pending_config_version_id = NULL, updated_at = ?
@@ -2220,6 +7650,8 @@ def save_project(project_id, data, actor=None):
                 """,
                 (
                     payload["name"],
+                    payload["portal_type"],
+                    payload["portal_slug"],
                     payload["owner_username"],
                     payload["idle_kicker"],
                     payload["idle_title"],
@@ -2238,14 +7670,16 @@ def save_project(project_id, data, actor=None):
             cursor = conn.execute(
                 """
                 INSERT INTO projects (
-                    name, owner_username, idle_kicker, idle_title, idle_copy, welcome_kicker,
+                    name, portal_type, portal_slug, owner_username, idle_kicker, idle_title, idle_copy, welcome_kicker,
                     welcome_title, welcome_subtitle, default_image_url, accent, display_config,
                     deployed, content_deployed, config_status, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'approved', ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'approved', ?)
                 """,
                 (
                     payload["name"],
+                    payload["portal_type"],
+                    payload["portal_slug"],
                     payload["owner_username"],
                     payload["idle_kicker"],
                     payload["idle_title"],
@@ -2311,10 +7745,13 @@ def submit_project_config(project_id, data, user):
 def deploy_project_check(project_id):
     result = {"ok": True, "projectId": project_id, "errors": [], "warnings": []}
     with db_connect() as conn:
-        row = conn.execute("SELECT id, config_status FROM projects WHERE id = ?", (project_id,)).fetchone()
+        row = conn.execute("SELECT id, portal_type, config_status FROM projects WHERE id = ?", (project_id,)).fetchone()
     if not row:
         result["ok"] = False
         result["errors"].append("项目不存在")
+    elif normalize_portal_type(row["portal_type"]) != "school":
+        result["ok"] = False
+        result["errors"].append("只有学校门户可发布为欢迎页")
     elif row["config_status"] == "pending":
         result["ok"] = False
         result["errors"].append("项目配置正在等待审核")
@@ -2325,8 +7762,16 @@ def deploy_project(project_id):
     check = deploy_project_check(project_id)
     if not check["ok"]:
         raise ValueError("; ".join(check["errors"]))
+    now = now_iso()
     with db_connect() as conn:
-        conn.execute("UPDATE projects SET deployed = CASE WHEN id = ? THEN 1 ELSE 0 END", (project_id,))
+        conn.execute(
+            """
+            UPDATE projects
+            SET deployed = CASE WHEN id = ? THEN 1 ELSE 0 END,
+                deployed_at = CASE WHEN id = ? THEN ? ELSE deployed_at END
+            """,
+            (project_id, project_id, now),
+        )
     return get_project(project_id)
 
 
@@ -2372,7 +7817,26 @@ def page_asset_urls(page):
     return urls
 
 
+def pages_by_ids_for_coverage(conn, project_id, page_ids, portal_type="department"):
+    ids = [int(page_id) for page_id in page_ids or [] if str(page_id).isdigit()]
+    if not ids:
+        return []
+    placeholders = ",".join("?" for _ in ids)
+    rows = conn.execute(
+        f"""
+        SELECT pages.*, pending.snapshot AS draft_snapshot
+        FROM pages
+        LEFT JOIN page_versions pending ON pending.id = pages.pending_version_id
+        WHERE pages.project_id = ? AND pages.id IN ({placeholders})
+        ORDER BY pages.updated_at DESC
+        """,
+        (project_id, *ids),
+    ).fetchall()
+    return [row_to_page(row, portal_type) for row in rows]
+
+
 def deploy_content_check(project_id, page_ids=None):
+    default_portal_type = "department"
     result = {
         "ok": True,
         "projectId": project_id,
@@ -2380,13 +7844,18 @@ def deploy_content_check(project_id, page_ids=None):
         "errors": [],
         "warnings": [],
         "eligiblePageIds": [],
+        "moduleCoverage": module_coverage_from_pages([], default_portal_type),
+        "eligibleModuleCoverage": module_coverage_from_pages([], default_portal_type),
     }
     with db_connect() as conn:
-        project = conn.execute("SELECT id, config_status FROM projects WHERE id = ?", (project_id,)).fetchone()
+        project = conn.execute("SELECT id, config_status, portal_type FROM projects WHERE id = ?", (project_id,)).fetchone()
         if not project:
             result["ok"] = False
             result["errors"].append("项目不存在")
             return result
+        portal_type = normalize_portal_type(project["portal_type"] if "portal_type" in project.keys() else default_portal_type)
+        result["moduleCoverage"] = module_coverage_from_pages([], portal_type)
+        result["eligibleModuleCoverage"] = module_coverage_from_pages([], portal_type)
         if project["config_status"] == "pending":
             result["warnings"].append("项目配置有待审核版本")
 
@@ -2396,6 +7865,10 @@ def deploy_content_check(project_id, page_ids=None):
         ).fetchall()
         eligible_ids = [int(row["id"]) for row in eligible_rows]
         result["eligiblePageIds"] = eligible_ids
+        result["eligibleModuleCoverage"] = module_coverage_from_pages(
+            pages_by_ids_for_coverage(conn, project_id, eligible_ids, portal_type),
+            portal_type,
+        )
 
         pending_count = conn.execute(
             """
@@ -2413,8 +7886,15 @@ def deploy_content_check(project_id, page_ids=None):
         else:
             selected_ids = [int(page_id) for page_id in page_ids if str(page_id).isdigit()]
         result["pageIds"] = selected_ids
+        result["moduleCoverage"] = module_coverage_from_pages(
+            pages_by_ids_for_coverage(conn, project_id, selected_ids, portal_type),
+            portal_type,
+        )
         if not selected_ids:
             result["errors"].append("未选择可部署页面")
+        missing_modules = result["moduleCoverage"].get("missingLabels", [])
+        if selected_ids and missing_modules:
+            result["warnings"].append("标准板块未覆盖：" + "、".join(missing_modules))
         for page_id in selected_ids:
             row = conn.execute(
                 """
@@ -2442,6 +7922,7 @@ def deploy_content_project(project_id, page_ids=None):
     check = deploy_content_check(project_id, page_ids)
     if not check["ok"]:
         raise ValueError("; ".join(check["errors"]))
+    now = now_iso()
     with db_connect() as conn:
         exists = conn.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
         if not exists:
@@ -2453,7 +7934,14 @@ def deploy_content_project(project_id, page_ids=None):
             ).fetchall()
             page_ids = [row["id"] for row in rows]
         page_ids = [int(page_id) for page_id in page_ids if str(page_id).isdigit()]
-        conn.execute("UPDATE projects SET content_deployed = CASE WHEN id = ? THEN 1 ELSE 0 END", (project_id,))
+        conn.execute(
+            """
+            UPDATE projects
+            SET content_deployed = CASE WHEN id = ? THEN 1 ELSE 0 END,
+                content_deployed_at = CASE WHEN id = ? THEN ? ELSE content_deployed_at END
+            """,
+            (project_id, project_id, now),
+        )
         conn.execute("DELETE FROM deployed_pages")
         for page_id in page_ids:
             row = conn.execute(
@@ -2466,7 +7954,7 @@ def deploy_content_project(project_id, page_ids=None):
             if row:
                 conn.execute(
                     "INSERT OR IGNORE INTO deployed_pages (project_id, page_id, updated_at) VALUES (?, ?, ?)",
-                    (project_id, page_id, now_iso()),
+                    (project_id, page_id, now),
                 )
     return get_project(project_id)
 
@@ -2477,11 +7965,25 @@ def delete_project(project_id):
         if not row:
             return False
         conn.execute("DELETE FROM deployed_pages WHERE project_id = ?", (project_id,))
+        conn.execute("DELETE FROM page_versions WHERE project_id = ?", (project_id,))
+        conn.execute("DELETE FROM project_versions WHERE project_id = ?", (project_id,))
+        if table_exists(conn, "content_items"):
+            conn.execute(
+                """
+                DELETE FROM content_item_assets
+                WHERE content_item_id IN (SELECT id FROM content_items WHERE project_id = ?)
+                """,
+                (project_id,),
+            )
+            conn.execute("DELETE FROM content_item_versions WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM content_items WHERE project_id = ?", (project_id,))
         conn.execute("DELETE FROM pages WHERE project_id = ?", (project_id,))
         conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
         if int(row["deployed"]) == 1 and not conn.execute("SELECT id FROM projects WHERE deployed = 1 LIMIT 1").fetchone():
-            fallback = conn.execute("SELECT id FROM projects ORDER BY updated_at DESC, id DESC LIMIT 1").fetchone()
+            fallback = conn.execute(
+                "SELECT id FROM projects WHERE portal_type = 'school' ORDER BY updated_at DESC, id DESC LIMIT 1"
+            ).fetchone()
             if fallback:
                 conn.execute("UPDATE projects SET deployed = CASE WHEN id = ? THEN 1 ELSE 0 END", (fallback["id"],))
 
@@ -2514,6 +8016,8 @@ def copy_project(project_id, data=None):
         None,
         {
             "name": name,
+            "portalType": source.get("portalType", "department"),
+            "portalSlug": source.get("portalSlug", ""),
             "idleKicker": source.get("idleKicker", ""),
             "idleTitle": source.get("idleTitle", ""),
             "idleCopy": source.get("idleCopy", ""),
@@ -2539,9 +8043,9 @@ def copy_project(project_id, data=None):
                 """
                 INSERT INTO pages (
                     project_id, code, category, source, published_at,
-                    title, subtitle, body, image_url, accent, enabled, updated_at
+                    title, subtitle, body, image_url, content_type, accent, enabled, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     copied["id"],
@@ -2553,6 +8057,7 @@ def copy_project(project_id, data=None):
                     row["subtitle"],
                     row["body"],
                     row["image_url"],
+                    row["content_type"] if "content_type" in row.keys() else "article",
                     row["accent"],
                     row["enabled"],
                     now_iso(),
@@ -2562,20 +8067,51 @@ def copy_project(project_id, data=None):
     return copied
 
 
-def row_to_page(row):
+def normalize_image_transform(value):
+    source = json_value(value, {})
+    if not isinstance(source, dict):
+        source = {}
+    try:
+        scale = float(source.get("scale", 1) or 1)
+    except (TypeError, ValueError):
+        scale = 1.0
+    try:
+        rotate = float(source.get("rotate", 0) or 0)
+    except (TypeError, ValueError):
+        rotate = 0.0
+    scale = min(2.5, max(0.5, scale))
+    rotate = min(360.0, max(-360.0, rotate))
+    return {"scale": round(scale, 3), "rotate": round(rotate, 2)}
+
+
+def row_to_page(row, portal_type=None):
     if not row:
         return None
+    if portal_type is None and "project_portal_type" in row.keys():
+        portal_type = row["project_portal_type"]
+    portal_type = normalize_portal_type(portal_type or "department")
+    category = row["category"] if "category" in row.keys() else DEFAULT_PAGE_CATEGORY
+    module_key = module_key_for_category(category, portal_type)
+    module_meta = module_meta_for_key(module_key, portal_type)
+    content_type = normalize_content_type(
+        row["content_type"] if "content_type" in row.keys() else default_content_type_for_module(module_key)
+    )
     page = {
         "id": row["id"],
         "projectId": row["project_id"],
         "code": row["code"],
-        "category": row["category"] if "category" in row.keys() else DEFAULT_PAGE_CATEGORY,
+        "category": category,
+        "moduleKey": module_key,
+        "moduleLabel": module_meta["label"] if module_meta else "",
+        "contentType": content_type,
+        "contentTypeLabel": content_type_label(content_type),
         "source": row["source"] if "source" in row.keys() else DEFAULT_PAGE_SOURCE,
         "publishedAt": row["published_at"] if "published_at" in row.keys() else "",
         "title": row["title"],
         "subtitle": row["subtitle"],
         "body": row["body"],
         "imageUrl": row["image_url"],
+        "imageTransform": normalize_image_transform(row["image_transform_json"] if "image_transform_json" in row.keys() else {}),
         "accent": row["accent"],
         "enabled": bool(row["enabled"]),
         "reviewStatus": row["review_status"] if "review_status" in row.keys() else "approved",
@@ -2586,6 +8122,17 @@ def row_to_page(row):
         "qrAvailable": bool(row["enabled"]) and (row["review_status"] if "review_status" in row.keys() else "approved") == "approved",
         "updatedAt": row["updated_at"],
     }
+    if "market_category_key" in row.keys() and row["market_category_key"]:
+        market_category_key = normalize_market_category(row["market_category_key"])
+        market_category = ACHIEVEMENT_MARKET_CATEGORY_MAP[market_category_key]
+        page.update(
+            {
+                "marketCategoryKey": market_category_key,
+                "marketCategoryLabel": market_category["label"],
+                "marketTheme": market_category["theme"],
+                "marketColor": market_category["color"],
+            }
+        )
     draft = None
     if "draft_snapshot" in row.keys() and row["draft_snapshot"]:
         try:
@@ -2595,10 +8142,16 @@ def row_to_page(row):
     if draft:
         page["draft"] = draft
         if page["reviewStatus"] in {"pending", "pending_delete", "rejected"}:
-            for key in ("code", "category", "source", "publishedAt", "title", "subtitle", "body", "imageUrl", "accent", "enabled"):
+            for key in ("code", "category", "source", "publishedAt", "title", "subtitle", "body", "imageUrl", "contentType", "accent", "enabled"):
                 if key in draft:
                     page[key] = draft[key]
             page["deleteRequested"] = page["reviewStatus"] == "pending_delete"
+    module_key = module_key_for_category(page.get("category", ""), portal_type)
+    module_meta = module_meta_for_key(module_key, portal_type)
+    page["moduleKey"] = module_key
+    page["moduleLabel"] = module_meta["label"] if module_meta else ""
+    page["contentType"] = normalize_content_type(page.get("contentType") or default_content_type_for_module(module_key))
+    page["contentTypeLabel"] = content_type_label(page["contentType"])
     page["published"] = {
         "code": row["code"],
         "category": row["category"] if "category" in row.keys() else DEFAULT_PAGE_CATEGORY,
@@ -2608,6 +8161,8 @@ def row_to_page(row):
         "subtitle": row["subtitle"],
         "body": row["body"],
         "imageUrl": row["image_url"],
+        "imageTransform": normalize_image_transform(row["image_transform_json"] if "image_transform_json" in row.keys() else {}),
+        "contentType": normalize_content_type(row["content_type"] if "content_type" in row.keys() else default_content_type_for_module(module_key)),
         "accent": row["accent"],
         "enabled": bool(row["enabled"]),
     }
@@ -2618,8 +8173,9 @@ def get_page(project_id, code):
     with db_connect() as conn:
         row = conn.execute(
             """
-            SELECT pages.*, pending.snapshot AS draft_snapshot
+            SELECT pages.*, pending.snapshot AS draft_snapshot, projects.portal_type AS project_portal_type
             FROM pages
+            JOIN projects ON projects.id = pages.project_id
             LEFT JOIN page_versions pending ON pending.id = pages.pending_version_id
             WHERE pages.project_id = ? AND pages.code = ?
             """,
@@ -2632,8 +8188,9 @@ def get_page_by_id(page_id):
     with db_connect() as conn:
         row = conn.execute(
             """
-            SELECT pages.*, pending.snapshot AS draft_snapshot
+            SELECT pages.*, pending.snapshot AS draft_snapshot, projects.portal_type AS project_portal_type
             FROM pages
+            JOIN projects ON projects.id = pages.project_id
             LEFT JOIN page_versions pending ON pending.id = pages.pending_version_id
             WHERE pages.id = ?
             """,
@@ -2675,8 +8232,9 @@ def list_pages(project_id):
     with db_connect() as conn:
         rows = conn.execute(
             """
-            SELECT pages.*, pending.snapshot AS draft_snapshot
+            SELECT pages.*, pending.snapshot AS draft_snapshot, projects.portal_type AS project_portal_type
             FROM pages
+            JOIN projects ON projects.id = pages.project_id
             LEFT JOIN page_versions pending ON pending.id = pages.pending_version_id
             WHERE pages.project_id = ?
             ORDER BY pages.updated_at DESC
@@ -2684,6 +8242,10 @@ def list_pages(project_id):
             (project_id,),
         ).fetchall()
     return [row_to_page(row) for row in rows]
+
+
+def list_pages_for_user(project_id, user):
+    return filter_items_by_assigned_modules(list_pages(project_id), project_id, user)
 
 
 def upsert_page(project_id, code, data):
@@ -2715,10 +8277,11 @@ def upsert_page(project_id, code, data):
         "category": field("category", DEFAULT_PAGE_CATEGORY) or DEFAULT_PAGE_CATEGORY,
         "source": field("source", DEFAULT_PAGE_SOURCE) or DEFAULT_PAGE_SOURCE,
         "published_at": field("publishedAt", field("published_at")),
-        "title": field("title", "未命名展示页") or "未命名展示页",
+        "title": field("title"),
         "subtitle": field("subtitle"),
         "body": sanitize_rich_html(field("body")),
         "image_url": field("imageUrl"),
+        "content_type": normalize_content_type(data.get("contentType") or current.get("contentType") or "article"),
         "accent": field("accent", "#0f766e") or "#0f766e",
         "enabled": enabled,
         "updated_at": now_iso(),
@@ -2729,7 +8292,7 @@ def upsert_page(project_id, code, data):
                 """
                 UPDATE pages SET
                     code = ?, category = ?, source = ?, published_at = ?,
-                    title = ?, subtitle = ?, body = ?, image_url = ?,
+                    title = ?, subtitle = ?, body = ?, image_url = ?, content_type = ?,
                     accent = ?, enabled = ?, updated_at = ?
                 WHERE id = ? AND project_id = ?
                 """,
@@ -2742,6 +8305,7 @@ def upsert_page(project_id, code, data):
                     page["subtitle"],
                     page["body"],
                     page["image_url"],
+                    page["content_type"],
                     page["accent"],
                     page["enabled"],
                     page["updated_at"],
@@ -2754,9 +8318,9 @@ def upsert_page(project_id, code, data):
                 """
                 INSERT INTO pages (
                     project_id, code, category, source, published_at,
-                    title, subtitle, body, image_url, accent, enabled, updated_at
+                    title, subtitle, body, image_url, content_type, accent, enabled, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project_id,
@@ -2768,6 +8332,7 @@ def upsert_page(project_id, code, data):
                     page["subtitle"],
                     page["body"],
                     page["image_url"],
+                    page["content_type"],
                     page["accent"],
                     page["enabled"],
                     page["updated_at"],
@@ -2786,15 +8351,20 @@ def page_payload_from_data(data, current=None):
         return str(current.get(name, default) or "").strip()
 
     enabled = data.get("enabled", current.get("enabled", True))
+    category = field("category", DEFAULT_PAGE_CATEGORY) or DEFAULT_PAGE_CATEGORY
+    module_key = current.get("moduleKey") or module_key_for_category(category)
     return {
         "code": field("code", current.get("code", "")),
-        "category": field("category", DEFAULT_PAGE_CATEGORY) or DEFAULT_PAGE_CATEGORY,
+        "category": category,
         "source": field("source", DEFAULT_PAGE_SOURCE) or DEFAULT_PAGE_SOURCE,
         "publishedAt": field("publishedAt", current.get("publishedAt", "")),
-        "title": field("title", "Untitled page") or "Untitled page",
+        "title": field("title"),
         "subtitle": field("subtitle"),
         "body": sanitize_rich_html(field("body")),
         "imageUrl": field("imageUrl"),
+        "contentType": normalize_content_type(
+            data.get("contentType") or current.get("contentType") or default_content_type_for_module(module_key)
+        ),
         "accent": field("accent", "#0f766e") or "#0f766e",
         "enabled": bool(enabled),
     }
@@ -2836,7 +8406,7 @@ def apply_page_snapshot(conn, project_id, page_id, snapshot, actor=None):
             """
             UPDATE pages SET
                 code = ?, category = ?, source = ?, published_at = ?,
-                title = ?, subtitle = ?, body = ?, image_url = ?, accent = ?,
+                title = ?, subtitle = ?, body = ?, image_url = ?, content_type = ?, accent = ?,
                 enabled = ?, review_status = 'approved', pending_version_id = NULL,
                 reviewed_by = ?, review_note = '', updated_at = ?
             WHERE id = ? AND project_id = ?
@@ -2850,6 +8420,7 @@ def apply_page_snapshot(conn, project_id, page_id, snapshot, actor=None):
                 snapshot["subtitle"],
                 snapshot["body"],
                 snapshot["imageUrl"],
+                snapshot["contentType"],
                 snapshot["accent"],
                 1 if snapshot.get("enabled", True) else 0,
                 actor.get("username", ADMIN_USERNAME),
@@ -2863,10 +8434,10 @@ def apply_page_snapshot(conn, project_id, page_id, snapshot, actor=None):
         """
         INSERT INTO pages (
             project_id, code, category, source, published_at, title, subtitle,
-            body, image_url, accent, enabled, review_status, submitted_by,
+            body, image_url, content_type, accent, enabled, review_status, submitted_by,
             reviewed_by, review_note, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, '', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, '', ?)
         """,
         (
             project_id,
@@ -2878,6 +8449,7 @@ def apply_page_snapshot(conn, project_id, page_id, snapshot, actor=None):
             snapshot["subtitle"],
             snapshot["body"],
             snapshot["imageUrl"],
+            snapshot["contentType"],
             snapshot["accent"],
             1 if snapshot.get("enabled", True) else 0,
             actor.get("username", ADMIN_USERNAME),
@@ -2902,6 +8474,8 @@ def save_page(project_id, code, data, actor, approve_now=False):
     if conflict:
         raise ValueError(f"code {code} 已被当前项目中的其他展示页使用")
     snapshot = page_payload_from_data({**data, "code": code}, current)
+    if not module_accessible(project_id, snapshot.get("moduleKey"), actor):
+        raise ValueError("只能编辑分配给自己的板块")
     with db_connect() as conn:
         if approve_now:
             page_id = apply_page_snapshot(conn, project_id, current_id, snapshot, actor)
@@ -2915,10 +8489,10 @@ def save_page(project_id, code, data, actor, approve_now=False):
                     """
                     INSERT INTO pages (
                         project_id, code, category, source, published_at, title, subtitle,
-                        body, image_url, accent, enabled, review_status, submitted_by,
+                        body, image_url, content_type, accent, enabled, review_status, submitted_by,
                         reviewed_by, review_note, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, '', '', ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, '', '', ?)
                     """,
                     (
                         project_id,
@@ -2930,6 +8504,7 @@ def save_page(project_id, code, data, actor, approve_now=False):
                         snapshot["subtitle"],
                         snapshot["body"],
                         snapshot["imageUrl"],
+                        snapshot["contentType"],
                         snapshot["accent"],
                         actor.get("username", ""),
                         now_iso(),
@@ -2952,6 +8527,8 @@ def request_delete_page(project_id, code, actor, approve_now=False):
     page = get_page(project_id, code)
     if not page:
         return False
+    if not module_accessible(project_id, page.get("moduleKey"), actor):
+        raise ValueError("只能操作分配给自己的板块")
     snapshot = page.get("published", page)
     with db_connect() as conn:
         if approve_now:
@@ -3030,31 +8607,84 @@ def row_to_project_version(row):
     }
 
 
-def list_reviews(status="pending"):
+def review_project_filter_sql(user, project_alias="projects", owner_alias="users"):
+    if is_admin_user(user):
+        return "", []
+    if is_department_admin_user(user):
+        department = str(user.get("department") or "").strip()
+        if not department:
+            return f" AND {project_alias}.owner_username = ?", [user.get("username", "")]
+        return (
+            f" AND ({project_alias}.owner_username = ? OR {owner_alias}.department = ?)",
+            [user.get("username", ""), department],
+        )
+    return f" AND {project_alias}.owner_username = ?", [user.get("username", "")]
+
+
+def review_version_project(review_type, version_id):
+    table = {
+        "pages": "page_versions",
+        "projects": "project_versions",
+        "content-items": "content_item_versions",
+    }.get(review_type)
+    if not table or not version_id:
+        return None
+    with db_connect() as conn:
+        row = conn.execute(f"SELECT project_id FROM {table} WHERE id = ?", (version_id,)).fetchone()
+    return get_project(row["project_id"]) if row else None
+
+
+def review_version_accessible(review_type, version_id, user):
+    if not can_review_user(user):
+        return False
+    project = review_version_project(review_type, version_id)
+    return project_accessible(project, user)
+
+
+def list_reviews(status="pending", user=None):
+    user = user or {"role": ROLE_ADMIN}
+    review_filter, review_params = review_project_filter_sql(user)
     with db_connect() as conn:
         page_rows = conn.execute(
-            """
+            f"""
             SELECT page_versions.*, projects.name AS project_name
             FROM page_versions
             JOIN projects ON projects.id = page_versions.project_id
+            LEFT JOIN users ON users.username = projects.owner_username
             WHERE page_versions.status = ?
+              {review_filter}
             ORDER BY page_versions.submitted_at DESC, page_versions.id DESC
             """,
-            (status,),
+            (status, *review_params),
         ).fetchall()
         project_rows = conn.execute(
-            """
+            f"""
             SELECT project_versions.*, projects.name AS project_name
             FROM project_versions
             JOIN projects ON projects.id = project_versions.project_id
+            LEFT JOIN users ON users.username = projects.owner_username
             WHERE project_versions.status = ?
+              {review_filter}
             ORDER BY project_versions.submitted_at DESC, project_versions.id DESC
             """,
-            (status,),
+            (status, *review_params),
+        ).fetchall()
+        content_item_rows = conn.execute(
+            f"""
+            SELECT content_item_versions.*, projects.name AS project_name
+            FROM content_item_versions
+            JOIN projects ON projects.id = content_item_versions.project_id
+            LEFT JOIN users ON users.username = projects.owner_username
+            WHERE content_item_versions.status = ?
+              {review_filter}
+            ORDER BY content_item_versions.submitted_at DESC, content_item_versions.id DESC
+            """,
+            (status, *review_params),
         ).fetchall()
     return {
         "pages": [row_to_page_version(row) for row in page_rows],
         "projects": [row_to_project_version(row) for row in project_rows],
+        "contentItems": [row_to_content_item_version(row) for row in content_item_rows],
     }
 
 
@@ -3157,7 +8787,7 @@ def approve_project_version(version_id, actor, note=""):
         conn.execute(
             """
             UPDATE projects SET
-                name = ?, idle_kicker = ?, idle_title = ?, idle_copy = ?,
+                name = ?, portal_type = ?, portal_slug = ?, idle_kicker = ?, idle_title = ?, idle_copy = ?,
                 welcome_kicker = ?, welcome_title = ?, welcome_subtitle = ?,
                 default_image_url = ?, accent = ?, display_config = ?,
                 config_status = 'approved', pending_config_version_id = NULL, updated_at = ?
@@ -3165,6 +8795,8 @@ def approve_project_version(version_id, actor, note=""):
             """,
             (
                 payload["name"],
+                payload["portal_type"],
+                payload["portal_slug"],
                 payload["idle_kicker"],
                 payload["idle_title"],
                 payload["idle_copy"],
@@ -3230,10 +8862,14 @@ def get_display_project(project_id):
 def get_display_page(project_id, code, require_deployed=False):
     with db_connect() as conn:
         sql = """
-            SELECT pages.*, NULL AS draft_snapshot
+            SELECT pages.*, NULL AS draft_snapshot, projects.portal_type AS project_portal_type,
+                   achievement_market_items.category_key AS market_category_key
             FROM pages
             JOIN projects ON projects.id = pages.project_id
             LEFT JOIN users ON users.username = projects.owner_username
+            LEFT JOIN achievement_market_items
+              ON achievement_market_items.page_id = pages.id
+             AND achievement_market_items.project_id = pages.project_id
         """
         params = [project_id, code]
         where = """
@@ -3248,6 +8884,120 @@ def get_display_page(project_id, code, require_deployed=False):
             where += " AND projects.content_deployed = 1"
         row = conn.execute(sql + where, params).fetchone()
     return row_to_page(row)
+
+
+def get_public_portal_content(portal_type, portal_slug):
+    portal_type = normalize_portal_type(portal_type)
+    portal_slug = normalize_portal_slug(portal_slug)
+    if portal_type not in {"department", "topic"} or not portal_slug:
+        return None
+    with db_connect() as conn:
+        project_row = conn.execute(
+            """
+            SELECT p.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
+            FROM projects p
+            LEFT JOIN users ON users.username = p.owner_username
+            WHERE p.portal_type = ?
+              AND p.portal_slug = ?
+              AND p.config_status = 'approved'
+              AND COALESCE(users.enabled, 1) = 1
+            ORDER BY p.content_deployed DESC, p.updated_at DESC, p.id DESC
+            LIMIT 1
+            """,
+            (portal_type, portal_slug),
+        ).fetchone()
+        if not project_row:
+            return None
+        page_rows = conn.execute(
+            """
+            SELECT pages.*, NULL AS draft_snapshot, projects.portal_type AS project_portal_type
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            WHERE pages.project_id = ?
+              AND pages.review_status = 'approved'
+              AND pages.enabled = 1
+            ORDER BY pages.updated_at DESC, pages.id DESC
+            """,
+            (project_row["id"],),
+        ).fetchall()
+    pages = [row_to_page(row, portal_type) for row in page_rows]
+    content_items = [
+        item for item in list_content_items(project_row["id"], {"reviewStatus": "approved", "enabled": "1"})
+        if item.get("enabled") and item.get("reviewStatus") == "approved"
+    ]
+    project = row_to_project(project_row)
+    project["pageCount"] = len(pages)
+    project["pendingPageCount"] = 0
+    return {
+        "project": project,
+        "pages": pages,
+        "contentItems": content_items,
+        "modules": content_modules_payload(content_items, portal_type),
+        "coverage": module_coverage_from_pages(pages, portal_type),
+        "achievementMarket": public_achievement_market_payload("", portal_slug) if portal_type == "topic" else None,
+    }
+
+
+def public_portal_home_card(project):
+    config = project.get("displayConfig") or {}
+    portal_type = normalize_portal_type(project.get("portalType", "topic"))
+    portal_slug = normalize_portal_slug(project.get("portalSlug", ""))
+    kind = "topics" if portal_type == "topic" else "departments"
+    return {
+        "id": portal_slug,
+        "kind": kind,
+        "projectId": project.get("id"),
+        "name": project.get("name", ""),
+        "cover": project.get("defaultImageUrl", ""),
+        "label": config.get("portalHomeCardLabel") or DEFAULT_DISPLAY_CONFIG["portalHomeCardLabel"],
+        "summary": config.get("portalHomeCardSummary") or project.get("idleCopy", ""),
+        "chips": config.get("portalHomeCardChips") or [],
+        "sortOrder": int_value(config.get("portalHomeCardSortOrder"), 0),
+        "hidden": bool(config.get("portalHomeCardHidden")),
+        "accent": project.get("accent", "#f59a13"),
+        "previewUrl": project.get("previewUrl", ""),
+    }
+
+
+def get_public_portal_home():
+    with db_connect() as conn:
+        school_row = conn.execute(
+            """
+            SELECT p.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
+            FROM projects p
+            LEFT JOIN users ON users.username = p.owner_username
+            WHERE p.portal_type = 'school'
+              AND p.config_status = 'approved'
+              AND COALESCE(users.enabled, 1) = 1
+            ORDER BY p.content_deployed DESC, p.deployed DESC, p.updated_at DESC, p.id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        card_rows = conn.execute(
+            """
+            SELECT p.*, users.display_name AS owner_display_name, users.enabled AS owner_enabled
+            FROM projects p
+            LEFT JOIN users ON users.username = p.owner_username
+            WHERE p.portal_type = 'topic'
+              AND p.portal_slug <> ''
+              AND p.config_status = 'approved'
+              AND COALESCE(users.enabled, 1) = 1
+            ORDER BY p.updated_at DESC, p.id DESC
+            """
+        ).fetchall()
+
+    school = row_to_project(school_row) if school_row else None
+    cards = [public_portal_home_card(row_to_project(row)) for row in card_rows]
+    blueprint_order = {
+        portal["portal_slug"]: index + 100
+        for index, portal in enumerate(BLUEPRINT_PORTALS)
+        if portal.get("portal_type") in {"department", "topic"} and portal.get("portal_slug")
+    }
+    cards.sort(key=lambda card: (
+        card["sortOrder"] if card["sortOrder"] else blueprint_order.get(card["id"], 999),
+        card["name"],
+    ))
+    return {"school": school, "cards": cards}
 
 
 def scan_code_candidates(code):
@@ -3274,6 +9024,52 @@ def find_deployed_display_page(project_id, code):
     return str(code or "").strip(), None
 
 
+def find_any_deployed_display_page(code):
+    for candidate in scan_code_candidates(code):
+        with db_connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT pages.project_id
+                FROM pages
+                JOIN projects ON projects.id = pages.project_id
+                JOIN deployed_pages
+                  ON deployed_pages.page_id = pages.id
+                 AND deployed_pages.project_id = pages.project_id
+                LEFT JOIN users ON users.username = projects.owner_username
+                WHERE pages.code = ?
+                  AND pages.review_status = 'approved'
+                  AND pages.enabled = 1
+                  AND projects.content_deployed = 1
+                  AND COALESCE(users.enabled, 1) = 1
+                ORDER BY projects.id
+                """,
+                (candidate,),
+            ).fetchall()
+        for row in rows:
+            project = get_display_project(int(row["project_id"]))
+            page = get_display_page(int(row["project_id"]), candidate, require_deployed=True)
+            if project and page:
+                return candidate, project, page
+    return str(code or "").strip(), None, None
+
+
+def find_deployed_display_target(project_id, code):
+    if project_id:
+        project = get_display_project(int(project_id))
+        if project:
+            matched_code, page = find_deployed_display_page(project["id"], code)
+            if page:
+                return matched_code, project, page
+        return str(code or "").strip(), None, None
+
+    project = get_deployed_content_project()
+    if project:
+        matched_code, page = find_deployed_display_page(project["id"], code)
+        if page:
+            return matched_code, project, page
+    return find_any_deployed_display_page(code)
+
+
 def validated_latest_scan():
     global LAST_SCAN
     scan = LAST_SCAN
@@ -3289,14 +9085,10 @@ def validated_latest_scan():
         return None
     if scan.get("external"):
         return scan
-    project = get_deployed_content_project()
     code = str(scan.get("code") or "")
     project_id = (scan.get("project") or {}).get("id")
-    if not project or (project_id and int(project_id) != int(project["id"])):
-        LAST_SCAN = None
-        return None
-    matched_code, page = find_deployed_display_page(project["id"], code)
-    if not page:
+    matched_code, project, page = find_deployed_display_target(project_id, code)
+    if not project or not page:
         LAST_SCAN = None
         return None
     code = matched_code
@@ -3312,6 +9104,753 @@ def deployed_page_ids(project_id):
     with db_connect() as conn:
         rows = conn.execute("SELECT page_id FROM deployed_pages WHERE project_id = ?", (project_id,)).fetchall()
     return [row["page_id"] for row in rows]
+
+
+def deployed_page_records(project_id):
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT page_id, updated_at
+            FROM deployed_pages
+            WHERE project_id = ?
+            ORDER BY updated_at DESC, page_id
+            """,
+            (project_id,),
+        ).fetchall()
+    return [{"pageId": row["page_id"], "updatedAt": row["updated_at"]} for row in rows]
+
+
+def achievement_market_default_config():
+    return dict(ACHIEVEMENT_MARKET_DEFAULT_CONFIG)
+
+
+def normalize_achievement_market_config(data):
+    source = data if isinstance(data, dict) else {}
+    fallback = achievement_market_default_config()
+    carousel_value = source.get("welcomeCarouselSlides") if "welcomeCarouselSlides" in source else source.get("welcomeCarouselImages", fallback["welcomeCarouselImages"])
+    carousel_source = json_value(carousel_value, [])
+    carousel_images = []
+    carousel_slides = []
+    if isinstance(carousel_source, list):
+        for item in carousel_source:
+            is_slide = isinstance(item, dict)
+            url = clean_config_text((item.get("imageUrl") or item.get("url") or "") if is_slide else item)[:600]
+            if url and url not in carousel_images:
+                carousel_images.append(url)
+                custom_text = bool(item.get("customText", any(key in item for key in ("meta", "title", "body")))) if is_slide else False
+                carousel_slides.append(
+                    {
+                        "imageUrl": url,
+                        "meta": clean_config_text(item.get("meta", ""))[:80] if is_slide else "",
+                        "title": clean_config_text(item.get("title", ""))[:120] if is_slide else "",
+                        "body": clean_config_text(item.get("body", ""))[:400] if is_slide else "",
+                        "customText": custom_text,
+                    }
+                )
+            if len(carousel_images) >= 30:
+                break
+    return {
+        "welcomeTitle": clean_config_text(source.get("welcomeTitle", fallback["welcomeTitle"]))[:120],
+        "welcomeSubtitle": clean_config_text(source.get("welcomeSubtitle", fallback["welcomeSubtitle"]))[:160],
+        "welcomeIntro": clean_config_text(source.get("welcomeIntro", fallback["welcomeIntro"]))[:800],
+        "welcomeImageUrl": clean_config_text(source.get("welcomeImageUrl", fallback["welcomeImageUrl"]))[:600],
+        "welcomeCarouselImages": carousel_images,
+        "welcomeCarouselSlides": carousel_slides,
+        "welcomeNote": clean_config_text(source.get("welcomeNote", fallback["welcomeNote"]))[:160],
+    }
+
+
+def row_to_achievement_market_config(row):
+    if not row:
+        return achievement_market_default_config()
+    return normalize_achievement_market_config(
+        {
+            "welcomeTitle": row["welcome_title"],
+            "welcomeSubtitle": row["welcome_subtitle"],
+            "welcomeIntro": row["welcome_intro"],
+            "welcomeImageUrl": row["welcome_image_url"],
+            "welcomeCarouselSlides": row["welcome_carousel_json"] if "welcome_carousel_json" in row.keys() else [],
+            "welcomeNote": row["welcome_note"],
+        }
+    ) | {"updatedAt": row["updated_at"] if "updated_at" in row.keys() else ""}
+
+
+def get_achievement_market_config(conn=None):
+    own_conn = conn is None
+    if own_conn:
+        conn = db_connect()
+    try:
+        row = conn.execute("SELECT * FROM achievement_market_config WHERE id = 1").fetchone()
+        return row_to_achievement_market_config(row)
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def save_achievement_market_config(data):
+    config = normalize_achievement_market_config(data)
+    now = now_iso()
+    with db_connect() as conn:
+        if DATABASE_BACKEND == "mysql":
+            conn.execute(
+                """
+                INSERT INTO achievement_market_config (
+                    id, welcome_title, welcome_subtitle, welcome_intro,
+                    welcome_image_url, welcome_carousel_json, welcome_note, updated_at
+                )
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    welcome_title = VALUES(welcome_title),
+                    welcome_subtitle = VALUES(welcome_subtitle),
+                    welcome_intro = VALUES(welcome_intro),
+                    welcome_image_url = VALUES(welcome_image_url),
+                    welcome_carousel_json = VALUES(welcome_carousel_json),
+                    welcome_note = VALUES(welcome_note),
+                    updated_at = VALUES(updated_at)
+                """,
+                (
+                    config["welcomeTitle"],
+                    config["welcomeSubtitle"],
+                    config["welcomeIntro"],
+                    config["welcomeImageUrl"],
+                    json.dumps(config["welcomeCarouselSlides"], ensure_ascii=False),
+                    config["welcomeNote"],
+                    now,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO achievement_market_config (
+                    id, welcome_title, welcome_subtitle, welcome_intro,
+                    welcome_image_url, welcome_carousel_json, welcome_note, updated_at
+                )
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    welcome_title = excluded.welcome_title,
+                    welcome_subtitle = excluded.welcome_subtitle,
+                    welcome_intro = excluded.welcome_intro,
+                    welcome_image_url = excluded.welcome_image_url,
+                    welcome_carousel_json = excluded.welcome_carousel_json,
+                    welcome_note = excluded.welcome_note,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    config["welcomeTitle"],
+                    config["welcomeSubtitle"],
+                    config["welcomeIntro"],
+                    config["welcomeImageUrl"],
+                    json.dumps(config["welcomeCarouselSlides"], ensure_ascii=False),
+                    config["welcomeNote"],
+                    now,
+                ),
+            )
+    return get_achievement_market_config()
+
+
+def infer_achievement_market_category(row):
+    portal_type = normalize_portal_type(row["project_portal_type"] if "project_portal_type" in row.keys() else "topic")
+    module_key = module_key_for_category(row["category"] if "category" in row.keys() else "", portal_type)
+    content_type = normalize_content_type(row["content_type"] if "content_type" in row.keys() else "")
+    category_text = " ".join(
+        str(row[field] if field in row.keys() else "")
+        for field in ("category", "title", "subtitle")
+    )
+    if module_key in {"masters", "alumni", "students", "competitions", "honors"}:
+        return module_key
+    if content_type == "honor" or any(word in category_text for word in ("荣誉", "资质", "证书", "奖项")):
+        return "honors"
+    if any(word in category_text for word in ("名师", "名匠", "大师", "教师")):
+        return "masters"
+    if any(word in category_text for word in ("校友", "毕业生")):
+        return "alumni"
+    if any(word in category_text for word in ("竞赛", "大赛", "比赛", "赛项")):
+        return "competitions"
+    if any(word in category_text for word in ("学生", "学生风采")):
+        return "students"
+    if any(word in category_text for word in ("教学", "科研", "成果", "案例", "创新", "项目")):
+        return "teaching"
+    return "teaching"
+
+
+def normalize_market_category(value):
+    key = str(value or "").strip()
+    key = ACHIEVEMENT_MARKET_CATEGORY_ALIASES.get(key, key)
+    return key if key in ACHIEVEMENT_MARKET_CATEGORY_MAP else "teaching"
+
+
+def achievement_market_item_url(project_id, code):
+    return f"/display?project={project_id}&code={code}&source=achievement-market"
+
+
+def row_to_achievement_market_item(row):
+    if not row:
+        return None
+    project_id = int(row["project_id"])
+    code = row["code"]
+    category_key = normalize_market_category(row["category_key"])
+    return {
+        "id": row["id"],
+        "projectId": project_id,
+        "projectName": row["project_name"] if "project_name" in row.keys() else "",
+        "pageId": row["page_id"],
+        "code": code,
+        "categoryKey": category_key,
+        "categoryLabel": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["label"],
+        "theme": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["theme"],
+        "color": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["color"],
+        "intro": row["intro"] if "intro" in row.keys() else "",
+        "sortOrder": int(row["sort_order"] if "sort_order" in row.keys() else 0),
+        "enabled": bool(row["enabled"]),
+        "title": row["title"],
+        "subtitle": row["subtitle"],
+        "body": row["body"] if "body" in row.keys() else "",
+        "summary": row["intro"] or row["subtitle"] or re.sub(r"<[^>]+>", "", row["body"] or "")[:120],
+        "moduleKey": module_key_for_category(row["category"] if "category" in row.keys() else "", row["project_portal_type"] if "project_portal_type" in row.keys() else "topic"),
+        "contentType": normalize_content_type(row["content_type"] if "content_type" in row.keys() else "article"),
+        "imageUrl": row["image_url"],
+        "imageTransform": normalize_image_transform(row["image_transform_json"] if "image_transform_json" in row.keys() else {}),
+        "accent": row["accent"],
+        "qrPath": achievement_market_item_url(project_id, code),
+        "updatedAt": row["updated_at"],
+    }
+
+
+def achievement_market_categories_with_items(items):
+    grouped = {category["key"]: [] for category in ACHIEVEMENT_MARKET_CATEGORIES}
+    for item in items:
+        grouped.setdefault(item["categoryKey"], []).append(item)
+    return [
+        {
+            **category,
+            "items": grouped.get(category["key"], []),
+            "count": len(grouped.get(category["key"], [])),
+            "url": f"/display?market={category['key']}",
+        }
+        for category in ACHIEVEMENT_MARKET_CATEGORIES
+    ]
+
+
+def achievement_market_topic_marker(topic_slug):
+    slug = normalize_portal_slug(topic_slug)
+    if not slug or slug in ACHIEVEMENT_MARKET_TOPIC_EXCLUDED:
+        return ""
+    return slug.upper()
+
+
+def filter_achievement_market_items_by_topic(items, topic_slug):
+    marker = achievement_market_topic_marker(topic_slug)
+    if not marker:
+        return []
+    return [
+        item for item in items
+        if marker in str(item.get("code") or "").upper()
+    ]
+
+
+def achievement_market_topic_name(topic_slug):
+    slug = normalize_portal_slug(topic_slug)
+    if not slug:
+        return ""
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT name
+            FROM projects
+            WHERE portal_type = 'topic'
+              AND portal_slug = ?
+              AND config_status = 'approved'
+            ORDER BY content_deployed DESC, updated_at DESC, id DESC
+            LIMIT 1
+            """,
+            (slug,),
+        ).fetchone()
+    return row["name"] if row else ""
+
+
+def list_achievement_market_items(project_id=0, enabled_only=False):
+    params = []
+    where = ["pages.review_status = 'approved'", "pages.enabled = 1"]
+    if project_id:
+        where.append("ami.project_id = ?")
+        params.append(project_id)
+    if enabled_only:
+        where.append("ami.enabled = 1")
+    with db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT ami.*, pages.code, pages.category, pages.title, pages.subtitle, pages.body,
+                   pages.image_url, pages.image_transform_json, pages.content_type, pages.accent,
+                   projects.name AS project_name, projects.portal_type AS project_portal_type
+            FROM achievement_market_items ami
+            JOIN pages ON pages.id = ami.page_id
+            JOIN projects ON projects.id = ami.project_id
+            WHERE {' AND '.join(where)}
+            ORDER BY ami.category_key, ami.sort_order, pages.updated_at DESC, ami.id DESC
+            """,
+            params,
+        ).fetchall()
+    return [row_to_achievement_market_item(row) for row in rows]
+
+
+def list_public_achievement_market_items(enabled_only=True):
+    return list_achievement_market_items(0, enabled_only=enabled_only)
+
+
+def list_achievement_market_candidates(project_id):
+    if not project_id:
+        return []
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT pages.*, projects.name AS project_name, projects.portal_type AS project_portal_type
+            FROM pages
+            JOIN projects ON projects.id = pages.project_id
+            LEFT JOIN achievement_market_items ami ON ami.page_id = pages.id
+            WHERE pages.project_id = ?
+              AND pages.review_status = 'approved'
+              AND pages.enabled = 1
+              AND ami.id IS NULL
+            ORDER BY pages.updated_at DESC, pages.id DESC
+            """,
+            (project_id,),
+        ).fetchall()
+    candidates = []
+    for row in rows:
+        category_key = infer_achievement_market_category(row)
+        candidates.append(
+            {
+                "pageId": row["id"],
+                "projectId": row["project_id"],
+                "projectName": row["project_name"],
+                "code": row["code"],
+                "title": row["title"],
+                "subtitle": row["subtitle"],
+                "category": row["category"],
+                "categoryKey": category_key,
+                "categoryLabel": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["label"],
+                "imageUrl": row["image_url"],
+                "updatedAt": row["updated_at"],
+            }
+        )
+    return candidates
+
+
+def achievement_market_active_project_id(conn):
+    row = conn.execute(
+        """
+        SELECT project_id
+        FROM achievement_market_items
+        WHERE enabled = 1
+        GROUP BY project_id
+        ORDER BY COUNT(*) DESC, MAX(updated_at) DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if row:
+        return int(row["project_id"])
+    project = get_deployed_content_project()
+    return int(project["id"]) if project else 0
+
+
+def sync_achievement_market_deployment(conn, project_id):
+    rows = conn.execute(
+        """
+        SELECT page_id FROM achievement_market_items
+        WHERE project_id = ? AND enabled = 1
+        ORDER BY sort_order, id
+        """,
+        (project_id,),
+    ).fetchall()
+    page_ids = [row["page_id"] for row in rows]
+    if not page_ids:
+        return
+    now = now_iso()
+    conn.execute(
+        """
+        UPDATE projects
+        SET content_deployed = 1,
+            content_deployed_at = ?
+        WHERE id = ?
+        """,
+        (now, project_id),
+    )
+    conn.execute(
+        """
+        DELETE FROM deployed_pages
+        WHERE project_id = ?
+          AND page_id IN (
+            SELECT page_id FROM achievement_market_items WHERE project_id = ?
+          )
+        """,
+        (project_id, project_id),
+    )
+    for page_id in page_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO deployed_pages (project_id, page_id, updated_at) VALUES (?, ?, ?)",
+            (project_id, page_id, now),
+        )
+
+
+def achievement_market_payload(project_id=0, include_candidates=False):
+    active_project_id = int(project_id or 0)
+    items = list_achievement_market_items(active_project_id)
+    payload = {
+        "config": get_achievement_market_config(),
+        "categories": achievement_market_categories_with_items(items),
+        "items": items,
+        "activeProjectId": active_project_id,
+    }
+    if include_candidates:
+        payload["candidates"] = list_achievement_market_candidates(active_project_id) if active_project_id else []
+    return payload
+
+
+def public_achievement_market_payload(category_key="", topic_slug=""):
+    items = list_public_achievement_market_items(enabled_only=False)
+    payload = {
+        "config": get_achievement_market_config(),
+        "categories": achievement_market_categories_with_items(items),
+        "items": items,
+        "activeProjectId": 0,
+    }
+    topic_slug = normalize_portal_slug(topic_slug)
+    if topic_slug:
+        payload["topicSlug"] = topic_slug
+        payload["topicName"] = achievement_market_topic_name(topic_slug)
+        payload["topicMarker"] = achievement_market_topic_marker(topic_slug)
+        payload["items"] = filter_achievement_market_items_by_topic(payload["items"], topic_slug)
+        payload["categories"] = achievement_market_categories_with_items(payload["items"])
+        payload["categories"] = [
+            {**category, "url": f"/display?market={category['key']}&topic={topic_slug}"}
+            for category in payload["categories"]
+        ]
+    if category_key:
+        key = normalize_market_category(category_key)
+        payload["items"] = [item for item in payload["items"] if item["categoryKey"] == key and item["enabled"]]
+        payload["categories"] = [category for category in achievement_market_categories_with_items(payload["items"]) if category["key"] == key]
+        if topic_slug:
+            payload["categories"] = [
+                {**category, "url": f"/display?market={category['key']}&topic={topic_slug}"}
+                for category in payload["categories"]
+            ]
+    else:
+        payload["items"] = [item for item in payload["items"] if item["enabled"]]
+        payload["categories"] = [
+            {**category, "items": [item for item in category["items"] if item["enabled"]], "count": len([item for item in category["items"] if item["enabled"]])}
+            for category in payload["categories"]
+        ]
+    return payload
+
+
+def save_achievement_market_item(data):
+    page_id = int_value(data.get("pageId") or data.get("page_id"), 0)
+    if not page_id:
+        raise ValueError("请选择展示项目")
+    category_key = normalize_market_category(data.get("categoryKey") or data.get("category_key"))
+    intro = clean_config_text(data.get("intro", ""))[:240]
+    sort_order = int_value(data.get("sortOrder") or data.get("sort_order"), 0)
+    enabled = 1 if data.get("enabled", True) else 0
+    now = now_iso()
+    with db_connect() as conn:
+        page = conn.execute(
+            """
+            SELECT id, project_id, title, review_status, enabled
+            FROM pages
+            WHERE id = ?
+            """,
+            (page_id,),
+        ).fetchone()
+        if not page or page["review_status"] != "approved" or not bool(page["enabled"]):
+            raise ValueError("只能加入已审核通过且启用的展示项目")
+        project_id = int(page["project_id"])
+        if DATABASE_BACKEND == "mysql":
+            conn.execute(
+                """
+                INSERT INTO achievement_market_items (
+                    project_id, page_id, category_key, intro, sort_order,
+                    enabled, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    project_id = VALUES(project_id),
+                    category_key = VALUES(category_key),
+                    intro = VALUES(intro),
+                    sort_order = VALUES(sort_order),
+                    enabled = VALUES(enabled),
+                    updated_at = VALUES(updated_at)
+                """,
+                (project_id, page_id, category_key, intro, sort_order, enabled, now, now),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO achievement_market_items (
+                    project_id, page_id, category_key, intro, sort_order,
+                    enabled, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(page_id) DO UPDATE SET
+                    project_id = excluded.project_id,
+                    category_key = excluded.category_key,
+                    intro = excluded.intro,
+                    sort_order = excluded.sort_order,
+                    enabled = excluded.enabled,
+                    updated_at = excluded.updated_at
+                """,
+                (project_id, page_id, category_key, intro, sort_order, enabled, now, now),
+            )
+        sync_achievement_market_deployment(conn, project_id)
+        item_id = conn.execute("SELECT id FROM achievement_market_items WHERE page_id = ?", (page_id,)).fetchone()["id"]
+    return get_achievement_market_item(item_id)
+
+
+def achievement_market_content_type(category_key):
+    if category_key in {"masters", "alumni", "students"}:
+        return "person"
+    if category_key == "competitions":
+        return "activity"
+    if category_key == "honors":
+        return "honor"
+    return "achievement"
+
+
+def achievement_market_code_prefix(category_key):
+    return {
+        "masters": "AM-MASTER",
+        "alumni": "AM-ALUMNI",
+        "students": "AM-STUDENT",
+        "teaching": "AM-TEACH",
+        "competitions": "AM-COMPETE",
+        "honors": "AM-HONOR",
+    }.get(category_key, "AM-ITEM")
+
+
+def unique_page_code_except(conn, preferred, page_id):
+    base = str(preferred or "page").strip() or "page"
+    code = base
+    index = 2
+    while conn.execute("SELECT id FROM pages WHERE code = ? AND id != ? LIMIT 1", (code, page_id)).fetchone():
+        code = f"{base}-{index}"
+        index += 1
+    return code
+
+
+def moved_achievement_market_code(conn, project, category_key, page_id):
+    marker = achievement_market_topic_marker(project["portal_slug"] if "portal_slug" in project.keys() else "")
+    prefix = achievement_market_code_prefix(category_key)
+    stamp = datetime.now().strftime("%Y%m%d")
+    token = secrets.token_hex(3).upper()
+    preferred = f"{prefix}-{marker}-{stamp}-{token}" if marker else f"{prefix}-{stamp}-{token}"
+    return unique_page_code_except(conn, preferred, page_id)
+
+
+def html_from_market_body(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if "<" in text and ">" in text:
+        return text
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n|\n", text) if part.strip()]
+    return "".join(f"<p>{xml_escape(part)}</p>" for part in paragraphs)
+
+
+def create_achievement_market_item(data, actor):
+    project_id = int_value(data.get("projectId") or data.get("project_id"), 0)
+    if not project_id:
+        with db_connect() as conn:
+            project_id = achievement_market_active_project_id(conn)
+    if not project_id:
+        raise ValueError("请先选择内容来源")
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("内容来源不存在")
+
+    title = clean_config_text(data.get("title", ""))[:120]
+    if not title:
+        raise ValueError("请填写展示项目标题")
+    category_key = normalize_market_category(data.get("categoryKey") or data.get("category_key"))
+    category = ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["label"]
+    subtitle = clean_config_text(data.get("subtitle", ""))[:200]
+    intro = clean_config_text(data.get("intro", "") or subtitle)[:240]
+    body_text = str(data.get("body", "") or "").strip()
+    body_html = html_from_market_body(body_text or intro or subtitle)
+    image_url = clean_config_text(data.get("imageUrl") or data.get("image_url") or "")[:600]
+    source = clean_config_text(data.get("source", "") or project.get("name") or DEFAULT_PAGE_SOURCE)[:120]
+    custom_code = clean_config_text(data.get("code", ""))[:80]
+
+    with db_connect() as conn:
+        code = unique_page_code(conn, custom_code or f"{achievement_market_code_prefix(category_key)}-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}")
+
+    page = save_page(
+        project_id,
+        code,
+        {
+            "category": category,
+            "source": source,
+            "publishedAt": datetime.now().strftime("%Y-%m-%d"),
+            "title": title,
+            "subtitle": subtitle or intro,
+            "body": body_html,
+            "imageUrl": image_url,
+            "contentType": achievement_market_content_type(category_key),
+            "accent": ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]["color"],
+            "enabled": True,
+        },
+        actor,
+        approve_now=True,
+    )
+    return save_achievement_market_item(
+        {
+            "pageId": page["id"],
+            "categoryKey": category_key,
+            "intro": intro or subtitle,
+            "sortOrder": data.get("sortOrder") or data.get("sort_order") or 0,
+            "enabled": data.get("enabled", True),
+        }
+    )
+
+
+def get_achievement_market_item(item_id):
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT ami.*, pages.code, pages.category, pages.title, pages.subtitle, pages.body,
+                   pages.image_url, pages.image_transform_json, pages.content_type, pages.accent,
+                   projects.name AS project_name, projects.portal_type AS project_portal_type
+            FROM achievement_market_items ami
+            JOIN pages ON pages.id = ami.page_id
+            JOIN projects ON projects.id = ami.project_id
+            WHERE ami.id = ?
+            """,
+            (item_id,),
+        ).fetchone()
+    return row_to_achievement_market_item(row)
+
+
+def update_achievement_market_item(item_id, data):
+    now = now_iso()
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT ami.id, ami.project_id, ami.page_id, ami.category_key, ami.intro,
+                   ami.sort_order, ami.enabled,
+                   pages.code, pages.category, pages.title, pages.subtitle, pages.body,
+                   pages.image_url, pages.image_transform_json, pages.content_type, pages.accent
+            FROM achievement_market_items ami
+            JOIN pages ON pages.id = ami.page_id
+            WHERE ami.id = ?
+            """,
+            (item_id,),
+        ).fetchone()
+        if not row:
+            return None
+
+        old_project_id = int(row["project_id"])
+        target_project_value = data["projectId"] if "projectId" in data else data.get("project_id", old_project_id)
+        target_project_id = int_value(target_project_value, old_project_id)
+        target_project = conn.execute(
+            "SELECT id, name, portal_type, portal_slug FROM projects WHERE id = ?",
+            (target_project_id,),
+        ).fetchone()
+        if not target_project:
+            raise ValueError("目标系部专题不存在")
+        if normalize_portal_type(target_project["portal_type"]) == "school":
+            raise ValueError("成果项目只能移动到系部专题")
+
+        category_key = normalize_market_category(data.get("categoryKey") or data.get("category_key") or row["category_key"])
+        category = ACHIEVEMENT_MARKET_CATEGORY_MAP[category_key]
+        intro = clean_config_text(data.get("intro", row["intro"] or ""))[:240]
+        sort_value = data["sortOrder"] if "sortOrder" in data else data.get("sort_order", row["sort_order"])
+        sort_order = int_value(sort_value, int(row["sort_order"] or 0))
+        enabled = 1 if data.get("enabled", bool(row["enabled"])) else 0
+        page_fields_present = any(key in data for key in ("title", "subtitle", "imageUrl", "image_url", "imageTransform", "image_transform", "body"))
+        should_move_page = target_project_id != old_project_id or category_key != normalize_market_category(row["category_key"])
+
+        if page_fields_present or should_move_page:
+            page_id = int(row["page_id"])
+            title = clean_config_text(data.get("title", row["title"] or ""))[:200]
+            subtitle = clean_config_text(data.get("subtitle", row["subtitle"] or ""))[:200]
+            image_value = data["imageUrl"] if "imageUrl" in data else data.get("image_url", row["image_url"] or "")
+            image_url = clean_config_text(image_value)[:600]
+            image_transform_value = data["imageTransform"] if "imageTransform" in data else data.get("image_transform", row["image_transform_json"] or {})
+            image_transform = normalize_image_transform(image_transform_value)
+            body = sanitize_rich_html(html_from_market_body(data.get("body", row["body"] or "")))
+            code = row["code"]
+            if should_move_page:
+                code = moved_achievement_market_code(conn, target_project, category_key, page_id)
+            conn.execute(
+                """
+                UPDATE pages
+                SET project_id = ?, code = ?, category = ?, title = ?, subtitle = ?,
+                    image_url = ?, image_transform_json = ?, body = ?, content_type = ?,
+                    accent = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    target_project_id,
+                    code,
+                    category["label"],
+                    str(title or ""),
+                    str(subtitle or ""),
+                    str(image_url or ""),
+                    json.dumps(image_transform, ensure_ascii=False),
+                    str(body or ""),
+                    achievement_market_content_type(category_key),
+                    category["color"],
+                    now,
+                    page_id,
+                ),
+            )
+            conn.execute("DELETE FROM deployed_pages WHERE page_id = ? AND project_id IN (?, ?)", (page_id, old_project_id, target_project_id))
+
+        conn.execute(
+            """
+            UPDATE achievement_market_items
+            SET project_id = ?, category_key = ?, intro = ?, sort_order = ?, enabled = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (target_project_id, category_key, intro, sort_order, enabled, now, item_id),
+        )
+        sync_achievement_market_deployment(conn, old_project_id)
+        sync_achievement_market_deployment(conn, target_project_id)
+    return get_achievement_market_item(item_id)
+
+
+def delete_achievement_market_item(item_id):
+    with db_connect() as conn:
+        row = conn.execute("SELECT id, project_id FROM achievement_market_items WHERE id = ?", (item_id,)).fetchone()
+        if not row:
+            return None
+        item = get_achievement_market_item(item_id)
+        project_id = int(row["project_id"])
+        conn.execute("DELETE FROM achievement_market_items WHERE id = ?", (item_id,))
+        sync_achievement_market_deployment(conn, project_id)
+    return item
+
+
+def publish_achievement_market(project_id=0):
+    with db_connect() as conn:
+        active_project_id = int(project_id or achievement_market_active_project_id(conn))
+        if not active_project_id:
+            return {
+                "ok": False,
+                "activeProjectId": 0,
+                "publishedCount": 0,
+                "message": "当前没有可发布的成果超市项目",
+            }
+        enabled_count = conn.execute(
+            "SELECT COUNT(*) AS value FROM achievement_market_items WHERE project_id = ? AND enabled = 1",
+            (active_project_id,),
+        ).fetchone()["value"]
+        if int(enabled_count or 0):
+            sync_achievement_market_deployment(conn, active_project_id)
+        return {
+            "ok": True,
+            "activeProjectId": active_project_id,
+            "publishedCount": int(enabled_count or 0),
+            "message": "成果超市已发布",
+        }
 
 
 def extract_code(value):
@@ -3617,6 +10156,37 @@ def qr_svg(text):
     )
 
 
+def qr_png(text, scale=12, border=4):
+    modules = make_qr_matrix(text)
+    module_count = len(modules)
+    size = (module_count + border * 2) * scale
+    rows = []
+    for y in range(size):
+        module_y = y // scale - border
+        row = bytearray([0])
+        for x in range(size):
+            module_x = x // scale - border
+            dark = (
+                0 <= module_x < module_count
+                and 0 <= module_y < module_count
+                and modules[module_y][module_x]
+            )
+            row.extend((0, 0, 0, 255) if dark else (255, 255, 255, 255))
+        rows.append(bytes(row))
+    raw = b"".join(rows)
+
+    def chunk(kind, data):
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
+
+
 def broadcast_scan(scan):
     payload = f"event: scan\ndata: {json.dumps(scan, ensure_ascii=False)}\n\n".encode("utf-8")
     dead = []
@@ -3630,6 +10200,637 @@ def broadcast_scan(scan):
         SSE_CLIENTS.discard(client)
 
 
+def tcp_port_open(host, port, timeout=0.35):
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def tcp_port_available(host, port):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind((host, port))
+            return True
+    except OSError:
+        return False
+
+
+def unity_model_url(port):
+    return f"http://{UNITY_MODEL_HOST}:{port}/"
+
+
+def unity_model_candidate_ports():
+    ports = [UNITY_MODEL_PORT]
+    for item in str(UNITY_MODEL_FALLBACK_PORTS or "").split(","):
+        try:
+            port = int(item.strip())
+        except (TypeError, ValueError):
+            continue
+        if port > 0:
+            ports.append(port)
+    result = []
+    for port in ports:
+        if port not in result:
+            result.append(port)
+    return result
+
+
+def unity_model_http_ready(port, timeout=0.6):
+    try:
+        with socket.create_connection((UNITY_MODEL_HOST, port), timeout=timeout) as conn:
+            conn.settimeout(timeout)
+            request = f"GET / HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: close\r\n\r\n"
+            conn.sendall(request.encode("ascii"))
+            chunks = []
+            started = time.time()
+            while time.time() - started < timeout:
+                chunk = conn.recv(8192)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                if b"unity-canvas" in chunk or b"TemplateData" in chunk or b"Build/" in chunk:
+                    break
+    except OSError:
+        return False
+    data = b"".join(chunks)
+    header, _, body = data.partition(b"\r\n\r\n")
+    if b" 200 " not in header[:64]:
+        return False
+    text = body.decode("utf-8", errors="ignore").lower()
+    return "unity" in text or "templateData".lower() in text or "unity-canvas" in text or "build/" in text
+
+
+def wait_for_unity_model(port, process):
+    for _ in range(20):
+        if unity_model_http_ready(port, timeout=0.2):
+            return {"ok": True, "url": unity_model_url(port), "started": True, "port": port}
+        if process.poll() is not None:
+            return {"ok": False, "error": "Unity 模型服务启动后立即退出", "url": unity_model_url(port), "port": port}
+        time.sleep(0.05)
+    return {"ok": False, "error": "Unity 模型服务启动超时", "url": unity_model_url(port), "port": port}
+
+
+def start_unity_model_server():
+    global UNITY_MODEL_PROCESS
+    model_dir = UNITY_MODEL_DIR.resolve()
+    if not model_dir.exists() or not (model_dir / "index.html").exists():
+        return {"ok": False, "error": "Unity 模型目录不存在或缺少 index.html", "url": unity_model_url(UNITY_MODEL_PORT)}
+
+    for port in unity_model_candidate_ports():
+        if unity_model_http_ready(port):
+            return {"ok": True, "url": unity_model_url(port), "alreadyRunning": True, "port": port}
+
+    with UNITY_MODEL_LOCK:
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        if UNITY_MODEL_PROCESS and UNITY_MODEL_PROCESS.poll() is None:
+            for port in unity_model_candidate_ports():
+                if unity_model_http_ready(port):
+                    return {"ok": True, "url": unity_model_url(port), "alreadyRunning": True, "port": port}
+
+        blocked_ports = []
+        last_error = ""
+        for port in unity_model_candidate_ports():
+            if unity_model_http_ready(port):
+                return {"ok": True, "url": unity_model_url(port), "alreadyRunning": True, "port": port}
+            if not tcp_port_available(UNITY_MODEL_HOST, port):
+                blocked_ports.append(port)
+                continue
+
+            commands = [
+                [sys.executable, "-m", "http.server", str(port), "--bind", UNITY_MODEL_HOST],
+                ["py", "-m", "http.server", str(port), "--bind", UNITY_MODEL_HOST],
+            ]
+            for command in commands:
+                try:
+                    UNITY_MODEL_PROCESS = subprocess.Popen(
+                        command,
+                        cwd=str(model_dir),
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        creationflags=creationflags,
+                    )
+                    result = wait_for_unity_model(port, UNITY_MODEL_PROCESS)
+                    if result.get("ok"):
+                        if blocked_ports:
+                            result["fallbackFrom"] = blocked_ports[0]
+                        return result
+                    last_error = result.get("error", "")
+                    if UNITY_MODEL_PROCESS and UNITY_MODEL_PROCESS.poll() is None:
+                        UNITY_MODEL_PROCESS.terminate()
+                    UNITY_MODEL_PROCESS = None
+                except OSError as exc:
+                    UNITY_MODEL_PROCESS = None
+                    last_error = str(exc)
+
+        blocked_text = f"；端口被占用：{', '.join(str(port) for port in blocked_ports)}" if blocked_ports else ""
+        return {"ok": False, "error": f"启动 Unity 模型服务失败：{last_error or '没有可用端口'}{blocked_text}", "url": unity_model_url(UNITY_MODEL_PORT)}
+
+
+def same_file_path(left, right):
+    try:
+        left_path = Path(left).resolve()
+        right_path = Path(right).resolve()
+    except OSError:
+        return False
+    return os.path.normcase(str(left_path)) == os.path.normcase(str(right_path))
+
+
+def homestay_model_processes():
+    if os.name != "nt":
+        process = HOMESTAY_MODEL_PROCESS
+        if process and process.poll() is None:
+            return [{"pid": process.pid, "path": str(HOMESTAY_MODEL_EXE.resolve())}]
+        return []
+
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
+                "Get-CimInstance Win32_Process -Filter \"Name = 'CoffeeShop.exe'\" "
+                "| ForEach-Object { \"{0}`t{1}\" -f $_.ProcessId, $_.ExecutablePath }",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+    except Exception:
+        return []
+
+    exe = HOMESTAY_MODEL_EXE.resolve()
+    processes = []
+    for line in result.stdout.splitlines():
+        if not line.strip() or "\t" not in line:
+            continue
+        pid, path = line.split("\t", 1)
+        if pid.strip().isdigit() and path.strip() and same_file_path(path.strip(), exe):
+            processes.append({"pid": int(pid.strip()), "path": path.strip()})
+    return processes
+
+
+def homestay_model_status():
+    processes = homestay_model_processes()
+    return {
+        "ok": True,
+        "running": bool(processes),
+        "pids": [item["pid"] for item in processes],
+        "exe": str(HOMESTAY_MODEL_EXE.resolve()),
+    }
+
+
+def start_homestay_model():
+    global HOMESTAY_MODEL_PROCESS
+    exe = HOMESTAY_MODEL_EXE.resolve()
+    if not exe.exists():
+        return {"ok": False, "error": f"民宿模型程序不存在：{exe}", "running": False, "exe": str(exe)}
+
+    with HOMESTAY_MODEL_LOCK:
+        if HOMESTAY_MODEL_PROCESS and HOMESTAY_MODEL_PROCESS.poll() is None:
+            return {
+                "ok": True,
+                "running": True,
+                "alreadyRunning": True,
+                "pid": HOMESTAY_MODEL_PROCESS.pid,
+                "exe": str(exe),
+            }
+
+        existing = homestay_model_processes()
+        if existing:
+            return {
+                "ok": True,
+                "running": True,
+                "alreadyRunning": True,
+                "pid": existing[0]["pid"],
+                "pids": [item["pid"] for item in existing],
+                "exe": str(exe),
+            }
+
+        try:
+            HOMESTAY_MODEL_PROCESS = subprocess.Popen(
+                [str(exe)],
+                cwd=str(exe.parent),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError as exc:
+            HOMESTAY_MODEL_PROCESS = None
+            return {"ok": False, "error": f"启动民宿模型失败：{exc}", "running": False, "exe": str(exe)}
+
+        time.sleep(0.4)
+        if HOMESTAY_MODEL_PROCESS.poll() is not None:
+            return {"ok": False, "error": "民宿模型启动后立即退出", "running": False, "exe": str(exe)}
+
+        return {
+            "ok": True,
+            "running": True,
+            "started": True,
+            "pid": HOMESTAY_MODEL_PROCESS.pid,
+            "exe": str(exe),
+        }
+
+
+def stop_homestay_model():
+    global HOMESTAY_MODEL_PROCESS
+    stopped = []
+    errors = []
+
+    with HOMESTAY_MODEL_LOCK:
+        pids = {item["pid"] for item in homestay_model_processes()}
+        if HOMESTAY_MODEL_PROCESS and HOMESTAY_MODEL_PROCESS.poll() is None:
+            pids.add(HOMESTAY_MODEL_PROCESS.pid)
+
+        for pid in sorted(pids):
+            try:
+                if os.name == "nt":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=6,
+                    )
+                else:
+                    os.kill(pid, 15)
+                stopped.append(pid)
+            except Exception as exc:
+                errors.append(f"{pid}: {exc}")
+
+        HOMESTAY_MODEL_PROCESS = None
+
+    return {"ok": not errors, "running": False, "stopped": stopped, "errors": errors, "exe": str(HOMESTAY_MODEL_EXE.resolve())}
+
+
+def homestay_model_window():
+    if os.name != "nt":
+        return None
+
+    try:
+        import win32con
+        import win32gui
+        import win32process
+    except ImportError:
+        return None
+
+    pids = {item["pid"] for item in homestay_model_processes()}
+    if not pids:
+        return None
+
+    candidates = []
+
+    def visit(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd):
+            return
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        if pid not in pids:
+            return
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        width = right - left
+        height = bottom - top
+        if width < 120 or height < 120:
+            return
+        title = win32gui.GetWindowText(hwnd)
+        candidates.append((hwnd, width * height, title))
+
+    win32gui.EnumWindows(visit, None)
+    if not candidates:
+        return None
+
+    hwnd = sorted(candidates, key=lambda item: item[1], reverse=True)[0][0]
+    if win32gui.IsIconic(hwnd):
+        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+    return hwnd
+
+
+def capture_window_pixels(hwnd):
+    if os.name != "nt" or not hwnd:
+        return None
+
+    try:
+        import win32con
+        import win32gui
+        import win32ui
+    except ImportError:
+        return None
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+    hwnd_dc = win32gui.GetWindowDC(hwnd)
+    source_dc = win32ui.CreateDCFromHandle(hwnd_dc)
+    memory_dc = source_dc.CreateCompatibleDC()
+    bitmap = win32ui.CreateBitmap()
+    bitmap.CreateCompatibleBitmap(source_dc, width, height)
+    memory_dc.SelectObject(bitmap)
+
+    try:
+        rendered = False
+        try:
+            rendered = bool(ctypes.windll.user32.PrintWindow(hwnd, memory_dc.GetSafeHdc(), 2))
+        except Exception:
+            rendered = False
+        if not rendered:
+            memory_dc.BitBlt((0, 0), (width, height), source_dc, (0, 0), win32con.SRCCOPY)
+
+        info = bitmap.GetInfo()
+        bits = bitmap.GetBitmapBits(True)
+        bit_count = int(info.get("bmBitsPixel") or 32)
+        row_size = int(info.get("bmWidthBytes") or (width * bit_count + 31) // 32 * 4)
+        rows = [bits[index:index + row_size] for index in range(0, len(bits), row_size)]
+        bits = b"".join(reversed(rows))
+        return {"width": width, "height": height, "bit_count": bit_count, "row_size": row_size, "bits": bits}
+    finally:
+        win32gui.DeleteObject(bitmap.GetHandle())
+        memory_dc.DeleteDC()
+        source_dc.DeleteDC()
+        win32gui.ReleaseDC(hwnd, hwnd_dc)
+
+
+def bmp_bytes_for_capture(capture):
+    if not capture:
+        return None
+    width = capture["width"]
+    height = capture["height"]
+    bit_count = capture["bit_count"]
+    bits = capture["bits"]
+    data_size = len(bits)
+    file_header_size = 14
+    info_header_size = 40
+    pixel_offset = file_header_size + info_header_size
+    file_size = pixel_offset + data_size
+    file_header = struct.pack("<2sIHHI", b"BM", file_size, 0, 0, pixel_offset)
+    info_header = struct.pack(
+        "<IiiHHIIiiII",
+        info_header_size,
+        width,
+        height,
+        1,
+        bit_count,
+        0,
+        data_size,
+        0,
+        0,
+        0,
+        0,
+    )
+    return file_header + info_header + bits
+
+
+def jpeg_bytes_for_capture(capture, quality=58, max_width=1280):
+    if not capture:
+        return None
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+
+    width = capture["width"]
+    height = capture["height"]
+    row_size = capture["row_size"]
+    bits = capture["bits"]
+    image = Image.frombuffer("RGBA", (width, height), bits, "raw", "BGRA", row_size, -1).convert("RGB")
+    if max_width and width > max_width:
+        next_height = max(1, round(height * (max_width / width)))
+        image = image.resize((max_width, next_height), Image.Resampling.BILINEAR)
+    output = io.BytesIO()
+    image.save(output, format="JPEG", quality=max(25, min(90, int(quality))), optimize=False)
+    return output.getvalue()
+
+
+def encoded_frame_for_window(hwnd, prefer="jpeg", quality=58, max_width=1280):
+    capture = capture_window_pixels(hwnd)
+    if not capture:
+        return None, ""
+    if prefer == "jpeg":
+        encoded = jpeg_bytes_for_capture(capture, quality=quality, max_width=max_width)
+        if encoded:
+            return encoded, "image/jpeg"
+    return bmp_bytes_for_capture(capture), "image/bmp"
+
+
+def bitmap_bytes_for_window(hwnd):
+    capture = capture_window_pixels(hwnd)
+    return bmp_bytes_for_capture(capture)
+
+
+def homestay_model_frame(prefer="jpeg", quality=58, max_width=1280):
+    hwnd = homestay_model_window()
+    if not hwnd:
+        return None, ""
+    return encoded_frame_for_window(hwnd, prefer=prefer, quality=quality, max_width=max_width)
+
+
+def homestay_model_window_point(x_ratio, y_ratio):
+    hwnd = homestay_model_window()
+    if not hwnd:
+        return None, None, None
+
+    try:
+        import win32gui
+    except ImportError:
+        return None, None, None
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+    x_ratio = min(1.0, max(0.0, float(x_ratio)))
+    y_ratio = min(1.0, max(0.0, float(y_ratio)))
+    return hwnd, int(left + width * x_ratio), int(top + height * y_ratio)
+
+
+def homestay_model_client_point(hwnd, x_ratio, y_ratio):
+    try:
+        import win32gui
+    except ImportError:
+        return None, None
+    left, top, right, bottom = win32gui.GetClientRect(hwnd)
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+    x_ratio = min(1.0, max(0.0, float(x_ratio)))
+    y_ratio = min(1.0, max(0.0, float(y_ratio)))
+    return int(width * x_ratio), int(height * y_ratio)
+
+
+def homestay_virtual_key(key):
+    key = str(key or "")
+    aliases = {
+        "ArrowLeft": 0x25,
+        "ArrowUp": 0x26,
+        "ArrowRight": 0x27,
+        "ArrowDown": 0x28,
+        "Escape": 0x1B,
+        "Enter": 0x0D,
+        " ": 0x20,
+        "Space": 0x20,
+        "Shift": 0x10,
+        "Control": 0x11,
+        "Alt": 0x12,
+        "w": 0x57,
+        "a": 0x41,
+        "s": 0x53,
+        "d": 0x44,
+        "W": 0x57,
+        "A": 0x41,
+        "S": 0x53,
+        "D": 0x44,
+    }
+    if key in aliases:
+        return aliases[key]
+    if len(key) == 1 and key.isalnum():
+        return ord(key.upper())
+    return None
+
+
+def restore_foreground_window(previous_hwnd):
+    if os.name != "nt" or not previous_hwnd:
+        return
+    try:
+        import win32gui
+        if win32gui.IsWindow(previous_hwnd):
+            win32gui.SetForegroundWindow(previous_hwnd)
+    except Exception:
+        pass
+
+
+def send_homestay_model_input(kind, x_ratio=0.0, y_ratio=0.0, delta_y=0.0, key="", mode=""):
+    if os.name != "nt":
+        return {"ok": False, "error": "当前系统不支持窗口输入转发"}
+
+    try:
+        import win32api
+        import win32con
+        import win32gui
+    except ImportError:
+        return {"ok": False, "error": "缺少 pywin32，无法转发模型输入"}
+
+    hwnd, x, y = homestay_model_window_point(x_ratio, y_ratio)
+    if not hwnd:
+        return {"ok": False, "error": "未找到民宿模型窗口"}
+
+    use_foreground = (mode or HOMESTAY_INPUT_MODE) == "foreground"
+    if not use_foreground:
+        client_x, client_y = homestay_model_client_point(hwnd, x_ratio, y_ratio)
+        if client_x is None:
+            return {"ok": False, "error": "无法计算模型窗口坐标"}
+        lparam = win32api.MAKELONG(client_x, client_y)
+        if kind == "down":
+            win32gui.PostMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
+        elif kind == "move":
+            win32gui.PostMessage(hwnd, win32con.WM_MOUSEMOVE, win32con.MK_LBUTTON, lparam)
+        elif kind == "up":
+            win32gui.PostMessage(hwnd, win32con.WM_LBUTTONUP, 0, lparam)
+        elif kind == "click":
+            win32gui.PostMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam)
+            time.sleep(0.02)
+            win32gui.PostMessage(hwnd, win32con.WM_LBUTTONUP, 0, lparam)
+        elif kind == "wheel":
+            wheel_delta = -120 if float(delta_y or 0) > 0 else 120
+            wparam = win32api.MAKELONG(0, wheel_delta & 0xFFFF)
+            win32gui.PostMessage(hwnd, win32con.WM_MOUSEWHEEL, wparam, lparam)
+        elif kind in {"keydown", "keyup"}:
+            vk = homestay_virtual_key(key)
+            if not vk:
+                return {"ok": False, "error": "不支持的按键"}
+            message = win32con.WM_KEYDOWN if kind == "keydown" else win32con.WM_KEYUP
+            win32gui.PostMessage(hwnd, message, vk, 0)
+        else:
+            return {"ok": False, "error": "不支持的输入类型"}
+        return {"ok": True, "mode": "message", "type": kind, "x": client_x, "y": client_y}
+
+    previous_hwnd = None
+    try:
+        previous_hwnd = win32gui.GetForegroundWindow()
+        win32gui.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+
+    try:
+        if kind in {"down", "move", "up", "click", "wheel"}:
+            win32api.SetCursorPos((x, y))
+
+        if kind == "down":
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)
+        elif kind == "move":
+            pass
+        elif kind == "up":
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x, y, 0, 0)
+        elif kind == "click":
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)
+            time.sleep(0.02)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x, y, 0, 0)
+        elif kind == "wheel":
+            wheel_delta = -120 if float(delta_y or 0) > 0 else 120
+            win32api.mouse_event(win32con.MOUSEEVENTF_WHEEL, x, y, wheel_delta, 0)
+        elif kind in {"keydown", "keyup"}:
+            vk = homestay_virtual_key(key)
+            if not vk:
+                return {"ok": False, "error": "不支持的按键"}
+            flags = 0 if kind == "keydown" else win32con.KEYEVENTF_KEYUP
+            win32api.keybd_event(vk, 0, flags, 0)
+        else:
+            return {"ok": False, "error": "不支持的输入类型"}
+    finally:
+        restore_foreground_window(previous_hwnd)
+
+    return {"ok": True, "mode": "foreground", "type": kind, "x": x, "y": y}
+
+
+def click_homestay_model(x_ratio, y_ratio):
+    return send_homestay_model_input("click", x_ratio, y_ratio, mode="foreground")
+
+
+def drag_homestay_model(points):
+    if os.name != "nt":
+        return {"ok": False, "error": "当前系统不支持窗口拖拽转发"}
+
+    try:
+        import win32api
+        import win32con
+        import win32gui
+    except ImportError:
+        return {"ok": False, "error": "缺少 pywin32，无法转发模型拖拽"}
+
+    clean = []
+    hwnd = None
+    for point in points:
+        try:
+            x_ratio = float(point[0])
+            y_ratio = float(point[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        hwnd, x, y = homestay_model_window_point(x_ratio, y_ratio)
+        if not hwnd:
+            return {"ok": False, "error": "未找到民宿模型窗口"}
+        clean.append((x, y))
+
+    if not clean:
+        return {"ok": False, "error": "拖拽路径为空"}
+
+    previous_hwnd = None
+    try:
+        previous_hwnd = win32gui.GetForegroundWindow()
+        try:
+            win32gui.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
+        win32api.SetCursorPos(clean[0])
+        time.sleep(0.04)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, clean[0][0], clean[0][1], 0, 0)
+        for x, y in clean[1:]:
+            win32api.SetCursorPos((x, y))
+            win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+            time.sleep(0.012)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, clean[-1][0], clean[-1][1], 0, 0)
+    finally:
+        restore_foreground_window(previous_hwnd)
+
+    return {"ok": True, "mode": "foreground-drag", "points": len(clean)}
+
+
 def content_type_for(path):
     suffix = path.suffix.lower()
     return {
@@ -3641,7 +10842,16 @@ def content_type_for(path):
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
         ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".bmp": "image/bmp",
+        ".mp4": "video/mp4",
+        ".webm": "video/webm",
+        ".pdf": "application/pdf",
     }.get(suffix, "application/octet-stream")
+
+
+def should_download_upload_path(path):
+    return Path(path).suffix.lower() not in INLINE_UPLOAD_EXTENSIONS
 
 
 def is_relative_to(path, root):
@@ -3702,13 +10912,17 @@ class ExpoHandler(BaseHTTPRequestHandler):
 
     def send_json(self, status, payload, extra_headers=None):
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        headers = extra_headers or {}
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_security_headers()
         self.send_cors_headers()
-        for name, value in (extra_headers or {}).items():
+        for name, value in headers.items():
             self.send_header(name, value)
+        refresh_cookie = self.session_refresh_cookie_header(headers)
+        if refresh_cookie:
+            self.send_header("Set-Cookie", refresh_cookie)
         self.end_headers()
         self.wfile.write(body)
 
@@ -3739,10 +10953,16 @@ class ExpoHandler(BaseHTTPRequestHandler):
 
     def current_admin(self):
         user = self.current_user()
-        return user["username"] if user and user.get("role") == "admin" else None
+        return user["username"] if is_admin_user(user) else None
 
     def current_user(self):
-        return get_session_user(self.cookie_value(ADMIN_COOKIE))
+        token = self.cookie_value(ADMIN_COOKIE)
+        if getattr(self, "_session_token_cache", None) == token:
+            return getattr(self, "_session_user_cache", None)
+        user = get_session_user(token)
+        self._session_token_cache = token
+        self._session_user_cache = user
+        return user
 
     def require_auth(self):
         user = self.current_user()
@@ -3753,9 +10973,16 @@ class ExpoHandler(BaseHTTPRequestHandler):
 
     def require_admin(self):
         user = self.current_user()
-        if user and user.get("role") == "admin":
+        if is_admin_user(user):
             return user
         self.send_json(401, {"ok": False, "error": "需要管理员权限"})
+        return None
+
+    def require_reviewer(self):
+        user = self.current_user()
+        if can_review_user(user):
+            return user
+        self.send_json(401, {"ok": False, "error": "需要审核权限"})
         return None
 
     def csrf_exempt(self, path):
@@ -3813,11 +11040,18 @@ class ExpoHandler(BaseHTTPRequestHandler):
             f"Max-Age={ADMIN_SESSION_SECONDS}{secure}"
         )
 
+    def session_refresh_cookie_header(self, extra_headers=None):
+        if any(name.lower() == "set-cookie" for name in (extra_headers or {})):
+            return ""
+        token = self.cookie_value(ADMIN_COOKIE)
+        user = self.current_user()
+        return self.session_cookie_header(token) if token and user else ""
+
     def clear_session_cookie_header(self):
         secure = "; Secure" if SESSION_COOKIE_SECURE else ""
         return f"{ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure}"
 
-    def serve_file(self, path):
+    def serve_file(self, path, as_attachment=False, download_name="", content_type=""):
         try:
             resolved = path.resolve()
             allowed_roots = (STATIC_DIR.resolve(), UPLOAD_DIR.resolve())
@@ -3830,7 +11064,11 @@ class ExpoHandler(BaseHTTPRequestHandler):
             return
 
         self.send_response(200)
-        self.send_header("Content-Type", content_type_for(resolved))
+        upload_file = is_relative_to(resolved, UPLOAD_DIR.resolve())
+        force_attachment = as_attachment or (upload_file and should_download_upload_path(resolved))
+        self.send_header("Content-Type", content_type or ("application/octet-stream" if force_attachment else content_type_for(resolved)))
+        if force_attachment:
+            self.send_header("Content-Disposition", content_disposition_header(download_name or resolved.name))
         if resolved.suffix.lower() in {".html", ".css", ".js"}:
             self.send_header("Cache-Control", "no-store, max-age=0")
         self.send_header("Content-Length", str(len(body)))
@@ -3865,7 +11103,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.serve_file(STATIC_DIR / "display.html")
             return
 
-        # 系部数字展厅（DESIGN.md）：一级页与二级页共用入口
+        # 数字门户展厅（DESIGN.md）：学校门户与二级门户共用入口
         if (
             path == "/departments"
             or path.startswith("/departments/")
@@ -3875,10 +11113,14 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.serve_file(STATIC_DIR / "blueprint" / "index.html")
             return
 
+        if path == "/model/homestay":
+            self.serve_file(STATIC_DIR / "homestay-model.html")
+            return
+
         if path == "/login":
             user = self.current_user()
             if user:
-                self.send_redirect("/admin" if user.get("role") == "admin" else "/teacher?view=pages")
+                self.send_redirect("/admin" if can_review_user(user) else "/teacher?view=pages")
                 return
             self.serve_file(STATIC_DIR / "login.html")
             return
@@ -3888,7 +11130,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
             if not user:
                 self.send_redirect("/login")
                 return
-            if user.get("role") != "admin":
+            if not can_review_user(user):
                 self.send_redirect("/teacher?view=pages")
                 return
             self.serve_file(STATIC_DIR / "admin.html")
@@ -3899,7 +11141,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
             if not user:
                 self.send_redirect("/login")
                 return
-            if user.get("role") == "admin":
+            if can_review_user(user):
                 self.send_redirect("/admin")
                 return
             self.serve_file(STATIC_DIR / "admin.html")
@@ -3914,11 +11156,152 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.send_json(200 if status["ok"] else 503, status)
             return
 
+        if path == "/api/unityceshi111/open":
+            status = start_unity_model_server()
+            if not status["ok"]:
+                self.send_json(500, status)
+                return
+            self.send_response(302)
+            self.send_header("Location", status["url"])
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.end_headers()
+            return
+
+        if path == "/api/unityceshi111/start":
+            status = start_unity_model_server()
+            self.send_json(200 if status["ok"] else 500, status)
+            return
+
+        if path == "/api/homestay-model/start":
+            status = start_homestay_model()
+            self.send_json(200 if status["ok"] else 500, status)
+            return
+
+        if path == "/api/homestay-model/stop":
+            status = stop_homestay_model()
+            self.send_json(200 if status["ok"] else 500, status)
+            return
+
+        if path == "/api/homestay-model/status":
+            self.send_json(200, homestay_model_status())
+            return
+
+        if path == "/api/homestay-model/frame":
+            query = parse_qs(parsed.query)
+            try:
+                quality = int((query.get("quality") or ["58"])[0])
+                max_width = int((query.get("width") or ["1280"])[0])
+            except ValueError:
+                self.send_json(400, {"ok": False, "error": "帧参数无效"})
+                return
+            prefer = "bmp" if (query.get("format") or ["jpeg"])[0].lower() == "bmp" else "jpeg"
+            frame, frame_type = homestay_model_frame(prefer=prefer, quality=quality, max_width=max_width)
+            if not frame:
+                self.send_json(404, {"ok": False, "error": "未捕获到民宿模型窗口画面"})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", frame_type or "image/jpeg")
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_header("Content-Length", str(len(frame)))
+            self.send_security_headers()
+            self.end_headers()
+            self.wfile.write(frame)
+            return
+
+        if path == "/api/homestay-model/stream":
+            query = parse_qs(parsed.query)
+            try:
+                quality = int((query.get("quality") or ["58"])[0])
+                max_width = int((query.get("width") or ["1280"])[0])
+                fps = float((query.get("fps") or ["10"])[0])
+            except ValueError:
+                self.send_json(400, {"ok": False, "error": "串流参数无效"})
+                return
+            delay = 1 / min(20, max(2, fps))
+            if not homestay_model_processes():
+                start_homestay_model()
+            deadline = time.time() + 12
+            first_frame = None
+            first_type = ""
+            while time.time() < deadline and not first_frame:
+                first_frame, first_type = homestay_model_frame(quality=quality, max_width=max_width)
+                if not first_frame:
+                    time.sleep(0.25)
+            if not first_frame:
+                self.send_json(404, {"ok": False, "error": "未捕获到民宿模型窗口画面"})
+                return
+
+            boundary = "homestayframe"
+            self.send_response(200)
+            self.send_header("Content-Type", f"multipart/x-mixed-replace; boundary={boundary}")
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_security_headers()
+            self.end_headers()
+            frame = first_frame
+            frame_type = first_type or "image/jpeg"
+            try:
+                while True:
+                    if frame:
+                        self.wfile.write(f"--{boundary}\r\n".encode("ascii"))
+                        self.wfile.write(f"Content-Type: {frame_type}\r\n".encode("ascii"))
+                        self.wfile.write(f"Content-Length: {len(frame)}\r\n\r\n".encode("ascii"))
+                        self.wfile.write(frame)
+                        self.wfile.write(b"\r\n")
+                        self.wfile.flush()
+                    time.sleep(delay)
+                    frame, frame_type = homestay_model_frame(quality=quality, max_width=max_width)
+                    frame_type = frame_type or "image/jpeg"
+            except Exception:
+                return
+
+        if path == "/api/homestay-model/click":
+            query = parse_qs(parsed.query)
+            try:
+                x_ratio = float((query.get("x") or ["0"])[0])
+                y_ratio = float((query.get("y") or ["0"])[0])
+            except ValueError:
+                self.send_json(400, {"ok": False, "error": "点击坐标无效"})
+                return
+            self.send_json(200, click_homestay_model(x_ratio, y_ratio))
+            return
+
+        if path == "/api/homestay-model/input":
+            query = parse_qs(parsed.query)
+            try:
+                x_ratio = float((query.get("x") or ["0"])[0])
+                y_ratio = float((query.get("y") or ["0"])[0])
+                delta_y = float((query.get("dy") or ["0"])[0])
+            except ValueError:
+                self.send_json(400, {"ok": False, "error": "输入参数无效"})
+                return
+            kind = (query.get("type") or [""])[0]
+            key = (query.get("key") or [""])[0]
+            mode = (query.get("mode") or [""])[0]
+            self.send_json(200, send_homestay_model_input(kind, x_ratio=x_ratio, y_ratio=y_ratio, delta_y=delta_y, key=key, mode=mode))
+            return
+
+        if path == "/api/homestay-model/drag":
+            query = parse_qs(parsed.query)
+            raw_points = (query.get("path") or [""])[0].split(";")
+            points = []
+            for raw_point in raw_points[:80]:
+                if "," not in raw_point:
+                    continue
+                x_text, y_text = raw_point.split(",", 1)
+                points.append((x_text, y_text))
+            self.send_json(200, drag_homestay_model(points))
+            return
+
         if path == "/api/session":
             user = self.current_user()
             permissions = []
             if user:
-                permissions = ["admin"] if user["role"] == "admin" else ["teacher"]
+                if is_admin_user(user):
+                    permissions = ["admin", "review"]
+                elif can_review_user(user):
+                    permissions = ["department_admin", "review"]
+                else:
+                    permissions = ["teacher"]
             token = self.cookie_value(ADMIN_COOKIE)
             self.send_json(
                 200,
@@ -3995,6 +11378,63 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path == "/api/admin/project-logs":
+            if not self.require_admin():
+                return
+            query = parse_qs(parsed.query)
+            project_id = int((query.get("projectId") or ["0"])[0] or 0)
+            project = get_project(project_id)
+            if not project:
+                self.send_json(404, {"ok": False, "error": "项目不存在"})
+                return
+            logs = []
+            with db_connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM admin_logs
+                    WHERE target_type = 'project' AND target_id = ?
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT 200
+                    """,
+                    (str(project_id),),
+                ).fetchall()
+                for row in rows:
+                    log = row_to_admin_log(row)
+                    logs.append({
+                        "kind": "log",
+                        "username": log["username"],
+                        "role": log["role"],
+                        "action": log["action"],
+                        "detail": log["detail"],
+                        "changes": log["changes"],
+                        "ip": log["ip"],
+                        "createdAt": log["createdAt"],
+                    })
+                version_rows = conn.execute(
+                    """
+                    SELECT * FROM project_versions
+                    WHERE project_id = ?
+                    ORDER BY submitted_at DESC, id DESC
+                    """,
+                    (project_id,),
+                ).fetchall()
+            for row in version_rows:
+                logs.append({
+                    "kind": "version",
+                    "username": row["submitted_by"],
+                    "role": "",
+                    "action": "submit_version",
+                    "detail": row["changes"] or "",
+                    "changes": "",
+                    "ip": "",
+                    "createdAt": row["submitted_at"],
+                    "reviewedBy": row["reviewed_by"],
+                    "reviewedAt": row["reviewed_at"],
+                })
+            logs.sort(key=lambda item: item["createdAt"] or "", reverse=True)
+            self.send_json(200, {"ok": True, "project": {"id": project["id"], "name": project["name"]}, "logs": logs})
+            return
+
         if path == "/api/display/project":
             project = get_deployed_project()
             self.send_json(200, {"ok": True, "project": project})
@@ -4025,20 +11465,52 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True, "project": project, "page": page})
                 return
 
+        if path == "/api/portal/home":
+            self.send_json(200, {"ok": True, **get_public_portal_home()})
+            return
+
+        if path == "/api/achievement-market/public":
+            query = parse_qs(parsed.query)
+            category_key = (query.get("category") or [""])[0]
+            topic_slug = (query.get("topic") or [""])[0]
+            self.send_json(200, {"ok": True, **public_achievement_market_payload(category_key, topic_slug)})
+            return
+
+        if path.startswith("/api/portal/"):
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "portal":
+                kind = parts[2]
+                portal_type = {"departments": "department", "department": "department", "topics": "topic", "topic": "topic"}.get(kind)
+                portal = get_public_portal_content(portal_type, parts[3]) if portal_type else None
+                if not portal:
+                    self.send_json(404, {"ok": False, "error": "portal not found"})
+                    return
+                self.send_json(200, {"ok": True, **portal})
+                return
+
         if path == "/api/qr-public":
             # 公开二维码（无需登录），供大屏展示页使用；data 限长防滥用
-            data = parse_qs(parsed.query).get("data", [""])[0]
+            query = parse_qs(parsed.query)
+            data = query.get("data", [""])[0]
+            output_format = (query.get("format", ["svg"])[0] or "svg").lower()
             if len(data) > 512:
                 self.send_json(400, {"ok": False, "error": "二维码内容过长"})
                 return
             try:
-                body = qr_svg(data).encode("utf-8")
+                if output_format == "png":
+                    body = qr_png(data)
+                    content_type = "image/png"
+                    filename = "display-qr.png"
+                else:
+                    body = qr_svg(data).encode("utf-8")
+                    content_type = "image/svg+xml; charset=utf-8"
+                    filename = "display-qr.svg"
             except ValueError as exc:
                 self.send_json(400, {"ok": False, "error": str(exc)})
                 return
             self.send_response(200)
-            self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
-            self.send_header("Content-Disposition", 'inline; filename="display-qr.svg"')
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Disposition", f'inline; filename="{filename}"')
             self.send_header("Content-Length", str(len(body)))
             self.send_security_headers()
             self.send_cors_headers()
@@ -4049,15 +11521,24 @@ class ExpoHandler(BaseHTTPRequestHandler):
         if path == "/api/qr":
             if not self.require_auth():
                 return
-            data = parse_qs(parsed.query).get("data", [""])[0]
+            query = parse_qs(parsed.query)
+            data = query.get("data", [""])[0]
+            output_format = (query.get("format", ["svg"])[0] or "svg").lower()
             try:
-                body = qr_svg(data).encode("utf-8")
+                if output_format == "png":
+                    body = qr_png(data)
+                    content_type = "image/png"
+                    filename = "display-qr.png"
+                else:
+                    body = qr_svg(data).encode("utf-8")
+                    content_type = "image/svg+xml; charset=utf-8"
+                    filename = "display-qr.svg"
             except ValueError as exc:
                 self.send_json(400, {"ok": False, "error": str(exc)})
                 return
             self.send_response(200)
-            self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
-            self.send_header("Content-Disposition", 'inline; filename="display-qr.svg"')
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Disposition", f'inline; filename="{filename}"')
             self.send_header("Content-Length", str(len(body)))
             self.send_security_headers()
             self.send_cors_headers()
@@ -4079,15 +11560,50 @@ class ExpoHandler(BaseHTTPRequestHandler):
             self.send_json(200, {"ok": True, "assets": list_assets(user, limit)})
             return
 
+        if path.startswith("/api/assets/") and path.endswith("/download"):
+            user = self.require_auth()
+            if not user:
+                return
+            parts = path.strip("/").split("/")
+            asset_id = int(parts[2]) if len(parts) == 4 and parts[2].isdigit() else 0
+            asset = get_asset(asset_id)
+            if not asset or not asset_accessible(asset, user):
+                self.send_error(404)
+                return
+            if asset_storage_backend() == "local" or str(asset.get("url") or "").startswith("/uploads/"):
+                self.serve_file(
+                    UPLOAD_DIR / str(asset.get("storageKey") or "").lstrip("/"),
+                    as_attachment=True,
+                    download_name=asset.get("originalFilename") or Path(asset.get("storageKey") or "download").name,
+                    content_type=asset.get("mimeType") or "application/octet-stream",
+                )
+                return
+            if asset.get("url"):
+                self.send_response(302)
+                self.send_header("Location", asset["url"])
+                self.send_security_headers()
+                self.end_headers()
+                return
+            self.send_error(404)
+            return
+
+        if path == "/api/content/templates":
+            if not self.require_auth():
+                return
+            self.send_json(200, {"ok": True, **content_templates_payload()})
+            return
+
         if path == "/api/reviews":
-            if not self.require_admin():
+            user = self.require_reviewer()
+            if not user:
                 return
             status = (parse_qs(parsed.query).get("status") or ["pending"])[0]
-            self.send_json(200, {"ok": True, "reviews": list_reviews(status)})
+            self.send_json(200, {"ok": True, "reviews": list_reviews(status, user)})
             return
 
         if path.startswith("/api/reviews/pages/") and path.endswith("/preview"):
-            if not self.require_admin():
+            user = self.require_reviewer()
+            if not user:
                 return
             parts = path.strip("/").split("/")
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "reviews" and parts[2] == "pages":
@@ -4104,7 +11620,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     ).fetchone()
                 version = row_to_page_version(row) if row else None
                 project = get_project(version["projectId"]) if version else None
-                if not version or not project:
+                if not version or not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "审核记录不存在"})
                     return
                 page = {**version["snapshot"], "projectId": version["projectId"], "reviewStatus": version["status"], "qrAvailable": False}
@@ -4116,7 +11632,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 return
             project_id_text = path.rsplit("/", 1)[-1]
             project_id = int(project_id_text) if project_id_text.isdigit() else 0
-            self.send_json(200, {"ok": True, "pageIds": deployed_page_ids(project_id)})
+            self.send_json(200, {"ok": True, "pageIds": deployed_page_ids(project_id), "records": deployed_page_records(project_id)})
             return
 
         if path.startswith("/api/deploy/check/"):
@@ -4125,6 +11641,15 @@ class ExpoHandler(BaseHTTPRequestHandler):
             project_id_text = path.rsplit("/", 1)[-1]
             project_id = int(project_id_text) if project_id_text.isdigit() else 0
             self.send_json(200, {"ok": True, "check": deploy_content_check(project_id)})
+            return
+
+        if path == "/api/achievement-market":
+            if not self.require_admin():
+                return
+            query = parse_qs(parsed.query)
+            project_id_text = (query.get("projectId") or ["0"])[0]
+            project_id = int(project_id_text) if str(project_id_text).isdigit() else 0
+            self.send_json(200, {"ok": True, **achievement_market_payload(project_id, include_candidates=True)})
             return
 
         if path == "/api/projects":
@@ -4140,6 +11665,54 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     "deployedContentProjectId": (get_deployed_content_project() or {}).get("id"),
                 },
             )
+            return
+
+        if path == "/api/lowcode/forms":
+            user = self.require_auth()
+            if not user:
+                return
+            filters = {key: values[0] for key, values in parse_qs(parsed.query).items() if values}
+            if not is_admin_user(user):
+                filters["enabled"] = "1"
+            self.send_json(200, {"ok": True, "forms": list_lowcode_forms(filters)})
+            return
+
+        if path.startswith("/api/lowcode/records/"):
+            user = self.require_auth()
+            if not user:
+                return
+            record_id_text = path.rsplit("/", 1)[-1]
+            record_id = int(record_id_text) if record_id_text.isdigit() else 0
+            record = get_lowcode_record(record_id, user)
+            if not record:
+                self.send_json(404, {"ok": False, "error": "模板填报记录不存在"})
+                return
+            self.send_json(200, {"ok": True, "record": record})
+            return
+
+        if path.startswith("/api/lowcode/forms/"):
+            user = self.require_auth()
+            if not user:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "lowcode" and parts[2] == "forms" and parts[4] == "versions":
+                actor = self.require_admin()
+                if not actor:
+                    return
+                form_id = int(parts[3]) if parts[3].isdigit() else 0
+                form = get_lowcode_form(form_id)
+                if not form:
+                    self.send_json(404, {"ok": False, "error": "资料采集模板不存在"})
+                    return
+                self.send_json(200, {"ok": True, "form": form, "versions": list_lowcode_form_versions(form_id)})
+                return
+            form_id_text = parts[-1]
+            form_id = int(form_id_text) if form_id_text.isdigit() else 0
+            form = get_lowcode_form(form_id)
+            if not form or (not form.get("enabled") and not is_admin_user(user)):
+                self.send_json(404, {"ok": False, "error": "资料采集模板不存在"})
+                return
+            self.send_json(200, {"ok": True, "form": form})
             return
 
         if path.startswith("/api/projects/"):
@@ -4163,13 +11736,138 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     return
                 self.send_json(200, {"ok": True, "project": project, "versions": list_project_versions(project_id)})
                 return
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
+                    return
+                filters = {key: values[0] for key, values in parse_qs(parsed.query).items() if values}
+                self.send_json(
+                    200,
+                    {
+                        "ok": True,
+                        "project": project,
+                        "items": list_content_items(project_id, filters),
+                        "templates": content_templates_payload(),
+                    },
+                )
+                return
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-quality":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "report": content_quality_report(project_id)})
+                return
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "asset-archive":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "report": asset_archive_report(project_id, user)})
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "forms":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                filters = {
+                    "portalType": project.get("portalType"),
+                }
+                if not is_admin_user(user):
+                    filters["enabled"] = "1"
+                if not can_review_user(user):
+                    filters["moduleKeys"] = sorted(assigned_module_keys(project_id, user))
+                self.send_json(200, {"ok": True, "project": project, "forms": list_lowcode_forms(filters)})
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "records":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "records": list_lowcode_records(project_id, user)})
+                return
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "assignments":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                self.send_json(
+                    200,
+                    {
+                        "ok": True,
+                        "project": project,
+                        "assignments": list_assignments(user, project_id),
+                        "assignmentScope": assignment_scope_for_response(project_id, user),
+                    },
+                )
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "report":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "report": lowcode_progress_report(project_id, user)})
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "template-quality":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                if not can_review_user(user):
+                    self.send_json(401, {"ok": False, "error": "需要审核权限"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "report": lowcode_template_quality_report(project_id, user)})
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                content_item_id = int(parts[4]) if parts[4].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                item = get_content_item(project_id, content_item_id)
+                if not item:
+                    self.send_json(404, {"ok": False, "error": "资料不存在"})
+                    return
+                self.send_json(200, {"ok": True, "project": project, "item": item})
+                return
             if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "pages":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
                 project = get_project(project_id)
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
-                self.send_json(200, {"ok": True, "pages": list_pages(project_id)})
+                pages = list_pages_for_user(project_id, user)
+                self.send_json(
+                    200,
+                    {
+                        "ok": True,
+                        "pages": pages,
+                        "coverage": module_coverage_from_pages(pages, project.get("portalType")),
+                        "assignmentScope": assignment_scope_for_response(project_id, user),
+                    },
+                )
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "pages":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
@@ -4278,7 +11976,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 return
             token = create_admin_session(username)
             user = get_user(username)
-            redirect_url = "/admin" if user["role"] == "admin" else "/teacher?view=pages"
+            redirect_url = "/admin" if can_review_user(user) else "/teacher?view=pages"
             create_admin_log("login", "user", username, username, "login", username=username, role=user["role"], ip=self.client_ip())
             self.send_json(
                 200,
@@ -4332,7 +12030,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 return
             data = self.read_json()
             text_csv = str(data.get("csv") or "")
-            result = {"created": 0, "updated": 0, "projects": 0, "errors": []}
+            result = {"created": 0, "updated": 0, "projects": 0, "roles": {ROLE_ADMIN: 0, ROLE_DEPARTMENT_ADMIN: 0, ROLE_TEACHER: 0}, "errors": []}
             reader = csv.DictReader(io.StringIO(text_csv))
             for line_no, row in enumerate(reader, start=2):
                 try:
@@ -4340,8 +12038,17 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     if not username:
                         raise ValueError("username 不能为空")
                     existed = get_user(username)
-                    user = upsert_user({"username": username, "displayName": row.get("name") or row.get("displayName") or username, "password": row.get("password"), "department": row.get("department") or "", "role": "teacher", "enabled": True}, actor["username"])
+                    role = normalize_user_role(row.get("role") or row.get("角色"), ROLE_TEACHER)
+                    user = upsert_user({
+                        "username": username,
+                        "displayName": row.get("name") or row.get("displayName") or row.get("姓名") or username,
+                        "password": row.get("password") or row.get("密码"),
+                        "department": row.get("department") or row.get("部门") or "",
+                        "role": role,
+                        "enabled": True,
+                    }, actor["username"])
                     result["updated" if existed else "created"] += 1
+                    result["roles"][user["role"]] = result["roles"].get(user["role"], 0) + 1
                     projects_text = str(row.get("projects") or "").strip()
                     for name in [item.strip() for item in re.split(r"[;；]", projects_text) if item.strip()]:
                         save_project(None, {"name": name, "ownerUsername": user["username"]}, actor)
@@ -4384,6 +12091,52 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True, "user": user})
                 return
 
+        if path == "/api/lowcode/forms":
+            actor = self.require_admin()
+            if not actor:
+                return
+            try:
+                form = save_lowcode_form(None, self.read_json(), actor)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.log_admin("save_lowcode_form", "lowcode_form", form["id"], form["name"], "create form")
+            self.send_json(200, {"ok": True, "form": form})
+            return
+
+        if path.startswith("/api/lowcode/forms/") and path.endswith("/copy"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "lowcode" and parts[2] == "forms" and parts[4] == "copy":
+                form_id = int(parts[3]) if parts[3].isdigit() else 0
+                try:
+                    form = copy_lowcode_form(form_id, self.read_json(), actor)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self.log_admin("copy_lowcode_form", "lowcode_form", form["id"], form["name"], f"copy from {form_id}")
+                self.send_json(200, {"ok": True, "form": form})
+                return
+
+        if path.startswith("/api/lowcode/forms/") and path.endswith("/restore"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 7 and parts[0] == "api" and parts[1] == "lowcode" and parts[2] == "forms" and parts[4] == "versions" and parts[6] == "restore":
+                form_id = int(parts[3]) if parts[3].isdigit() else 0
+                version_id = int(parts[5]) if parts[5].isdigit() else 0
+                try:
+                    form = restore_lowcode_form_version(form_id, version_id, actor)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self.log_admin("restore_lowcode_form_version", "lowcode_form", form["id"], form["name"], f"restore version {version_id}")
+                self.send_json(200, {"ok": True, "form": form})
+                return
+
         if path == "/api/deploy/content":
             actor = self.require_admin()
             if not actor:
@@ -4400,11 +12153,57 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 self.send_json(404, {"ok": False, "error": "项目不存在"})
                 return
             self.log_admin("deploy_content", "project", project["id"], project["name"], "deploy selected pages", changes="pageIds")
-            self.send_json(200, {"ok": True, "project": project, "pageIds": deployed_page_ids(project_id)})
+            self.send_json(200, {"ok": True, "project": project, "pageIds": deployed_page_ids(project_id), "records": deployed_page_records(project_id)})
+            return
+
+        if path == "/api/achievement-market/config":
+            actor = self.require_admin()
+            if not actor:
+                return
+            config = save_achievement_market_config(self.read_json())
+            self.log_admin("save_achievement_market_config", "achievement_market", "config", "成果超市欢迎页", "update config")
+            self.send_json(200, {"ok": True, "config": config})
+            return
+
+        if path == "/api/achievement-market/items/new":
+            actor = self.require_admin()
+            if not actor:
+                return
+            try:
+                item = create_achievement_market_item(self.read_json(), actor)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.log_admin("create_achievement_market_item", "achievement_market_item", item["id"], item["title"], "create item")
+            self.send_json(200, {"ok": True, "item": item, **achievement_market_payload(item["projectId"], include_candidates=True)})
+            return
+
+        if path == "/api/achievement-market/items":
+            actor = self.require_admin()
+            if not actor:
+                return
+            try:
+                item = save_achievement_market_item(self.read_json())
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.log_admin("save_achievement_market_item", "achievement_market_item", item["id"], item["title"], "add/update item")
+            self.send_json(200, {"ok": True, "item": item, **achievement_market_payload(item["projectId"], include_candidates=True)})
+            return
+
+        if path == "/api/achievement-market/publish":
+            actor = self.require_admin()
+            if not actor:
+                return
+            data = self.read_json()
+            project_id = int_value(data.get("projectId"), 0)
+            result = publish_achievement_market(project_id)
+            self.log_admin("publish_achievement_market", "achievement_market", str(result["activeProjectId"]), "成果超市", result["message"])
+            self.send_json(200, {"ok": True, "result": result, **achievement_market_payload(result["activeProjectId"], include_candidates=True)})
             return
 
         if path.startswith("/api/reviews/"):
-            actor = self.require_admin()
+            actor = self.require_reviewer()
             if not actor:
                 return
             parts = path.strip("/").split("/")
@@ -4414,6 +12213,9 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 review_type = parts[2]
                 version_id = int(parts[3]) if parts[3].isdigit() else 0
                 action = parts[4]
+                if not review_version_accessible(review_type, version_id, actor):
+                    self.send_json(404, {"ok": False, "error": "审核记录不存在"})
+                    return
                 if review_type == "pages" and action == "approve":
                     item = approve_page_version(version_id, actor, note)
                 elif review_type == "pages" and action == "reject":
@@ -4422,12 +12224,99 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     item = approve_project_version(version_id, actor, note)
                 elif review_type == "projects" and action == "reject":
                     item = reject_project_version(version_id, actor, note)
+                elif review_type == "content-items" and action == "approve":
+                    item = approve_content_item_version(version_id, actor, note)
+                elif review_type == "content-items" and action == "reject":
+                    item = reject_content_item_version(version_id, actor, note)
                 else:
                     item = None
                 if not item:
                     self.send_json(404, {"ok": False, "error": "审核记录不存在"})
                     return
                 self.log_admin(f"review_{action}", review_type[:-1], version_id, str(version_id), note)
+                self.send_json(200, {"ok": True, "item": item})
+                return
+
+        if path.startswith("/api/projects/"):
+            user = self.require_auth()
+            if not user:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "assignments":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                data = self.read_json()
+                data["projectId"] = project_id
+                try:
+                    assignment = save_assignment(data, user)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self.log_admin("save_assignment", "assignment", assignment["id"], assignment["title"], f"project {project_id} personnel assignment")
+                self.send_json(200, {"ok": True, "assignment": assignment})
+                return
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                try:
+                    approve_now = can_review_user(user)
+                    item = save_content_item(project_id, None, self.read_json(), user, approve_now=approve_now)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self.log_admin(
+                    "save_content_item" if can_review_user(user) else "submit_content_item",
+                    "content_item",
+                    item["id"],
+                    item["title"],
+                    f"project {project_id}",
+                    changes="structured-content",
+                )
+                self.send_json(200, {"ok": True, "item": item})
+                return
+            if len(parts) == 7 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "forms" and parts[6] == "records":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                form_id = int(parts[5]) if parts[5].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                data = self.read_json()
+                try:
+                    result = save_lowcode_record_draft(project_id, form_id, data, user) if data.get("draft") else submit_lowcode_record(project_id, form_id, data, user)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                log_title = (result.get("item") or {}).get("title") or (result.get("record") or {}).get("contentTitle") or "低代码资料草稿"
+                self.log_admin(
+                    "save_lowcode_draft" if data.get("draft") else ("save_lowcode_record" if can_review_user(user) else "submit_lowcode_record"),
+                    "lowcode_record",
+                    result["record"]["id"],
+                    log_title,
+                    f"project {project_id}",
+                    changes="lowcode-draft" if data.get("draft") else "lowcode-to-content-item",
+                )
+                self.send_json(200, {"ok": True, **result})
+                return
+
+        if path.startswith("/api/content-items/") and path.endswith("/assets"):
+            user = self.require_auth()
+            if not user:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "content-items" and parts[3] == "assets":
+                content_item_id = int(parts[2]) if parts[2].isdigit() else 0
+                try:
+                    item = add_content_item_asset(content_item_id, self.read_json(), user)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                if not item:
+                    self.send_json(404, {"ok": False, "error": "资料不存在"})
+                    return
+                self.log_admin("link_content_asset", "content_item", item["id"], item["title"], "link asset")
                 self.send_json(200, {"ok": True, "item": item})
                 return
         if path == "/api/projects":
@@ -4486,7 +12375,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
             original_url = str(data.get("url", "")).strip()
             raw_url = normalize_scan_url(original_url)
 
-            # 系部数字展厅联动（DESIGN.md 第 13 节）：
+            # 数字门户展厅联动（DESIGN.md 第 13 节）：
             # 扫码内容指向 /departments/<id> 或 /topics/<id>（二维码生成的是绝对 URL，需按 path 匹配），
             # 命中后广播相对路径给展厅大屏
             parsed_scan_url = urlparse(original_url)
@@ -4540,20 +12429,14 @@ class ExpoHandler(BaseHTTPRequestHandler):
             local_display_url = ""
             result = "ok"
             detail = ""
-            project = get_deployed_content_project()
-            if project and (not project_id or int(project_id) == int(project["id"])):
-                matched_code, page = find_deployed_display_page(project["id"], code)
-                if page:
-                    code = matched_code
-                    external_link = False
-                    local_display_url = f"/display?project={project['id']}&code={code}"
-                elif not external_link:
-                    result = "not_available"
-                    detail = "页面未通过审核、未勾选部署或账号已禁用"
+            matched_code, project, page = find_deployed_display_target(project_id, code)
+            if project and page:
+                code = matched_code
+                external_link = False
+                local_display_url = f"/display?project={project['id']}&code={code}"
             elif not external_link:
                 result = "not_deployed"
-                detail = "内容未部署到当前大屏"
-                project = None
+                detail = "内容未部署到当前大屏或专题"
             target_display_url = scanned_url if external_link else local_display_url
             scan = {
                 "url": scanned_url,
@@ -4603,22 +12486,20 @@ class ExpoHandler(BaseHTTPRequestHandler):
             data = self.read_json(max_bytes=max(MAX_JSON_BYTES, int(MAX_UPLOAD_BYTES * 1.5) + 1024))
             data_url = str(data.get("dataUrl", ""))
             filename = str(data.get("filename", "upload")).strip()
-            match = re.match(r"data:(image/[a-zA-Z0-9.+-]+);base64,(.+)", data_url)
+            match = re.match(r"data:([^;,]*)(?:;[^,]*)*;base64,(.+)", data_url, flags=re.S)
             if not match:
-                self.send_json(400, {"ok": False, "error": "图片数据无效"})
+                self.send_json(400, {"ok": False, "error": "上传文件数据无效"})
                 return
 
-            mime, encoded = match.groups()
-            ext = UPLOAD_MIME_EXTENSIONS.get(mime)
-            if not ext:
-                self.send_json(415, {"ok": False, "error": "不支持的图片类型"})
-                return
+            raw_mime, encoded = match.groups()
+            ext = safe_upload_extension(filename, raw_mime)
+            mime = safe_upload_mime(raw_mime, ext)
             safe_name = f"{uuid.uuid4().hex}{ext}"
             storage_key = f"{ASSET_KEY_PREFIX}/{safe_name}" if ASSET_KEY_PREFIX else safe_name
             try:
                 payload = base64.b64decode(encoded, validate=True)
                 if len(payload) > MAX_UPLOAD_BYTES:
-                    self.send_json(413, {"ok": False, "error": "上传图片太大"})
+                    self.send_json(413, {"ok": False, "error": "上传文件太大"})
                     return
                 url = asset_storage(UPLOAD_DIR).save(storage_key, payload, mime)
                 asset = create_asset_record(user, filename, storage_key, url, mime, len(payload))
@@ -4644,6 +12525,42 @@ class ExpoHandler(BaseHTTPRequestHandler):
         if not self.require_csrf(path):
             return
 
+        if path.startswith("/api/achievement-market/items/"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            item_id_text = path.rsplit("/", 1)[-1]
+            item_id = int(item_id_text) if item_id_text.isdigit() else 0
+            try:
+                item = update_achievement_market_item(item_id, self.read_json())
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            if not item:
+                self.send_json(404, {"ok": False, "error": "成果超市项目不存在"})
+                return
+            self.log_admin("update_achievement_market_item", "achievement_market_item", item["id"], item["title"], "update item")
+            self.send_json(200, {"ok": True, "item": item, **achievement_market_payload(item["projectId"], include_candidates=True)})
+            return
+
+        if path.startswith("/api/content-assignments/"):
+            user = self.require_auth()
+            if not user:
+                return
+            assignment_id_text = path.rsplit("/", 1)[-1]
+            assignment_id = int(assignment_id_text) if assignment_id_text.isdigit() else 0
+            try:
+                assignment = save_assignment(self.read_json(), user, assignment_id)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            if not assignment:
+                self.send_json(404, {"ok": False, "error": "人员分配不存在"})
+                return
+            self.log_admin("update_assignment", "assignment", assignment["id"], assignment["title"], "update assignment")
+            self.send_json(200, {"ok": True, "assignment": assignment})
+            return
+
         if path.startswith("/api/projects/"):
             user = self.require_auth()
             if not user:
@@ -4655,13 +12572,54 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
-                if user["role"] == "admin":
+                if can_review_user(user):
                     project = save_project(project_id, self.read_json(), user)
                     self.log_admin("update_project", "project", project["id"], project["name"], "update project", changes="config")
                 else:
                     project = submit_project_config(project_id, self.read_json(), user)
                     self.log_admin("submit_project_config", "project", project["id"], project["name"], "submit project config", changes="config")
                 self.send_json(200, {"ok": True, "project": project})
+                return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                content_item_id = int(parts[4]) if parts[4].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                try:
+                    approve_now = can_review_user(user)
+                    item = save_content_item(project_id, content_item_id, self.read_json(), user, approve_now=approve_now)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self.log_admin(
+                    "save_content_item" if can_review_user(user) else "submit_content_item",
+                    "content_item",
+                    item["id"],
+                    item["title"],
+                    f"project {project_id}",
+                    changes="structured-content",
+                )
+                self.send_json(200, {"ok": True, "item": item})
+                return
+            if len(parts) == 6 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "lowcode" and parts[4] == "records":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                record_id = int(parts[5]) if parts[5].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                try:
+                    record = delete_lowcode_record_draft(project_id, record_id, user)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                if not record:
+                    self.send_json(404, {"ok": False, "error": "草稿不存在"})
+                    return
+                self.log_admin("delete_lowcode_draft", "lowcode_record", record_id, record.get("contentTitle") or "低代码草稿", f"project {project_id}")
+                self.send_json(200, {"ok": True, "record": record})
                 return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "pages":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
@@ -4674,13 +12632,29 @@ class ExpoHandler(BaseHTTPRequestHandler):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
                 try:
-                    page = save_page(project_id, code, self.read_json(), user, approve_now=user["role"] == "admin")
+                    approve_now = can_review_user(user)
+                    page = save_page(project_id, code, self.read_json(), user, approve_now=approve_now)
                 except ValueError as exc:
                     self.send_json(409, {"ok": False, "error": str(exc)})
                     return
-                self.log_admin("save_page" if user["role"] == "admin" else "submit_page", "page", page["code"], page["title"], f"project {project_id}", changes="content")
+                self.log_admin("save_page" if can_review_user(user) else "submit_page", "page", page["code"], page["title"], f"project {project_id}", changes="content")
                 self.send_json(200, {"ok": True, "page": page})
                 return
+
+        if path.startswith("/api/lowcode/forms/"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            form_id_text = path.rsplit("/", 1)[-1]
+            form_id = int(form_id_text) if form_id_text.isdigit() else 0
+            try:
+                form = save_lowcode_form(form_id, self.read_json(), actor)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.log_admin("update_lowcode_form", "lowcode_form", form["id"], form["name"], "update form")
+            self.send_json(200, {"ok": True, "form": form})
+            return
 
         if path.startswith("/api/pages/"):
             user = self.require_auth()
@@ -4695,18 +12669,93 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 self.send_json(500, {"ok": False, "error": "当前没有已部署的内容项目"})
                 return
             try:
-                page = save_page(project["id"], code, self.read_json(), user, approve_now=user["role"] == "admin")
+                approve_now = can_review_user(user)
+                page = save_page(project["id"], code, self.read_json(), user, approve_now=approve_now)
             except ValueError as exc:
                 self.send_json(409, {"ok": False, "error": str(exc)})
                 return
-            self.log_admin("save_page" if user["role"] == "admin" else "submit_page", "page", page["code"], page["title"], f"project {project['id']}", changes="content")
+            self.log_admin("save_page" if can_review_user(user) else "submit_page", "page", page["code"], page["title"], f"project {project['id']}", changes="content")
             self.send_json(200, {"ok": True, "page": page})
             return
+
+        if path.startswith("/api/content-items/") and path.endswith("/assets/order"):
+            user = self.require_auth()
+            if not user:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "content-items" and parts[3] == "assets" and parts[4] == "order":
+                content_item_id = int(parts[2]) if parts[2].isdigit() else 0
+                data = self.read_json()
+                try:
+                    item = reorder_content_item_assets(content_item_id, data.get("assets") if isinstance(data.get("assets"), list) else [], user)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                if not item:
+                    self.send_json(404, {"ok": False, "error": "资料不存在"})
+                    return
+                self.log_admin("order_content_assets", "content_item", item["id"], item["title"], "order assets")
+                self.send_json(200, {"ok": True, "item": item})
+                return
         self.send_error(404)
     def do_DELETE(self):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
         if not self.require_csrf(path):
+            return
+
+        if path.startswith("/api/users/"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 3 and parts[0] == "api" and parts[1] == "users":
+                username = parts[2]
+                try:
+                    user = delete_user_account(username, actor)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                except Exception as exc:
+                    self.send_json(500, {"ok": False, "error": f"删除账号失败：{exc}"})
+                    return
+                if not user:
+                    self.send_json(404, {"ok": False, "error": "用户不存在"})
+                    return
+                self.log_admin("delete_user", "user", user["username"], user["displayName"], "delete user")
+                self.send_json(200, {"ok": True, "user": user})
+                return
+
+        if path.startswith("/api/achievement-market/items/"):
+            actor = self.require_admin()
+            if not actor:
+                return
+            item_id_text = path.rsplit("/", 1)[-1]
+            item_id = int(item_id_text) if item_id_text.isdigit() else 0
+            item = delete_achievement_market_item(item_id)
+            if not item:
+                self.send_json(404, {"ok": False, "error": "成果超市项目不存在"})
+                return
+            self.log_admin("delete_achievement_market_item", "achievement_market_item", item["id"], item["title"], "delete item")
+            self.send_json(200, {"ok": True, "item": item, **achievement_market_payload(item["projectId"], include_candidates=True)})
+            return
+
+        if path.startswith("/api/content-assignments/"):
+            user = self.require_auth()
+            if not user:
+                return
+            assignment_id_text = path.rsplit("/", 1)[-1]
+            assignment_id = int(assignment_id_text) if assignment_id_text.isdigit() else 0
+            try:
+                assignment = delete_assignment(assignment_id, user)
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
+            if not assignment:
+                self.send_json(404, {"ok": False, "error": "人员分配不存在"})
+                return
+            self.log_admin("delete_assignment", "assignment", assignment["id"], assignment["title"], "delete assignment")
+            self.send_json(200, {"ok": True, "assignment": assignment})
             return
 
         if path.startswith("/api/projects/"):
@@ -4715,7 +12764,7 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 return
             parts = path.strip("/").split("/")
             if len(parts) == 3 and parts[0] == "api" and parts[1] == "projects":
-                if user["role"] != "admin":
+                if not is_admin_user(user):
                     self.send_json(403, {"ok": False, "error": "没有权限执行此操作"})
                     return
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
@@ -4726,6 +12775,27 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 self.log_admin("delete_project", "project", project_id, project["name"] if project else "", "delete project")
                 self.send_json(200, {"ok": True})
                 return
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "content-items":
+                project_id = int(parts[2]) if parts[2].isdigit() else 0
+                content_item_id = int(parts[4]) if parts[4].isdigit() else 0
+                project = get_project(project_id)
+                if not project or not project_accessible(project, user):
+                    self.send_json(404, {"ok": False, "error": "项目不存在"})
+                    return
+                approve_now = can_review_user(user)
+                item = delete_content_item(project_id, content_item_id, user, approve_now=approve_now)
+                if not item:
+                    self.send_json(404, {"ok": False, "error": "资料不存在"})
+                    return
+                self.log_admin(
+                    "delete_content_item" if can_review_user(user) else "request_delete_content_item",
+                    "content_item",
+                    item["id"],
+                    item["title"],
+                    f"project {project_id}",
+                )
+                self.send_json(200, {"ok": True, "item": item})
+                return
             if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "pages":
                 project_id = int(parts[2]) if parts[2].isdigit() else 0
                 code = parts[4].strip()
@@ -4733,12 +12803,32 @@ class ExpoHandler(BaseHTTPRequestHandler):
                 if not project or not project_accessible(project, user):
                     self.send_json(404, {"ok": False, "error": "项目不存在"})
                     return
-                ok = request_delete_page(project_id, code, user, approve_now=user["role"] == "admin")
+                approve_now = can_review_user(user)
+                ok = request_delete_page(project_id, code, user, approve_now=approve_now)
                 if not ok:
                     self.send_json(404, {"ok": False, "error": "页面不存在"})
                     return
-                self.log_admin("delete_page" if user["role"] == "admin" else "request_delete_page", "page", code, code, f"project {project_id}")
+                self.log_admin("delete_page" if can_review_user(user) else "request_delete_page", "page", code, code, f"project {project_id}")
                 self.send_json(200, {"ok": True})
+                return
+
+        if path.startswith("/api/content-items/") and "/assets/" in path:
+            user = self.require_auth()
+            if not user:
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "content-items" and parts[3] == "assets":
+                content_item_id = int(parts[2]) if parts[2].isdigit() else 0
+                try:
+                    item = delete_content_item_asset(content_item_id, parts[4], user)
+                except ValueError as exc:
+                    self.send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                if not item:
+                    self.send_json(404, {"ok": False, "error": "资料不存在"})
+                    return
+                self.log_admin("unlink_content_asset", "content_item", item["id"], item["title"], "unlink asset")
+                self.send_json(200, {"ok": True, "item": item})
                 return
 
         if path.startswith("/api/assets/"):

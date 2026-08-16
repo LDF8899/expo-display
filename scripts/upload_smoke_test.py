@@ -15,6 +15,7 @@ PNG_1X1 = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8"
     "/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 )
+INSTALLER_BYTES = b"MZ\x90\x00codex-test-installer"
 
 
 def request(url, method="GET", headers=None, body=None):
@@ -78,6 +79,35 @@ def main():
             saved_path = upload_dir / saved_name
             if not saved_path.exists() or not saved_path.read_bytes():
                 raise RuntimeError(f"uploaded file missing: {saved_path}")
+            installer_upload = request(
+                f"http://127.0.0.1:{PORT}/api/assets",
+                method="POST",
+                headers={"Content-Type": "application/json", "Cookie": cookie, "X-CSRF-Token": csrf_token},
+                body=json_body(
+                    {
+                        "filename": "setup-installer.exe",
+                        "dataUrl": "data:application/octet-stream;base64,"
+                        + base64.b64encode(INSTALLER_BYTES).decode("ascii"),
+                    }
+                ),
+            )
+            installer = json.loads(installer_upload.read().decode("utf-8"))
+            installer_asset = installer.get("asset") or {}
+            installer_url = str(installer.get("url", ""))
+            if not installer.get("ok") or not installer_url.endswith(".exe"):
+                raise RuntimeError(f"installer upload did not preserve executable extension: {installer}")
+            installer_path = upload_dir / installer_url.removeprefix("/uploads/")
+            if installer_path.read_bytes() != INSTALLER_BYTES:
+                raise RuntimeError("installer upload payload mismatch")
+            download = request(
+                f"http://127.0.0.1:{PORT}/api/assets/{installer_asset.get('id')}/download",
+                headers={"Cookie": cookie},
+            )
+            if download.read() != INSTALLER_BYTES:
+                raise RuntimeError("installer download payload mismatch")
+            disposition = download.headers.get("Content-Disposition", "")
+            if "attachment" not in disposition or "setup-installer.exe" not in disposition:
+                raise RuntimeError(f"installer download headers wrong: {disposition}")
             print("upload_ok=true")
             print(f"url={result['url']}")
         finally:
